@@ -1,0 +1,83 @@
+# Builds the mod on every push, checks the jar, starts a dedicated server with it and
+# publishes the jar to the ci-jar branch (main only). Publishes nothing else, uses no secrets.
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write # only for the ci-jar branch
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: gradle/actions/wrapper-validation@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build
+        run: |
+          set -o pipefail
+          ./gradlew build --stacktrace 2>&1 | tee build.log
+
+      - name: Report build errors (1)
+        if: failure()
+        run: |
+          python3 .github/scripts/condense-errors.py build.log > report.txt
+          .github/scripts/annotate.sh report.txt 0 "Build log"
+      - name: Report build errors (2)
+        if: failure()
+        run: .github/scripts/annotate.sh report.txt 10 "Build log"
+
+      - name: Check the jar contents
+        run: |
+          jar=$(ls build/libs/kingdomquest-*.jar | grep -v sources)
+          unzip -Z1 "$jar" > contents.txt
+          for f in fabric.mod.json \
+                   io/github/sotadevop/kingdomquest/KingdomQuest.class \
+                   io/github/sotadevop/kingdomquest/KingdomQuestClient.class \
+                   assets/kingdomquest/lang/en_us.json; do
+            grep -qx "$f" contents.txt || { echo "::error title=Jar check::missing $f"; exit 1; }
+          done
+
+      # Starts a real dedicated server with the mod and fails unless it loads cleanly.
+      - name: Server smoke test
+        timeout-minutes: 15
+        run: |
+          mkdir -p run
+          echo "eula=true" > run/eula.txt
+          printf 'level-type=minecraft\\:flat\nonline-mode=false\nspawn-protection=0\n' > run/server.properties
+          touch server.log
+          {
+            for i in $(seq 1 300); do grep -q 'Done (' server.log && break; sleep 2; done
+            echo "stop"
+          } | ./gradlew runServer --console=plain > server.log 2>&1 || true
+          grep -E 'KingdomQuest|kingdomquest|ERROR|Exception' server.log | head -40
+          grep -q 'KingdomQuest loaded' server.log || { echo "::error title=Server smoke test::mod did not load"; exit 1; }
+          grep -q 'Done (' server.log || { echo "::error title=Server smoke test::server did not start"; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: kingdomquest
+          path: build/libs/kingdomquest-*.jar
+          if-no-files-found: error
+
+      - name: Publish the jar to the ci-jar branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p /tmp/jar
+          cp $(ls build/libs/kingdomquest-*.jar | grep -v sources) /tmp/jar/
+          cd /tmp/jar
+          git init -q -b ci-jar
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          printf '# KingdomQuest jar\n\nFrom commit %s.\n' "$GITHUB_SHA" > README.md
+          git add -A
+          git commit -qm "Jar for $GITHUB_SHA"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-jar

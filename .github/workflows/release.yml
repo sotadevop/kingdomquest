@@ -1,0 +1,56 @@
+# Publishes a GitHub release with the mod jar. Two ways to start it:
+# - "Run workflow" in the Actions tab: tags the current commit as v<mod_version> and releases it
+# - pushing a tag like v1.0.0 (it must match mod_version in gradle.properties)
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # needed to create the tag and the release; nothing else
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Work out the tag
+        run: |
+          version=$(grep '^mod_version=' gradle.properties | cut -d= -f2)
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error title=Version mismatch::tag $GITHUB_REF_NAME but mod_version=$version"
+            exit 1
+          fi
+          echo "TAG=v$version" >> "$GITHUB_ENV"
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build
+        run: ./gradlew build --stacktrace
+
+      # --target creates the tag on this commit if it doesn't exist yet. Fails if the release
+      # already exists, so a version can't be published twice by accident.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jar=$(ls build/libs/kingdomquest-*.jar | grep -v sources)
+          gh release create "$TAG" "$jar" \
+            --target "$GITHUB_SHA" \
+            --title "KingdomQuest $TAG" \
+            --notes-file .github/release-notes.md
