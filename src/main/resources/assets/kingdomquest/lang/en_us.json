@@ -1,1 +1,10 @@
-{}
+{
+	"item.kingdomquest.royal_charter": "Royal Charter",
+	"item.kingdomquest.royal_charter.tooltip": "Right-click: found your kingdom",
+	"kingdomquest.founding.title": "Found your Kingdom",
+	"kingdomquest.founding.name": "Name",
+	"kingdomquest.founding.color": "Color",
+	"kingdomquest.founding.logo": "Logo",
+	"kingdomquest.founding.search": "Search blocks",
+	"kingdomquest.founding.confirm": "Seal the Charter"
+}
