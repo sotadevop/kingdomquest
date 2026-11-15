@@ -62,7 +62,10 @@ public final class Progression {
 									tag(ItemTags.WOOL, "wool", 8), item(Items.EMERALD, 4))),
 					new Step(Settlement.MAIN, "village_1", 7, "kingdomquest.level.village_1", 0, adv("story/enchant_item"),
 							"kingdomquest.req.enchant", List.of(tag(ItemTags.LOGS, "logs", 64), item(Items.COBBLESTONE, 128), item(Items.GLASS, 8),
-									item(Items.BRICK, 16), item(Items.EMERALD, 8)))),
+									item(Items.BRICK, 16), item(Items.EMERALD, 8))),
+					new Step(Settlement.MAIN, "town_1", 8, "kingdomquest.level.town_1", 0, adv("story/enter_the_nether"),
+							"kingdomquest.req.nether", List.of(item(Items.STONE_BRICKS, 256), tag(ItemTags.LOGS, "logs", 64), item(Items.GLASS_PANE, 32),
+									item(Items.BRICK, 64), item(Items.EMERALD, 16), item(Items.BELL, 1)))),
 			FARM, List.of(
 					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
 							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2))),
@@ -92,7 +95,11 @@ public final class Progression {
 			new Step(WALLS, "wall_1", 1, "kingdomquest.walls.wall_1", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
 					List.of(tag(ItemTags.LOGS, "logs", 96), item(Items.STICK, 32))),
 			new Step(WALLS, "wall_2", 2, "kingdomquest.walls.wall_2", 7, adv("adventure/shoot_arrow"), "kingdomquest.req.arrow",
-					List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.PLANKS, "planks", 64), item(Items.LADDER, 8))));
+					List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.PLANKS, "planks", 64), item(Items.LADDER, 8))),
+			new Step(WALLS, "wall_3", 3, "kingdomquest.walls.wall_3", 8, adv("story/form_obsidian"), "kingdomquest.req.obsidian",
+					List.of(item(Items.STONE_BRICKS, 512), item(Items.COBBLESTONE, 128), item(Items.IRON_BARS, 3))),
+			new Step(WALLS, "wall_4", 4, "kingdomquest.walls.wall_4", 8, adv("adventure/kill_all_mobs"), "kingdomquest.req.monsters",
+					List.of(item(Items.STONE_BRICKS, 512), item(Items.LADDER, 64), item(Items.LANTERN, 8))));
 
 	/** Roads and lamps: the village infrastructure, each upgraded on its own. */
 	public static final String ROADS = "roads";
