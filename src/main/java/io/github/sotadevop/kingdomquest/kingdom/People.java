@@ -115,6 +115,9 @@ final class People {
 
 	/** Every 10 seconds: settlements with a house get their Architect (again, if he went missing). */
 	static void ensureArchitect(ServerLevel level, Settlement s) {
+		// villagers from older versions of the mod (before our own NPCs) are retired
+		level.getEntitiesOfClass(net.minecraft.world.entity.npc.villager.Villager.class, new AABB(s.heart()).inflate(96, 48, 96),
+				v -> v.getAttached(ROLE) != null).forEach(Entity::discard);
 		if (s.level(Settlement.MAIN) < 4 || !level.isLoaded(s.heart()) || !find(level, s, ARCHITECT).isEmpty()) {
 			return;
 		}
