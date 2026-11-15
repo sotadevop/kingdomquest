@@ -12,6 +12,8 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.PotionContents;
+import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.phys.Vec3;
 
@@ -101,6 +103,33 @@ public final class Production {
 				if (lvl >= 2) {
 					g.add(new ItemStack(item(wood + "_planks"), 32));
 					g.add(new ItemStack(Items.CHARCOAL, 4));
+				}
+			}
+			case Progression.LIBRARY -> {
+				g.add(new ItemStack(Items.PAPER, 6));
+				g.add(new ItemStack(Items.BOOK, 2));
+				g.add(new ItemStack(Items.LAPIS_LAZULI, 3));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.EXPERIENCE_BOTTLE, 4));
+				}
+			}
+			case Progression.BREWERY -> {
+				g.add(PotionContents.createItemStack(Items.POTION, Potions.HEALING));
+				g.add(PotionContents.createItemStack(Items.POTION, Potions.HEALING));
+				g.add(new ItemStack(Items.GLASS_BOTTLE, 3));
+				if (lvl >= 2) {
+					g.add(PotionContents.createItemStack(Items.POTION, Potions.SWIFTNESS));
+					g.add(PotionContents.createItemStack(Items.POTION, Potions.REGENERATION));
+				}
+			}
+			case Progression.STABLES -> {
+				g.add(new ItemStack(Items.LEATHER, 2));
+				g.add(new ItemStack(Items.WHEAT, 6));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.GOLDEN_CARROT, 2));
+					if (random.nextInt(4) == 0) {
+						g.add(new ItemStack(Items.SADDLE));
+					}
 				}
 			}
 			default -> {

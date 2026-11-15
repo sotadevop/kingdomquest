@@ -25,7 +25,7 @@ import java.util.Map;
  * Light/dark colors and the modern (rounded) or vanilla style follow the mod settings, like StoryQuest.
  */
 public class KingdomScreen extends Screen {
-	private static final int W = 320;
+	private static final int W = 360;
 	private static final int HEADER = 34;
 	private static final int TAB_H = 18;
 	private static final int CARD_H = 50;
@@ -40,7 +40,9 @@ public class KingdomScreen extends Screen {
 			new Tab("kingdomquest.tab.settlement", List.of("main")),
 			new Tab("kingdomquest.tab.defense", List.of("walls")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps")),
-			new Tab("kingdomquest.tab.addons", List.of("farm", "smith", "wood")));
+			new Tab("kingdomquest.tab.farming", List.of("farm", "stables")),
+			new Tab("kingdomquest.tab.crafts", List.of("smith", "wood")),
+			new Tab("kingdomquest.tab.culture", List.of("library", "brewery")));
 	private static int lastTab;
 
 	private final KingdomInfoPayload info;

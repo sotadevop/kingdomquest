@@ -119,8 +119,28 @@ public final class Progression {
 			new Step(LAMPS, "lamp_3", 3, "kingdomquest.lamps.lamp_3", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
 					List.of(item(Items.LANTERN, 32), item(Items.STONE_BRICKS, 16), tag(ItemTags.LOGS, "logs", 8))));
 
+	public static final String LIBRARY = "library";
+	public static final String BREWERY = "brewery";
+	public static final String STABLES = "stables";
+	public static final Map<String, List<Step>> ADDONS_3 = Map.of(
+			LIBRARY, List.of(
+					new Step(LIBRARY, "library_1", 1, "kingdomquest.addon.library_1", 7, adv("story/enchant_item"), "kingdomquest.req.enchant",
+							List.of(item(Items.STONE_BRICKS, 96), item(Items.BOOKSHELF, 6), item(Items.ENCHANTING_TABLE, 1))),
+					new Step(LIBRARY, "library_2", 2, "kingdomquest.addon.library_2", 7, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+							List.of(item(Items.BOOKSHELF, 20), item(Items.LECTERN, 1), item(Items.LANTERN, 2)))),
+			BREWERY, List.of(
+					new Step(BREWERY, "brewery_1", 1, "kingdomquest.addon.brewery_1", 7, adv("nether/obtain_blaze_rod"), "kingdomquest.req.blaze",
+							List.of(item(Items.STONE_BRICKS, 64), item(Items.BREWING_STAND, 1), item(Items.CAULDRON, 2))),
+					new Step(BREWERY, "brewery_2", 2, "kingdomquest.addon.brewery_2", 7, adv("nether/brew_potion"), "kingdomquest.req.brew",
+							List.of(item(Items.BREWING_STAND, 1), item(Items.BARREL, 4), item(Items.GLASS_BOTTLE, 16)))),
+			STABLES, List.of(
+					new Step(STABLES, "stables_1", 1, "kingdomquest.addon.stables_1", 5, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame",
+							List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.HAY_BLOCK, 6), item(Items.LEAD, 2))),
+					new Step(STABLES, "stables_2", 2, "kingdomquest.addon.stables_2", 7, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed",
+							List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.HAY_BLOCK, 8), item(Items.SADDLE, 1)))));
+
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, ROADS, LAMPS, FARM, SMITH, WOOD);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -131,7 +151,7 @@ public final class Progression {
 			case WALLS -> WALL_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
-			default -> ADDONS_2.get(track);
+			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.get(track);
 		};
 	}
 

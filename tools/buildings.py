@@ -678,17 +678,20 @@ SEGMENTS = [
     ("well", [("main", 4)]),
     ("square", [("main", 7)]),
     ("smith", [("smith", 1)]),
-    ("street_w1", [("main", 5), ("wood", 1)]),
-    ("street_w2", [("wood", 1)]),
+    ("street_w1", [("main", 5), ("wood", 1), ("brewery", 1)]),
+    ("street_w2", [("wood", 1), ("brewery", 1)]),
     ("house2", [("main", 5)]),
-    ("street_e1", [("main", 6)]),
+    ("street_e1", [("main", 6), ("stables", 1)]),
     ("house3", [("main", 6)]),
-    ("street_e2", [("main", 7)]),
+    ("street_e2", [("main", 7), ("stables", 1)]),
     ("house4", [("main", 7)]),
     ("wood", [("wood", 1)]),
     ("farm", [("farm", 1)]),
     ("pasture", [("farm", 2)]),
     ("smokehouse", [("farm", 3)]),
+    ("library", [("library", 1)]),
+    ("brewery", [("brewery", 1)]),
+    ("stables", [("stables", 1)]),
 ]
 SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
 
@@ -724,6 +727,11 @@ def road_cells():
     strip("pasture", range(27, 43), range(12, 14), core_z=12)
     strip("pasture", [39], [10, 11], core_x=39)
     strip("smokehouse", [38], [14], core_x=38)
+    strip("library", range(-28, -14), range(12, 14), core_z=12)
+    strip("library", [-28], range(5, 12), core_x=-28)
+    strip("brewery", [-17], range(20, 25), core_x=-17)
+    strip("stables", range(35, 44), range(18, 20), core_z=18)
+    strip("stables", [43], range(20, 24), core_x=43)
     for x in (1, 2, 3):
         for z in (12, 13, 14):
             cells.pop((x, z), None)                                      # the well
@@ -952,11 +960,155 @@ def town_hall(b, style, x0=1, z0=-1):
     b.put(x0 + 1, 1, z1 - 2, "{color}_bed", facing="north", part="head", occupied="false")
 
 
+def stone_hut(b, x0, z0, x1, z1, walls_h, wall, corner, floor, door, roof_stairs, roof_slab):
+    """Rectangular building with corner posts, a door on the given side ('n'/'s') at the middle, gable roof along x."""
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, wall if edge else floor)
+            if edge:
+                c = x in (x0, x1) and z in (z0, z1)
+                for y in range(1, walls_h + 1):
+                    b.put(x, y, z, corner if c else wall, **({"axis": "y"} if c and "log" in corner else {}))
+    dx = (x0 + x1) // 2
+    dz = z0 if door == "n" else z1
+    facing = "north" if door == "n" else "south"
+    b.put(dx, 1, dz, "spruce_door", facing=facing, half="lower", hinge="left", open="false", powered="false")
+    b.put(dx, 2, dz, "spruce_door", facing=facing, half="upper", hinge="left", open="false", powered="false")
+    depth = z1 - z0 + 1
+    half = depth // 2 + 1
+    for x in range(x0 - 1, x1 + 2):
+        for i in range(half):
+            b.put(x, walls_h + 1 + i, z0 - 1 + i, roof_stairs, facing="south", **ST)
+            b.put(x, walls_h + 1 + i, z1 + 1 - i, roof_stairs, facing="north", **ST)
+        if depth % 2 == 1:
+            b.put(x, walls_h + half, z0 - 1 + half, roof_slab, type="bottom", waterlogged="false")
+    for xx in (x0, x1):
+        for i in range(1, half):
+            for z in range(z0 + i, z1 - i + 1):
+                b.put(xx, walls_h + i, z, wall)
+
+
+def mats(style):
+    frozen = style == "frozen"
+    return dict(wall="spruce_planks" if frozen else "calcite", corner="stripped_spruce_log" if frozen else "stripped_oak_log",
+                stone="cobblestone" if frozen else "stone_bricks",
+                roof="spruce_stairs" if frozen else "brick_stairs", slab="spruce_slab" if frozen else "brick_slab")
+
+
+LIB = (-33, -6, -23, 4)      # x0, z0, x1, z1 (door south)
+BREW = (-21, 25, -13, 31)    # door north
+STABLE = (37, 24, 49, 32)    # door north
+LIB_STORE = (-31, 0, 3)
+BREW_STORE = (-19, 0, 30)
+STABLE_STORE = (39, 0, 25)
+
+
+def library(style, level):
+    """Library add-on (enchanting): stone hall with bookshelves and an enchanting table; level 2 a reading room
+    with more shelves (a full 15-shelf ring around the table), lecterns and lanterns."""
+    m = mats(style)
+    b = B()
+    x0, z0, x1, z1 = LIB
+    stone_hut(b, x0, z0, x1, z1, 4, m["stone"], m["corner"], "spruce_planks", "s", m["roof"], m["slab"])
+    for x in range(x0 + 2, x1 - 1, 2):
+        b.put(x, 2, z0, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2 - 1
+    b.put(cx, 1, cz, "enchanting_table")
+    ring = [(cx + dx, cz + dz) for dx in range(-2, 3) for dz in range(-2, 3) if max(abs(dx), abs(dz)) == 2 and (dx, dz) != (0, 2)]
+    shelves = ring if level >= 2 else [(x, z) for x, z in ring if z == cz - 2]
+    for x, z in shelves:
+        b.put(x, 2, z, "bookshelf")
+        b.put(x, 1, z, "bookshelf" if level >= 2 else "spruce_planks")
+    for x in range(x0 + 1, x1):
+        b.put(x, 1, z0 + 1, "bookshelf")
+        b.put(x, 2, z0 + 1, "bookshelf" if level >= 2 else "air")
+    b.put(*LIB_STORE, "chest", facing="east", type="single", waterlogged="false")
+    b.put(x1 - 1, 1, z1 - 1, "lectern", facing="south", has_book="false", powered="false")
+    if level >= 2:
+        b.put(x0 + 1, 1, z1 - 1, "lectern", facing="south", has_book="false", powered="false")
+        for x in (x0 + 2, x1 - 2):
+            b.put(x, 4, cz, "lantern", hanging="true", waterlogged="false")
+        b.put(cx, 1, z1 - 1, "{color}_carpet")
+    b.put(cx, 4, cz, "lantern", hanging="true", waterlogged="false")
+    return b.b
+
+
+def brewery(style, level):
+    """Brewery add-on: small stone house with brewing stands, cauldrons, a herb garden; level 2 adds a cellar room."""
+    m = mats(style)
+    b = B()
+    x0, z0, x1, z1 = BREW
+    stone_hut(b, x0, z0, x1, z1, 3, m["stone"], m["corner"], "packed_mud", "n", m["roof"], m["slab"])
+    cx = (x0 + x1) // 2
+    for y in range(1, 9):
+        b.put(x1 - 1, y, z1, "bricks")
+    b.put(x1 - 1, 9, z1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(cx - 2, 1, z1 - 1, "brewing_stand", has_bottle_0="false", has_bottle_1="false", has_bottle_2="false")
+    b.put(cx - 1, 1, z1 - 1, "water_cauldron", level="3")
+    b.put(cx + 1, 1, z1 - 1, "cauldron")
+    b.put(*BREW_STORE, "barrel", facing="up", open="false")
+    b.put(x0 + 1, 1, z0 + 1, "barrel", facing="up", open="false")
+    for x in range(x0 + 1, x1):
+        b.put(x, 3, z0 + 1, "spruce_trapdoor", facing="south", half="top", open="false", powered="false", waterlogged="false")
+    # herb garden in front
+    for x in range(x0, x0 + 3):
+        b.put(x, -1, z0 - 2, "farmland", moisture="7")
+        b.put(x, 0, z0 - 2, "sweet_berry_bush" if style == "frozen" else "beetroots", age="3")
+    if level >= 2:
+        b.put(cx + 2, 1, z1 - 1, "brewing_stand", has_bottle_0="false", has_bottle_1="false", has_bottle_2="false")
+        for x in range(x0 + 1, x1):
+            b.put(x, 0, z1 - 2, "barrel", facing="up", open="false") if x % 2 else None
+        for x in (x0 + 2, x1 - 2):
+            b.put(x, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    return b.b
+
+
+def stables(style, level):
+    """Stables add-on: long timber barn with stalls, hay and a paddock; level 2 a second row of stalls and a tack room."""
+    m = mats(style)
+    b = B()
+    w = STYLES[style]["wood"]
+    x0, z0, x1, z1 = STABLE
+    log = "spruce_log" if style == "frozen" else "oak_log"
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z0 + 5):
+            b.put(x, -1, z, "coarse_dirt" if (x + z) % 3 else "dirt")
+            post = (x - x0) % 3 == 0 and z in (z0, z0 + 4)
+            if post:
+                for y in range(0, 3):
+                    b.put(x, y, z, log, axis="y")
+            elif z == z0 + 4 and x not in (x0, x1):
+                b.put(x, 0, z, w + "_fence")
+            elif z == z0:
+                b.put(x, 0, z, w + "_fence") if (x - x0) % 3 != 1 else b.put(x, 0, z, w + "_fence_gate", facing="north", in_wall="false", open="false", powered="false")
+        for i, z in enumerate(range(z0 - 1, z0 + 6)):
+            y = 3 + min(i, 6 - i) // 1 // 2
+            b.put(x, y, z, m["roof"], facing="south" if i < 3 else "north", **ST) if i != 3 else b.put(x, y, z, m["slab"], type="bottom", waterlogged="false")
+    for x in range(x0 + 1, x1, 3):
+        b.put(x, 0, z0 + 3, "hay_block", axis="y")
+    b.put(*STABLE_STORE, "barrel", facing="up", open="false")
+    # paddock behind (south)
+    for x in range(x0, x1 + 1):
+        for z in range(z0 + 5, z1 + 1):
+            if x in (x0, x1) or z == z1:
+                b.put(x, 0, z, w + "_fence")
+    b.put(x0 + 3, 0, z1 - 1, "water_cauldron", level="3")
+    if level >= 2:
+        for x in range(x0 + 1, x1, 4):
+            b.put(x, 0, z1 - 2, "hay_block", axis="x")
+        b.put(x1 - 1, 0, z0 + 1, "chest", facing="west", type="single", waterlogged="false")
+        b.put(x1 - 1, 1, z0 + 3, "{color}_wool")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
-    xs = [p[0] for p in blocks] + [0]
-    zs = [p[2] for p in blocks] + [0]
+    # the plot is the blocks' bounding box; the heart may lie outside it (add-ons far from the square),
+    # so levelling an add-on only touches its own area
+    xs = [p[0] for p in blocks]
+    zs = [p[2] for p in blocks]
     dx, dz = -min(xs), -min(zs)
     nb = {(x + dx, y, z + dz): v for (x, y, z), v in blocks.items()}
     size = (max(xs) + dx + 1, max(max(p[1] for p in blocks) + 1, 8), max(zs) + dz + 1)
@@ -1005,6 +1157,11 @@ if __name__ == "__main__":
         jobs.append((style, "town_1", hamlet(style, 5), 420, TAX_STORE, None))
         for level, secs in ((1, 300), (2, 300), (3, 420), (4, 480)):
             jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None, 24))
+        for level in (1, 2):
+            jobs.append((style, f"library_{level}", library(style, level), 180, LIB_STORE, None))
+            jobs.append((style, f"brewery_{level}", brewery(style, level), 180, BREW_STORE, None))
+            jobs.append((style, f"stables_{level}", stables(style, level), 180, STABLE_STORE,
+                         [["horse", 40, 0, 30], ["horse", 44, 0, 29]] if level == 1 else [["donkey", 46, 0, 30]]))
         for level in (1, 2, 3, 4):
             jobs.append((style, f"road_{level}", roads(style, level), 90 + 30 * level, None, None))
         for level in (1, 2, 3):
