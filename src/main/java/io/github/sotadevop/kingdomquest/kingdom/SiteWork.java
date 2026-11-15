@@ -286,7 +286,7 @@ public final class SiteWork {
 			level.setBlock(pos, wall, FLAGS); // edge beam
 			pos.set(x, top + 1, z);
 			if (level.getBlockState(pos).isAir()) {
-				level.setBlock(pos, railing(wall), FLAGS);
+				level.setBlock(pos, railing(level, pos.immutable(), wall), FLAGS);
 			}
 		}
 		// arch braces: the blocks next to a pier, under the deck, lean on it
@@ -303,10 +303,9 @@ public final class SiteWork {
 		}
 	}
 
-	private static BlockState railing(BlockState wall) {
+	private static BlockState railing(ServerLevel level, BlockPos at, BlockState wall) {
 		return Block.updateFromNeighbourShapes((wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SANDSTONE_WALL : wall.is(Blocks.COBBLESTONE)
-				? Blocks.COBBLESTONE_WALL : Blocks.STONE_BRICK_WALL).defaultBlockState(), net.minecraft.world.level.EmptyBlockGetter.INSTANCE,
-				BlockPos.ZERO);
+				? Blocks.COBBLESTONE_WALL : Blocks.STONE_BRICK_WALL).defaultBlockState(), level, at);
 	}
 
 	private static BlockState stairs(BlockState wall) {
