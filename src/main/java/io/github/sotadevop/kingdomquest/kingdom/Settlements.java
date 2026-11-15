@@ -105,6 +105,20 @@ public final class Settlements {
 		return null;
 	}
 
+	/** The player's own settlement closest to them (a player may rule several, one per charter). */
+	public static Settlement nearestOwned(ServerPlayer player) {
+		Settlement best = null;
+		double bestDist = Double.MAX_VALUE;
+		for (Settlement s : all(player.level().getServer())) {
+			double d = player.distanceToSqr(Vec3.atCenterOf(s.heart()));
+			if (s.owner().equals(player.getUUID()) && d < bestDist) {
+				best = s;
+				bestDist = d;
+			}
+		}
+		return best;
+	}
+
 	public static Settlement byOwner(MinecraftServer server, UUID owner) {
 		for (Settlement s : all(server)) {
 			if (s.owner().equals(owner)) {
@@ -138,10 +152,6 @@ public final class Settlements {
 		MinecraftServer server = level.getServer();
 		if (level.dimension() != Level.OVERWORLD) {
 			player.sendOverlayMessage(Component.translatable("kingdomquest.found.overworld"));
-			return false;
-		}
-		if (byOwner(server, player.getUUID()) != null) {
-			player.sendOverlayMessage(Component.translatable("kingdomquest.found.one"));
 			return false;
 		}
 		BlockPos heart = clicked.above();
@@ -252,7 +262,7 @@ public final class Settlements {
 	/** Finishes the running build of the player's settlement at once. Returns null if there is no settlement. */
 	public static Settlement testFinish(ServerPlayer player) {
 		MinecraftServer server = player.level().getServer();
-		Settlement s = byOwner(server, player.getUUID());
+		Settlement s = nearestOwned(player);
 		if (s != null && !s.job().isEmpty()) {
 			step(server, s, true);
 			s = byHeart(server, s.heart());
@@ -283,7 +293,7 @@ public final class Settlements {
 	}
 
 	public static boolean testProduce(ServerPlayer player) {
-		Settlement s = byOwner(player.level().getServer(), player.getUUID());
+		Settlement s = nearestOwned(player);
 		if (s != null) {
 			Production.run(player.level().getServer().overworld(), s);
 		}
@@ -293,7 +303,7 @@ public final class Settlements {
 	/** Removes the player's settlement and every block its builders placed. */
 	public static boolean testReset(ServerPlayer player) {
 		MinecraftServer server = player.level().getServer();
-		Settlement s = byOwner(server, player.getUUID());
+		Settlement s = nearestOwned(player);
 		if (s == null) {
 			return false;
 		}
@@ -308,96 +318,6 @@ public final class Settlements {
 		rest.removeIf(o -> o.id().equals(s.id()));
 		server.overworld().setAttached(DATA, List.copyOf(rest));
 		return true;
-	}
-
-	// ---- test tools (/kingdomquest test ...) ----
-
-	/** Finishes the running build of the player's settlement at once. Returns null if there is no settlement. */
-	public static Settlement testFinish(ServerPlayer player) {
-		MinecraftServer server = player.level().getServer();
-		Settlement s = byOwner(server, player.getUUID());
-		if (s != null && !s.job().isEmpty()) {
-			step(server, s, true);
-			s = byHeart(server, s.heart());
-		}
-		return s;
-	}
-
-	/** Builds the given level of a track at once, skipping requirements and costs (also downgrades). */
-	public static boolean testSet(ServerPlayer player, String track, int lvl) {
-		Settlement s = testFinish(player);
-		List<Progression.Step> steps = Progression.steps(track);
-		if (s == null || steps == null || lvl < 1 || lvl > steps.size()) {
-			return false;
-		}
-		MinecraftServer server = player.level().getServer();
-		start(server, s, track, steps.get(lvl - 1));
-		testFinish(player);
-		return true;
-	}
-
-	/** Every track to its highest level. */
-	public static boolean testMax(ServerPlayer player) {
-		boolean ok = true;
-		for (String track : Progression.ORDER) {
-			ok &= testSet(player, track, Progression.steps(track).size());
-		}
-		return ok;
-	}
-
-	public static boolean testProduce(ServerPlayer player) {
-		Settlement s = byOwner(player.level().getServer(), player.getUUID());
-		if (s != null) {
-			Production.run(player.level().getServer().overworld(), s);
-		}
-		return s != null;
-	}
-
-	/** Removes the player's settlement and every block its builders placed. */
-	public static boolean testReset(ServerPlayer player) {
-		MinecraftServer server = player.level().getServer();
-		Settlement s = byOwner(server, player.getUUID());
-		if (s == null) {
-			return false;
-		}
-		ServerLevel level = server.overworld();
-		for (List<Long> list : s.built().values()) {
-			for (long pos : list) {
-				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-			}
-		}
-		level.setBlock(s.heart(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-		List<Settlement> rest = new ArrayList<>(all(server));
-		rest.removeIf(o -> o.id().equals(s.id()));
-		server.overworld().setAttached(DATA, List.copyOf(rest));
-		return true;
-	}
-
-	/**
-	 * Makes room for a new building: in every column it uses, natural blocks up to 10 above the ground are removed
-	 * (blocks of other buildings stay) and holes under it are filled.
-	 */
-	private static void clearFootprint(ServerLevel level, Settlement s, List<Template.Placement> list) {
-		Set<Long> columns = new HashSet<>();
-		for (Template.Placement p : list) {
-			BlockPos column = s.heart().offset(p.offset().getX(), 0, p.offset().getZ());
-			if (!columns.add(column.asLong())) {
-				continue;
-			}
-			for (int y = 0; y < 10; y++) {
-				BlockPos pos = column.above(y);
-				if (!level.getBlockState(pos).isAir() && !s.isBuilt(pos.asLong()) && !pos.equals(s.heart())) {
-					level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-				}
-			}
-			for (int y = 1; y <= 3; y++) {
-				BlockPos pos = column.below(y);
-				BlockState state = level.getBlockState(pos);
-				if (state.isAir() || state.canBeReplaced()) {
-					level.setBlock(pos, (y == 1 ? Blocks.GRASS_BLOCK : Blocks.DIRT).defaultBlockState(), Block.UPDATE_ALL);
-				}
-			}
-		}
 	}
 
 	private static List<Template.Placement> placements(Settlement s, String job) {
