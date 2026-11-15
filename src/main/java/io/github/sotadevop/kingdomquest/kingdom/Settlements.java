@@ -402,7 +402,7 @@ public final class Settlements {
 		int count = 0;
 		int i = 0;
 		for (String style : List.of(Style.TEMPERATE, Style.FROZEN)) {
-			for (Progression.Step step : Progression.ORDER.stream().flatMap(t -> Progression.TRACKS.get(t).stream()).toList()) {
+			for (Progression.Step step : Progression.ORDER.stream().flatMap(t -> Progression.steps(t).stream()).toList()) {
 				Template t = Template.get(style + "/" + step.building());
 				if (t == null) {
 					continue;

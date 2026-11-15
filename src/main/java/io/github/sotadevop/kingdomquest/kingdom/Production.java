@@ -2,58 +2,115 @@ package io.github.sotadevop.kingdomquest.kingdom;
 
 import io.github.sotadevop.kingdomquest.building.Template;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Add-ons that produce goods put them into their storage container (the barrel of the template's "storage" field).
- * Runs every {@link #INTERVAL} ticks while the settlement is loaded; a full container just loses the overflow.
+ * Buildings that produce goods put them into their storage container (the template's "storage" barrel).
+ * Runs every {@link #INTERVAL} ticks while the settlement is loaded; a full container loses the overflow.
+ * Main track from Hamlet II on: taxes into the barrel by the fire.
  */
 public final class Production {
 	/** 5 minutes. */
 	public static final int INTERVAL = 6000;
 
+	private static final List<Item> SMITH_GEAR = List.of(Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
+			Items.IRON_SWORD, Items.IRON_PICKAXE, Items.IRON_AXE, Items.IRON_SHOVEL, Items.SHIELD, Items.BUCKET, Items.SHEARS);
+
 	private Production() {
 	}
 
 	static void run(ServerLevel level, Settlement s) {
-		int farm = s.level(Progression.FARM);
-		if (farm <= 0 || Progression.FARM.equals(s.jobTrack()) || !level.isLoaded(s.heart())) {
+		if (!level.isLoaded(s.heart())) {
 			return;
 		}
-		Container box = storage(level, s, s.style() + "/farm_" + farm);
-		if (box == null) {
-			return;
+		boolean any = false;
+		for (String track : Progression.ORDER) {
+			Progression.Step step = Progression.current(s, track);
+			if (step == null || track.equals(s.jobTrack())) {
+				continue;
+			}
+			List<ItemStack> goods = goods(track, step.level(), s.style(), level.getRandom());
+			Container box = goods.isEmpty() ? null : storage(level, s, s.style() + "/" + step.building());
+			if (box != null) {
+				goods.forEach(stack -> insert(box, stack));
+				box.setChanged();
+				any = true;
+			}
 		}
-		List<ItemStack> harvest = new java.util.ArrayList<>(List.of(new ItemStack(Items.WHEAT, 6), new ItemStack(Items.CARROT, 3),
-				new ItemStack(Items.POTATO, 3)));
-		if (farm >= 2) {
-			// pasture: eggs, wool and leather; meat comes raw, or cooked once the smokehouse stands
-			boolean smoked = farm >= 3;
-			harvest.add(new ItemStack(Items.EGG, 3));
-			harvest.add(new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.withDefaultNamespace("white_wool")), 2));
-			harvest.add(new ItemStack(Items.LEATHER, 1));
-			harvest.add(new ItemStack(smoked ? Items.COOKED_BEEF : Items.BEEF, 2));
-			harvest.add(new ItemStack(smoked ? Items.COOKED_MUTTON : Items.MUTTON, 2));
-			harvest.add(new ItemStack(smoked ? Items.COOKED_CHICKEN : Items.CHICKEN, 1));
-		}
-		if (farm >= 3) {
-			harvest.add(new ItemStack(Items.BREAD, 3));
-			harvest.add(new ItemStack(Items.BAKED_POTATO, 3));
-		}
-		harvest.forEach(stack -> insert(box, stack));
-		box.setChanged();
 		ServerPlayer owner = level.getServer().getPlayerList().getPlayer(s.owner());
-		if (owner != null && owner.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(s.heart())) < 64 * 64) {
-			owner.sendOverlayMessage(Component.translatable("kingdomquest.farm.harvest", s.name()));
+		if (any && owner != null && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 64 * 64) {
+			owner.sendOverlayMessage(Component.translatable("kingdomquest.production", s.name()));
 		}
+	}
+
+	static List<ItemStack> goods(String track, int lvl, String style, RandomSource random) {
+		List<ItemStack> g = new ArrayList<>();
+		switch (track) {
+			case Settlement.MAIN -> {
+				if (lvl >= 5) { // taxes
+					g.add(new ItemStack(Items.EMERALD, lvl >= 6 ? 4 : 2));
+					g.add(new ItemStack(Items.COOKED_BEEF, 3));
+				}
+			}
+			case Progression.FARM -> {
+				g.add(new ItemStack(Items.WHEAT, 6));
+				g.add(new ItemStack(Items.CARROT, 3));
+				g.add(new ItemStack(Items.POTATO, 3));
+				if (lvl >= 2) { // pasture; meat comes cooked once the smokehouse stands
+					boolean smoked = lvl >= 3;
+					g.add(new ItemStack(Items.EGG, 3));
+					g.add(new ItemStack(item("white_wool"), 2));
+					g.add(new ItemStack(Items.LEATHER, 1));
+					g.add(new ItemStack(smoked ? Items.COOKED_BEEF : Items.BEEF, 2));
+					g.add(new ItemStack(smoked ? Items.COOKED_MUTTON : Items.MUTTON, 2));
+					g.add(new ItemStack(smoked ? Items.COOKED_CHICKEN : Items.CHICKEN, 1));
+				}
+				if (lvl >= 3) {
+					g.add(new ItemStack(Items.BREAD, 3));
+					g.add(new ItemStack(Items.BAKED_POTATO, 3));
+				}
+			}
+			case Progression.SMITH -> {
+				g.add(new ItemStack(Items.IRON_INGOT, 3));
+				g.add(new ItemStack(Items.IRON_NUGGET, 6));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.GOLD_INGOT, 1));
+					if (random.nextInt(3) == 0) {
+						g.add(new ItemStack(SMITH_GEAR.get(random.nextInt(SMITH_GEAR.size()))));
+					}
+				}
+			}
+			case Progression.WOOD -> {
+				String wood = Style.FROZEN.equals(style) ? "spruce" : "oak";
+				g.add(new ItemStack(item(wood + "_log"), 16));
+				g.add(new ItemStack(Items.STICK, 8));
+				if (lvl >= 2) {
+					g.add(new ItemStack(item(wood + "_planks"), 32));
+					g.add(new ItemStack(Items.CHARCOAL, 4));
+				}
+			}
+			default -> {
+			}
+		}
+		return g;
+	}
+
+	private static Item item(String id) {
+		return BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(id));
 	}
 
 	private static Container storage(ServerLevel level, Settlement s, String job) {

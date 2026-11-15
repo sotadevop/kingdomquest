@@ -15,7 +15,7 @@ import net.minecraft.world.item.ItemStack;
 /** The kingdom menu, opened at the heart: name, logo, current level, build progress and the next upgrade. */
 public class KingdomScreen extends Screen {
 	private static final int W = 240;
-	private static final int ROW = 40;
+	private static final int ROW = 34;
 	private static final int TEXT = 0xFF404040;
 	private static final int GOOD = 0xFF2E7D32;
 	private static final int BAD = 0xFFB71C1C;

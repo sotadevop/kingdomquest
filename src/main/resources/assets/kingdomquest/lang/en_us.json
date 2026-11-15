@@ -36,5 +36,17 @@
 	"kingdomquest.addon.farm_2": "Farm - Pasture",
 	"kingdomquest.addon.farm_3": "Farm - Smokehouse",
 	"kingdomquest.req.plant_seed": "Plant a seed",
-	"kingdomquest.farm.harvest": "The fields of %s brought in a harvest."
+	"kingdomquest.production": "%s: new goods in the storehouses.",
+	"kingdomquest.level.hamlet_2": "Hamlet - Two Houses",
+	"kingdomquest.level.hamlet_3": "Hamlet - Market",
+	"kingdomquest.addon.smith_1": "Blacksmith - Forge",
+	"kingdomquest.addon.smith_2": "Blacksmith - Workshop",
+	"kingdomquest.addon.wood_1": "Woodcutter - Log Store",
+	"kingdomquest.addon.wood_2": "Woodcutter - Sawmill",
+	"kingdomquest.req.fish": "Catch a fish",
+	"kingdomquest.req.trade": "Trade with a villager",
+	"kingdomquest.req.armor": "Wear iron armor",
+	"kingdomquest.req.diamond": "Mine a diamond",
+	"kingdomquest.req.stone_tools": "Craft a stone pickaxe",
+	"kingdomquest.req.lava": "Fill a bucket with lava"
 }
