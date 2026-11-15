@@ -67,9 +67,10 @@ public class RealmScreen extends Screen {
 	/** Opens (or refreshes) the screen; the heart is the settlement whose menu it came from. */
 	public static void open(RealmPayload payload) {
 		Minecraft mc = Minecraft.getInstance();
-		BlockPos heart = mc.screen instanceof RealmScreen r ? r.heart : KingdomScreen.lastHeart();
+		RealmScreen r = shown;
+		BlockPos heart = r != null ? r.heart : KingdomScreen.lastHeart();
 		RealmScreen next = new RealmScreen(payload, heart);
-		if (mc.screen instanceof RealmScreen r) {
+		if (r != null) {
 			next.tab = r.tab;
 			next.page = r.page;
 			next.selA = r.selA;
@@ -90,8 +91,18 @@ public class RealmScreen extends Screen {
 		return this.nodes.stream().filter(n -> n.key().equals(key)).findFirst().orElse(null);
 	}
 
+	/** The realm screen on display (refreshed in place when the server answers an action). */
+	private static RealmScreen shown;
+
+	@Override
+	public void onClose() {
+		shown = null;
+		super.onClose();
+	}
+
 	@Override
 	protected void init() {
+		shown = this;
 		this.left = (this.width - W) / 2;
 		this.top = (this.height - H) / 2;
 		this.themed.clear();
