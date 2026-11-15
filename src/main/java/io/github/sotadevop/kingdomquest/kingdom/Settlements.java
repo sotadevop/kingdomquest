@@ -25,6 +25,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.CrossCollisionBlock;
+import net.minecraft.world.level.block.WallBlock;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -50,7 +52,7 @@ public final class Settlements {
 			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "settlements"));
 
 	/** Minimum distance between two hearts. */
-	private static final int SPACING = 64;
+	private static final int SPACING = 160;
 	private static final int CONFIRM_TICKS = 200;
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final Map<String, List<Template.Placement>> PLACEMENTS = new HashMap<>();
@@ -242,8 +244,70 @@ public final class Settlements {
 				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
 			}
 		}
-		clearFootprint(level, s, list);
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
+	}
+
+	// ---- test tools (/kingdomquest test ...) ----
+
+	/** Finishes the running build of the player's settlement at once. Returns null if there is no settlement. */
+	public static Settlement testFinish(ServerPlayer player) {
+		MinecraftServer server = player.level().getServer();
+		Settlement s = byOwner(server, player.getUUID());
+		if (s != null && !s.job().isEmpty()) {
+			step(server, s, true);
+			s = byHeart(server, s.heart());
+		}
+		return s;
+	}
+
+	/** Builds the given level of a track at once, skipping requirements and costs (also downgrades). */
+	public static boolean testSet(ServerPlayer player, String track, int lvl) {
+		Settlement s = testFinish(player);
+		List<Progression.Step> steps = Progression.steps(track);
+		if (s == null || steps == null || lvl < 1 || lvl > steps.size()) {
+			return false;
+		}
+		MinecraftServer server = player.level().getServer();
+		start(server, s, track, steps.get(lvl - 1));
+		testFinish(player);
+		return true;
+	}
+
+	/** Every track to its highest level. */
+	public static boolean testMax(ServerPlayer player) {
+		boolean ok = true;
+		for (String track : Progression.ORDER) {
+			ok &= testSet(player, track, Progression.steps(track).size());
+		}
+		return ok;
+	}
+
+	public static boolean testProduce(ServerPlayer player) {
+		Settlement s = byOwner(player.level().getServer(), player.getUUID());
+		if (s != null) {
+			Production.run(player.level().getServer().overworld(), s);
+		}
+		return s != null;
+	}
+
+	/** Removes the player's settlement and every block its builders placed. */
+	public static boolean testReset(ServerPlayer player) {
+		MinecraftServer server = player.level().getServer();
+		Settlement s = byOwner(server, player.getUUID());
+		if (s == null) {
+			return false;
+		}
+		ServerLevel level = server.overworld();
+		for (List<Long> list : s.built().values()) {
+			for (long pos : list) {
+				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+			}
+		}
+		level.setBlock(s.heart(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+		List<Settlement> rest = new ArrayList<>(all(server));
+		rest.removeIf(o -> o.id().equals(s.id()));
+		server.overworld().setAttached(DATA, List.copyOf(rest));
+		return true;
 	}
 
 	// ---- test tools (/kingdomquest test ...) ----
@@ -358,6 +422,12 @@ public final class Settlements {
 		}
 	}
 
+	/** Total work units of a job: columns to level first, then blocks to place. */
+	private static int total(Settlement s, String job) {
+		Template t = Template.get(job);
+		return t == null ? 0 : SiteWork.columns(job, t, Rotation.values()[s.rotation()]).size() + placements(s, job).size();
+	}
+
 	private static void step(MinecraftServer server, Settlement s, boolean instant) {
 		ServerLevel level = server.overworld();
 		if (!level.isLoaded(s.heart())) {
@@ -369,26 +439,43 @@ public final class Settlements {
 			put(server, s.withJob("", "", 0));
 			return;
 		}
-		int perTick = instant ? list.size() : Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 20.0)));
+		List<SiteWork.Column> columns = SiteWork.columns(s.job(), t, Rotation.values()[s.rotation()]);
+		int cols = columns.size();
 		int index = s.jobIndex();
+		Set<Long> allBuilt = new HashSet<>();
+		s.built().values().forEach(allBuilt::addAll);
+		// phase 1: level the ground
+		int colsPerTick = instant ? cols : Math.max(4, (int) Math.ceil(cols / (t.seconds * 8.0)));
+		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
+			SiteWork.clear(level, s.heart(), columns.get(index), allBuilt);
+		}
+		// phase 2: place the blocks
+		int perTick = instant ? list.size() : Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 12.0)));
 		List<Long> built = new ArrayList<>(s.built().getOrDefault(s.jobTrack(), List.of()));
-		for (int n = 0; n < perTick && index < list.size(); n++, index++) {
-			Template.Placement p = list.get(index);
-			BlockPos pos = s.heart().offset(p.offset());
-			if (!level.getBlockState(pos).equals(p.state())) {
-				level.setBlock(pos, p.state(), Block.UPDATE_ALL);
-				if (n == 0) {
-					SoundType sound = p.state().getSoundType();
-					level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
-					level.levelEvent(2001, pos, Block.getId(p.state()));
+		Set<Long> builtSet = new HashSet<>(built);
+		if (index >= cols) {
+			for (int n = 0; n < perTick && index < cols + list.size(); n++, index++) {
+				Template.Placement p = list.get(index - cols);
+				BlockPos pos = s.heart().offset(p.offset());
+				BlockState state = p.state();
+				if (state.getBlock() instanceof CrossCollisionBlock || state.getBlock() instanceof WallBlock) {
+					state = Block.updateFromNeighbourShapes(state, level, pos); // fences, panes and walls join their neighbours
+				}
+				if (!level.getBlockState(pos).equals(state)) {
+					level.setBlock(pos, state, Block.UPDATE_ALL);
+					if (n == 0) {
+						SoundType sound = state.getSoundType();
+						level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
+						level.levelEvent(2001, pos, Block.getId(state));
+					}
+				}
+				// crops are harvested normally, so they are not protected
+				if (p.offset().getY() >= 0 && !(state.getBlock() instanceof CropBlock) && builtSet.add(pos.asLong())) {
+					built.add(pos.asLong());
 				}
 			}
-			// crops are harvested normally, so they are not protected
-			if (p.offset().getY() >= 0 && !(p.state().getBlock() instanceof CropBlock) && !built.contains(pos.asLong())) {
-				built.add(pos.asLong());
-			}
 		}
-		if (index >= list.size()) {
+		if (index >= cols + list.size()) {
 			put(server, s.withJob("", "", 0).withBuilt(s.jobTrack(), built));
 			spawnAnimals(level, s, t);
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
@@ -399,8 +486,9 @@ public final class Settlements {
 		}
 		put(server, s.withJob(s.job(), s.jobTrack(), index).withBuilt(s.jobTrack(), built));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 48 * 48) {
-			owner.sendOverlayMessage(Component.translatable("kingdomquest.build.progress", s.name(), index * 100 / list.size()));
+		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 64 * 64) {
+			owner.sendOverlayMessage(Component.translatable(index < cols ? "kingdomquest.build.clearing" : "kingdomquest.build.progress", s.name(),
+					index * 100 / (cols + list.size())));
 		}
 	}
 
@@ -449,7 +537,7 @@ public final class Settlements {
 	public static void sendInfo(ServerPlayer player, Settlement s) {
 		int percent = -1;
 		if (!s.job().isEmpty()) {
-			int total = placements(s, s.job()).size();
+			int total = total(s, s.job());
 			percent = total == 0 ? 100 : s.jobIndex() * 100 / total;
 		}
 		boolean mine = s.owner().equals(player.getUUID());

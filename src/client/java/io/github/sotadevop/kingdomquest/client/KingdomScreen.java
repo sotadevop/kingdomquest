@@ -3,6 +3,7 @@ package io.github.sotadevop.kingdomquest.client;
 import io.github.sotadevop.kingdomquest.kingdom.KingdomInfoPayload;
 import io.github.sotadevop.kingdomquest.kingdom.UpgradePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -12,10 +13,17 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
 
-/** The kingdom menu, opened at the heart: name, logo, current level, build progress and the next upgrade. */
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * The kingdom menu, opened at the heart: name, logo, current level, build progress, and one compact cell per
+ * upgrade (two columns). Hovering a cell shows what it needs.
+ */
 public class KingdomScreen extends Screen {
-	private static final int W = 240;
-	private static final int ROW = 34;
+	private static final int W = 420;
+	private static final int COL = (W - 16) / 2;
+	private static final int ROW = 28;
 	private static final int TEXT = 0xFF404040;
 	private static final int GOOD = 0xFF2E7D32;
 	private static final int BAD = 0xFFB71C1C;
@@ -38,22 +46,34 @@ public class KingdomScreen extends Screen {
 		return this.top + (this.info.percent() >= 0 ? 66 : 40);
 	}
 
+	private int cellX(int i) {
+		return this.left + 8 + (i % 2) * COL;
+	}
+
+	private int cellY(int i) {
+		return optionsTop() + (i / 2) * ROW;
+	}
+
+	private boolean creative() {
+		return this.minecraft != null && this.minecraft.player != null && this.minecraft.player.isCreative();
+	}
+
 	@Override
 	protected void init() {
-		this.h = (this.info.percent() >= 0 ? 66 : 40) + Math.max(1, this.info.options().size()) * ROW + 30;
+		int rows = Math.max(1, (this.info.options().size() + 1) / 2);
+		this.h = (this.info.percent() >= 0 ? 66 : 40) + rows * ROW + 30;
 		this.left = (this.width - W) / 2;
 		this.top = (this.height - this.h) / 2;
-		int y = optionsTop();
-		for (KingdomInfoPayload.Option o : this.info.options()) {
+		List<KingdomInfoPayload.Option> options = this.info.options();
+		for (int i = 0; i < options.size(); i++) {
+			KingdomInfoPayload.Option o = options.get(i);
 			Button build = Button.builder(Component.translatable("kingdomquest.menu.build"), b -> {
 				ClientPlayNetworking.send(new UpgradePayload(this.info.heart(), o.track()));
 				this.onClose();
-			}).bounds(this.left + W - 58, y + 10, 50, 18).build();
+			}).bounds(cellX(i) + COL - 54, cellY(i) + 2, 48, 18).build();
 			// creative may start a new build while one runs; the server finishes the running one first
-			boolean creative = this.minecraft != null && this.minecraft.player != null && this.minecraft.player.isCreative();
-			build.active = (this.info.percent() < 0 || creative) && o.requirementMet() && o.canPay();
+			build.active = (this.info.percent() < 0 || creative()) && o.requirementMet() && o.canPay();
 			this.addRenderableWidget(build);
-			y += ROW;
 		}
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 88, this.top + this.h - 26, 80, 18).build());
@@ -66,6 +86,9 @@ public class KingdomScreen extends Screen {
 		g.fill(this.left, this.top, this.left + W, this.top + this.h, 0xFFC6C6C6);
 		int c = 0xFF000000 | DyeColor.byId(this.info.color()).getTextureDiffuseColor();
 		g.fill(this.left + 8, this.top + 8, this.left + 28, this.top + 28, c);
+		for (int i = 0; i < this.info.options().size(); i++) {
+			g.fill(cellX(i), cellY(i), cellX(i) + COL - 4, cellY(i) + ROW - 4, 0xFFB4B4B4);
+		}
 	}
 
 	@Override
@@ -81,20 +104,32 @@ public class KingdomScreen extends Screen {
 			g.fill(this.left + 8, y + 12, this.left + W - 8, y + 18, 0xFF8B8B8B);
 			g.fill(this.left + 8, y + 12, this.left + 8 + (W - 16) * this.info.percent() / 100, y + 18, GOOD);
 		}
-		int y = optionsTop();
-		if (this.info.options().isEmpty()) {
-			g.text(this.font, Component.translatable("kingdomquest.menu.max"), this.left + 8, y, TEXT, false);
+		List<KingdomInfoPayload.Option> options = this.info.options();
+		if (options.isEmpty()) {
+			g.text(this.font, Component.translatable("kingdomquest.menu.max"), this.left + 8, optionsTop(), TEXT, false);
 			return;
 		}
-		for (KingdomInfoPayload.Option o : this.info.options()) {
-			g.fill(this.left + 6, y - 3, this.left + W - 6, y - 2, 0xFF8B8B8B);
-			g.text(this.font, Component.translatable("kingdomquest.menu.next", Component.translatable(o.title())), this.left + 8, y, TEXT, false);
-			if (!o.requirement().isEmpty()) {
-				g.text(this.font, Component.translatable("kingdomquest.menu.requires", Component.translatable(o.requirement())),
-						this.left + 8, y + 11, o.requirementMet() ? GOOD : BAD, false);
+		boolean creative = creative();
+		for (int i = 0; i < options.size(); i++) {
+			KingdomInfoPayload.Option o = options.get(i);
+			int x = cellX(i) + 4;
+			int y = cellY(i) + 3;
+			g.text(this.font, Component.translatable(o.title()), x, y, TEXT, false);
+			String status = !o.requirementMet() ? "kingdomquest.menu.locked" : !o.canPay() ? "kingdomquest.menu.missing" : "kingdomquest.menu.ready";
+			g.text(this.font, Component.translatable(status), x, y + 11, o.requirementMet() && o.canPay() ? GOOD : BAD, false);
+			if (mouseX >= cellX(i) && mouseX < cellX(i) + COL - 4 && mouseY >= cellY(i) && mouseY < cellY(i) + ROW - 4) {
+				List<Component> lines = new ArrayList<>();
+				lines.add(Component.translatable(o.title()));
+				if (!o.requirement().isEmpty()) {
+					lines.add(Component.translatable("kingdomquest.menu.requires", Component.translatable(o.requirement()))
+							.withStyle(o.requirementMet() ? ChatFormatting.GREEN : ChatFormatting.RED));
+				}
+				lines.add(Component.translatable("kingdomquest.menu.cost", o.cost()).withStyle(o.canPay() ? ChatFormatting.GREEN : ChatFormatting.RED));
+				if (creative) {
+					lines.add(Component.literal("Creative: free, no requirement").withStyle(ChatFormatting.GRAY));
+				}
+				g.setComponentTooltipForNextFrame(this.font, lines, mouseX, mouseY);
 			}
-			g.text(this.font, Component.translatable("kingdomquest.menu.cost", o.cost()), this.left + 8, y + 22, o.canPay() ? GOOD : BAD, false);
-			y += ROW;
 		}
 	}
 

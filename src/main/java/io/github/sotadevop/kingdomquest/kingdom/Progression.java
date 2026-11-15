@@ -94,12 +94,38 @@ public final class Progression {
 			new Step(WALLS, "wall_2", 2, "kingdomquest.walls.wall_2", 7, adv("adventure/shoot_arrow"), "kingdomquest.req.arrow",
 					List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.PLANKS, "planks", 64), item(Items.LADDER, 8))));
 
+	/** Roads and lamps: the village infrastructure, each upgraded on its own. */
+	public static final String ROADS = "roads";
+	public static final String LAMPS = "lamps";
+	public static final List<Step> ROAD_STEPS = List.of(
+			new Step(ROADS, "road_1", 1, "kingdomquest.roads.road_1", 4, null, null, List.of(item(Items.STONE_SHOVEL, 1))),
+			new Step(ROADS, "road_2", 2, "kingdomquest.roads.road_2", 5, adv("story/mine_stone"), "kingdomquest.req.mine_stone",
+					List.of(item(Items.IRON_SHOVEL, 1), item(Items.GRAVEL, 16))),
+			new Step(ROADS, "road_3", 3, "kingdomquest.roads.road_3", 7, adv("story/smelt_iron"), "kingdomquest.req.smelt_iron",
+					List.of(item(Items.COBBLESTONE, 192), item(Items.GRAVEL, 64))),
+			new Step(ROADS, "road_4", 4, "kingdomquest.roads.road_4", 7, adv("story/enchant_item"), "kingdomquest.req.enchant",
+					List.of(item(Items.STONE_BRICKS, 192), item(Items.POLISHED_ANDESITE, 64))));
+	public static final List<Step> LAMP_STEPS = List.of(
+			new Step(LAMPS, "lamp_1", 1, "kingdomquest.lamps.lamp_1", 4, null, null, List.of(item(Items.TORCH, 16), tag(ItemTags.LOGS, "logs", 4))),
+			new Step(LAMPS, "lamp_2", 2, "kingdomquest.lamps.lamp_2", 5, adv("story/smelt_iron"), "kingdomquest.req.smelt_iron",
+					List.of(item(Items.LANTERN, 16), tag(ItemTags.LOGS, "logs", 8))),
+			new Step(LAMPS, "lamp_3", 3, "kingdomquest.lamps.lamp_3", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
+					List.of(item(Items.LANTERN, 32), item(Items.STONE_BRICKS, 16), tag(ItemTags.LOGS, "logs", 8))));
+
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, FARM, SMITH, WOOD);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, ROADS, LAMPS, FARM, SMITH, WOOD);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
-		return l != null ? l : WALLS.equals(track) ? WALL_STEPS : ADDONS_2.get(track);
+		if (l != null) {
+			return l;
+		}
+		return switch (track) {
+			case WALLS -> WALL_STEPS;
+			case ROADS -> ROAD_STEPS;
+			case LAMPS -> LAMP_STEPS;
+			default -> ADDONS_2.get(track);
+		};
 	}
 
 	private Progression() {

@@ -43,6 +43,8 @@ public final class Template {
 	public final List<Entry> entries;
 	/** Container the add-on fills with its production (relative to the plot), or null. */
 	public final BlockPos storage;
+	/** Land graded outside the template's area (walls), 0 for none. */
+	public final int apron;
 	/** Animals spawned once when the building is finished: entity id and position relative to the plot. */
 	public final List<Animal> animals;
 
@@ -76,6 +78,7 @@ public final class Template {
 			list.add(new Entry(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt(), names.get(i), props.get(i)));
 		}
 		this.entries = List.copyOf(list);
+		this.apron = json.has("apron") ? json.get("apron").getAsInt() : 0;
 		JsonArray st = json.getAsJsonArray("storage");
 		this.storage = st == null ? null : new BlockPos(st.get(0).getAsInt(), st.get(1).getAsInt(), st.get(2).getAsInt());
 		List<Animal> animals = new ArrayList<>();

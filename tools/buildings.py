@@ -307,7 +307,7 @@ def house_norse(b, x0=4, z0=0):
         b.put(x, 1, z1 + 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
 
 
-FARM = (13, 1, 9, 9)  # x0, z0, width, depth of the field
+FARM = (22, 1, 9, 9)  # x0, z0, width, depth of the field
 
 
 def farm_plot_markers(b, s):
@@ -342,9 +342,9 @@ def house(b, style, x0, z0, facing_north=False):
         b.b.update(t.b)
 
 
-TAX_STORE = (11, 0, 11)
-SMITH_STORE = (-9, 0, 2)
-WOOD_STORE = (-12, 0, 16)
+TAX_STORE = (12, 0, 9)
+SMITH_STORE = (-15, 0, 2)
+WOOD_STORE = (-28, 0, 22)
 
 
 def street_lamp(b, s, x, z):
@@ -378,54 +378,45 @@ def hamlet(style, level):
     b.put(2, -1, 13, "water", level="0")
     b.put(2, -2, 13, "cobblestone")
     farm_plot_markers(b, s)
-    path = {(hx, z) for z in range(9, 15)} | {(hx + dx, hz + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1)}
-    path |= {(x, 10) for x in range(3, 13)}
     if level >= 2:
-        # second house south-west, door facing the square; tax barrel by the fire
-        house(b, style, -4, 16, facing_north=True)
-        path |= {(x, 10) for x in range(-1, 3)} | {(-1, z) for z in range(10, 16)}
+        # second house across the street, door facing the square; tax barrel by the fire
+        house(b, style, -8, 22, facing_north=True)
         b.put(*TAX_STORE, "barrel", facing="up", open="false")
-        street_lamp(b, s, 0, 11)
     if level >= 3:
-        house(b, style, 10, 16, facing_north=True)
-        path |= {(13, z) for z in range(11, 16)}
-        street_lamp(b, s, 12, 12)
-        # market stall
-        for x, z in ((4, 16), (7, 16), (4, 19), (7, 19)):
-            b.put(x, 0, z - 1, s["pole"]); b.put(x, 1, z - 1, s["pole"])
-        for x in range(4, 8):
-            for z in range(15, 19):
-                b.put(x, 2, z, "{color}_wool" if z == 18 else "white_wool")
-        b.put(5, 0, 16, "barrel", facing="up", open="false")
-        b.put(6, 0, 16, "barrel", facing="up", open="true")
+        house(b, style, 16, 22, facing_north=True)
+        # market stall on the east side of the square
+        for x, z in ((11, 12), (13, 12), (11, 14), (13, 14)):
+            b.put(x, 0, z, s["pole"])
+            b.put(x, 1, z, s["pole"])
+        for x in range(11, 14):
+            for z in range(12, 15):
+                b.put(x, 2, z, "{color}_wool" if z == 14 else "white_wool")
+        b.put(12, 0, 12, "barrel", facing="up", open="false")
+        b.put(12, 0, 13, "barrel", facing="up", open="true")
     if level >= 4:
-        # Village: fourth house, paved roads, bell on the square, flower beds
-        house(b, style, 19, 16, facing_north=True)
-        path |= {(x, 15) for x in range(13, 23)}
+        # Village: fourth house, bell on the square, flower beds
+        house(b, style, 28, 22, facing_north=True)
         b.put(hx + 1, 0, hz - 2, "bell", attachment="floor", facing="south", powered="false")
-        for x, z in ((9, 13), (5, 13)):
+        for x, z in ((9, 15), (5, 15)):
             b.put(x, 0, z, "sweet_berry_bush" if style == "frozen" else "rose_bush", **({"age": "3"} if style == "frozen" else {"half": "lower"}))
             if style != "frozen":
                 b.put(x, 1, z, "rose_bush", half="upper")
-        street_lamp(b, s, 18, 14)
-        street_lamp(b, s, -3, 13)
-        s = dict(s, path=("cobblestone", "gravel") if style == "frozen" else ("cobblestone", "stone_bricks"))
-    ground(b, s, path)
-    snow(b, s, [(x, z) for x in range(-5, 27) for z in range(15 if level == 1 else 26) if (x * 73856093 ^ z * 19349663) % 11 == 0
-                and not (4 <= x <= 10 and z <= 9)])
+    road = road_cells()
+    snow(b, s, [(x, z) for x in range(-10, 36) for z in range(16 if level == 1 else 32) if (x * 73856093 ^ z * 19349663) % 11 == 0
+                and not (4 <= x <= 10 and z <= 9) and (x, z) not in road])
     return b.b
 
 
 def pasture(b, s):
     """Farm level 2: fenced pasture east of the field with hay, a water trough and a lean-to shelter."""
     w = s["wood"]
-    x0, x1, z0, z1 = 23, 31, 0, 9
+    x0, x1, z0, z1 = 35, 43, 0, 9
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             edge = x in (x0, x1) or z in (z0, z1)
             if edge:
-                if (x, z) == (x0, 5):
-                    b.put(x, 0, z, w + "_fence_gate", facing="west", in_wall="false", open="false", powered="false")
+                if (x, z) == (39, z1):
+                    b.put(x, 0, z, w + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
                 else:
                     b.put(x, 0, z, w + "_fence")
             elif (x * 7 + z * 3) % 6 == 0:
@@ -447,7 +438,7 @@ def pasture(b, s):
 def smokehouse(b, s):
     """Farm level 3: small smokehouse south of the pasture where meat is cured over a smoker."""
     w = s["wood"]
-    x0, x1, z0, z1 = 25, 29, 11, 14
+    x0, x1, z0, z1 = 36, 40, 15, 18
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             edge = x in (x0, x1) or z in (z0, z1)
@@ -489,16 +480,14 @@ def farm(style, level):
             b.put(x, -1, z, "farmland", moisture="7")
             crop = ("wheat", "carrots", "potatoes")[(z - z0) % 3 if z < zc else (z - zc) % 3]
             b.put(x, 0, z, crop, age="3")
-    # fence with a gate facing the hamlet (west side)
+    # fence with a gate on the road side (south)
     for x in range(x0 - 1, x0 + w + 1):
         for z in (z0 - 1, z0 + d):
             b.put(x, 0, z, s["wood"] + "_fence")
     for z in range(z0, z0 + d):
         for x in (x0 - 1, x0 + w):
-            if (x, z) == (x0 - 1, zc):
-                b.put(x, 0, z, s["wood"] + "_fence_gate", facing="west", in_wall="false", open="false", powered="false")
-            else:
-                b.put(x, 0, z, s["wood"] + "_fence")
+            b.put(x, 0, z, s["wood"] + "_fence")
+    b.put(x0 + w // 2, 0, z0 + d, s["wood"] + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
     # scarecrow
     sx, sz = x0 + 2, z0 + 1
     b.put(sx, -1, sz, "coarse_dirt")
@@ -520,7 +509,7 @@ def smithy(style, level):
     s = STYLES[style]
     b = B()
     w = s["wood"]
-    x0, x1, z0, z1 = -10, -2, 1, 8
+    x0, x1, z0, z1 = -16, -8, 1, 8
     log = "stripped_spruce_log" if style == "frozen" else "stripped_oak_log"
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
@@ -565,7 +554,6 @@ def smithy(style, level):
             b.put(x, 2, z0, "iron_bars", north="false", south="false", east="true", west="true", waterlogged="false")
         b.put(x0 + 1, 1, z0 + 5, w + "_trapdoor", facing="east", half="top", open="false", powered="false", waterlogged="false")
         b.put(x0 + 4, 2, z1 + 1, "{color}_wall_banner", facing="south")
-    ground(b, s, {(x, z) for x in range(x0 + 2, x1) for z in (9, 10)})
     return b.b
 
 
@@ -575,7 +563,7 @@ def woodcutter(style, level):
     b = B()
     w = s["wood"]
     log = "spruce_log" if style == "frozen" else "oak_log"
-    x0, x1, z0, z1 = -14, -7, 15, 23
+    x0, x1, z0, z1 = -30, -23, 21, 29
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             if (x * 3 + z) % 5 == 0:
@@ -614,11 +602,10 @@ def woodcutter(style, level):
                 b.put(x, 3, z, w + "_slab", type="bottom", waterlogged="false")
         b.put(sx + 1, 0, sz, w + "_planks")
         b.put(sx + 1, 1, sz, w + "_slab", type="bottom", waterlogged="false")
-    ground(b, s, {(x, 15) for x in range(x0 + 6, -4)})
     return b.b
 
 
-WALL = (-17, 33, -3, 28)  # x0, x1, z0, z1 of the palisade ring (village plot)
+WALL = (-39, 52, -9, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
 
 
 def walls(style, level):
@@ -645,12 +632,10 @@ def walls(style, level):
         b.put(x, 0, z1, w + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
         b.put(x, 1, z1, w + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
         b.put(x, 3, z1, "stripped_" + log, axis="x")
-        b.put(x, -1, z1, s["path"][0])
     for x in (gx - 2, gx + 2):
         for y in range(0, 5):
             b.put(x, y, z1, "stripped_" + log, axis="y")
     b.put(gx, 4, z1 + 1, "{color}_wall_banner", facing="south")
-    ground(b, s, {(gx, z) for z in range(15, z1)})
     if level >= 2:
         # walkway on the inside at y=2, reached from the towers
         inner = {(x, z0 + 1) for x in range(x0 + 1, x1)} | {(x, z1 - 1) for x in range(x0 + 1, x1) if abs(x - gx) > 2}
@@ -674,6 +659,94 @@ def walls(style, level):
                 b.put(tx + 1, y, tz + 2, log, axis="y")  # the ladder hangs on this
                 b.put(tx + 1, y, tz + 1, "ladder", facing="north", waterlogged="false")
             b.put(tx + 1, 4, tz + 1, "air")
+    return b.b
+
+
+def road_cells():
+    """The road network of the full village (fixed plots: roads lead to every plot, built or not).
+    Returns {(x, z): kind} with kind 'core' (centre line) or 'side'."""
+    cells = {}
+
+    def strip(xs, zs, core_x=None, core_z=None):
+        for x in xs:
+            for z in zs:
+                core = (core_x is not None and x == core_x) or (core_z is not None and z == core_z)
+                if cells.get((x, z)) != "core":
+                    cells[(x, z)] = "core" if core else "side"
+
+    strip(range(0, 15), range(9, 17), core_x=7)                                  # square
+    strip(range(6, 9), range(16, WALL[3] + 1), core_x=7)                         # main road to the gate
+    strip(range(-14, 0), range(12, 14), core_z=12)                               # west road
+    strip(range(-13, -10), range(9, 12), core_x=-12)                             # smithy
+    strip(range(15, 43), range(12, 14), core_z=12)                               # east road
+    strip([26], [11], core_x=26)                                                 # field gate
+    strip([39], [10, 11], core_x=39)                                             # pasture gate
+    strip([38], [14], core_x=38)                                                 # smokehouse
+    strip([20], range(5, 12), core_x=20)                                         # farm barrel
+    strip(range(-26, 35), range(18, 20), core_z=18)                              # street of houses
+    for x in (-5, 19, 31, -26):                                                  # doors, woodcutter
+        strip([x], [20, 21], core_x=x)
+    for x, z in ((1, 12), (2, 12), (3, 12), (1, 13), (2, 13), (3, 13), (1, 14), (2, 14), (3, 14)):
+        cells.pop((x, z), None)                                                  # the well
+    return cells
+
+
+ROAD_MATS = {
+    1: ("dirt_path", "coarse_dirt"),
+    2: ("dirt_path", "coarse_dirt"),
+    3: ("cobblestone", "gravel", "mossy_cobblestone"),
+    4: ("stone_bricks", "polished_andesite", "cracked_stone_bricks"),
+}
+
+
+def roads(style, level):
+    """Roads track: 1 trodden path (centre line, gaps), 2 full dirt roads, 3 cobblestone and gravel,
+    4 stone brick with polished andesite borders."""
+    b = B()
+    cells = road_cells()
+    m = ROAD_MATS[level]
+    for (x, z), kind in cells.items():
+        h = (x * 73856093 ^ z * 19349663) % 20
+        if level == 1:
+            if kind != "core" or h >= 13:
+                continue
+            b.put(x, -1, z, m[0] if h < 9 else m[1])
+        elif level == 2:
+            b.put(x, -1, z, m[1] if h < 4 else m[0])
+        elif level == 3:
+            b.put(x, -1, z, m[1] if h < 5 else m[2] if h < 8 else m[0])
+        else:
+            border = any((x + dx, z + dz) not in cells for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+            b.put(x, -1, z, m[1] if border else m[2] if h < 3 else m[0])
+    return b.b
+
+
+# lamp posts: x, z and the direction their arm points (towards the road)
+LAMP_SPOTS = [(5, 22, 1, 0), (9, 22, -1, 0), (5, 30, 1, 0), (9, 30, -1, 0), (5, 35, 1, 0), (9, 35, -1, 0),
+              (-6, 11, 0, 1), (20, 11, 0, 1), (32, 11, 0, 1),
+              (-10, 17, 0, 1), (2, 17, 0, 1), (13, 17, 0, 1), (25, 17, 0, 1), (0, 9, 1, 0), (14, 9, -1, 0)]
+
+
+def lamps(style, level):
+    """Lamps track: 1 torches on posts, 2 lanterns on posts, 3 stone-footed posts with a hanging lantern on an arm."""
+    s = STYLES[style]
+    b = B()
+    fence = s["wood"] + "_fence"
+    for x, z, dx, dz in LAMP_SPOTS:
+        if level == 1:
+            b.put(x, 0, z, fence)
+            b.put(x, 1, z, "torch")
+        elif level == 2:
+            b.put(x, 0, z, fence)
+            b.put(x, 1, z, fence)
+            b.put(x, 2, z, "lantern", hanging="false", waterlogged="false")
+        else:
+            b.put(x, 0, z, "stone_brick_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+            for y in (1, 2, 3):
+                b.put(x, y, z, fence)
+            b.put(x + dx, 3, z + dz, fence)
+            b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")
+            b.put(x, 4, z, "lantern", hanging="false", waterlogged="false")
     return b.b
 
 
@@ -722,18 +795,26 @@ if __name__ == "__main__":
             jobs.append((style, f"hamlet_{level}", hamlet(style, level), secs, TAX_STORE if level >= 2 else None, None))
         jobs.append((style, "village_1", hamlet(style, 4), 300, TAX_STORE, None))
         for level, secs in ((1, 300), (2, 300)):
-            jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None))
+            jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None, 24))
+        for level in (1, 2, 3, 4):
+            jobs.append((style, f"road_{level}", roads(style, level), 90 + 30 * level, None, None))
+        for level in (1, 2, 3):
+            jobs.append((style, f"lamp_{level}", lamps(style, level), 60 + 30 * level, None, None))
         for level, secs in ((1, 120), (2, 150), (3, 180)):
             jobs.append((style, f"farm_{level}", farm(style, level), secs, STORE,
-                         [["cow", 27, 0, 4], ["cow", 28, 0, 6], ["sheep", 26, 0, 7], ["sheep", 29, 0, 3], ["chicken", 25, 0, 5],
-                          ["chicken", 26, 0, 3]] if level == 2 else None))
+                         [["cow", 39, 0, 4], ["cow", 40, 0, 6], ["sheep", 38, 0, 7], ["sheep", 41, 0, 3], ["chicken", 37, 0, 5],
+                          ["chicken", 38, 0, 3]] if level == 2 else None))
         for level, secs in ((1, 150), (2, 150)):
             jobs.append((style, f"smith_{level}", smithy(style, level), secs, SMITH_STORE, None))
             jobs.append((style, f"wood_{level}", woodcutter(style, level), secs, WOOD_STORE, None))
-    for style, name, blocks, seconds, storage, animals in jobs:
+    jobs = [j if len(j) == 7 else j + (0,) for j in jobs]
+    for style, name, blocks, seconds, storage, animals, apron in jobs:
         os.makedirs(os.path.join(OUT, style), exist_ok=True)
         with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
-            json.dump(to_json(blocks, seconds, storage, animals), f, separators=(",", ":"))
+            j = to_json(blocks, seconds, storage, animals)
+            if apron:
+                j["apron"] = apron
+            json.dump(j, f, separators=(",", ":"))
         if "--render" in sys.argv and (len(sys.argv) < 3 or name in sys.argv[2:]):
             sys.path.insert(0, os.path.dirname(__file__))
             from render import render, add_ground
