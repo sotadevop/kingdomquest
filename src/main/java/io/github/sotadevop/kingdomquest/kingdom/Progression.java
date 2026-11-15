@@ -127,6 +127,7 @@ public final class Progression {
 	public static final String LIBRARY = "library";
 	public static final String BREWERY = "brewery";
 	public static final String STABLES = "stables";
+	public static final String BARRACKS = "barracks";
 	public static final Map<String, List<Step>> ADDONS_3 = Map.of(
 			LIBRARY, List.of(
 					new Step(LIBRARY, "library_1", 1, "kingdomquest.addon.library_1", 7, adv("story/enchant_item"), "kingdomquest.req.enchant",
@@ -138,6 +139,11 @@ public final class Progression {
 							List.of(item(Items.STONE_BRICKS, 64), item(Items.BREWING_STAND, 1), item(Items.CAULDRON, 2))),
 					new Step(BREWERY, "brewery_2", 2, "kingdomquest.addon.brewery_2", 7, adv("nether/brew_potion"), "kingdomquest.req.brew",
 							List.of(item(Items.BREWING_STAND, 1), item(Items.BARREL, 4), item(Items.GLASS_BOTTLE, 16)))),
+			BARRACKS, List.of(
+					new Step(BARRACKS, "barracks_1", 1, "kingdomquest.addon.barracks_1", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
+							List.of(item(Items.STONE_BRICKS, 96), item(Items.IRON_BLOCK, 8), item(Items.CARVED_PUMPKIN, 2))),
+					new Step(BARRACKS, "barracks_2", 2, "kingdomquest.addon.barracks_2", 9, adv("adventure/voluntary_exile"), "kingdomquest.req.raid_captain",
+							List.of(item(Items.STONE_BRICKS, 64), item(Items.IRON_BLOCK, 8), item(Items.CARVED_PUMPKIN, 2)))),
 			STABLES, List.of(
 					new Step(STABLES, "stables_1", 1, "kingdomquest.addon.stables_1", 5, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame",
 							List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.HAY_BLOCK, 6), item(Items.LEAD, 2))),
@@ -166,7 +172,7 @@ public final class Progression {
 	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3};
 
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

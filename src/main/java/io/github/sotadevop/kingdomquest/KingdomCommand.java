@@ -31,7 +31,7 @@ final class KingdomCommand {
 				.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 				.then(Commands.literal("selftest").executes(ctx -> {
 					List<String> ids = new ArrayList<>();
-					for (String style : List.of("temperate", "frozen")) {
+					for (String style : io.github.sotadevop.kingdomquest.kingdom.Style.ALL) {
 						for (int i = 1; i <= 3; i++) {
 							ids.add(style + "/tent_" + i);
 							if (i == 1) {
@@ -39,7 +39,7 @@ final class KingdomCommand {
 								ids.add(style + "/farm_1");
 								ids.add(style + "/farm_2");
 								ids.add(style + "/farm_3");
-								for (String n : List.of("hamlet_2", "hamlet_3", "village_1", "town_1", "castle_1", "castle_2", "cellar_1", "cellar_2", "gate_1", "gate_2", "gate_3", "gate_4", "wall_1", "wall_2", "wall_3", "wall_4", "smith_1", "smith_2", "wood_1", "wood_2", "road_1", "road_2", "road_3", "road_4", "lamp_1", "lamp_2", "lamp_3", "library_1", "library_2", "brewery_1", "brewery_2", "stables_1", "stables_2")) {
+								for (String n : List.of("hamlet_2", "hamlet_3", "village_1", "town_1", "castle_1", "castle_2", "cellar_1", "cellar_2", "gate_1", "gate_2", "gate_3", "gate_4", "wall_1", "wall_2", "wall_3", "wall_4", "smith_1", "smith_2", "wood_1", "wood_2", "road_1", "road_2", "road_3", "road_4", "lamp_1", "lamp_2", "lamp_3", "library_1", "library_2", "brewery_1", "brewery_2", "stables_1", "stables_2", "barracks_1", "barracks_2")) {
 									ids.add(style + "/" + n);
 								}
 							}
@@ -58,6 +58,8 @@ final class KingdomCommand {
 				.then(Commands.literal("test")
 						.then(Commands.literal("finish").executes(ctx -> run(ctx, p -> Settlements.testFinish(p) != null, "Build finished.")))
 						.then(Commands.literal("max").executes(ctx -> run(ctx, Settlements::testMax, "Everything built to the highest level.")))
+						.then(Commands.literal("attack").executes(ctx -> run(ctx, Settlements::testAttack, "An army is on its way.")))
+						.then(Commands.literal("attacks").executes(ctx -> run(ctx, Settlements::testAttacksToggle, "Done.")))
 						.then(Commands.literal("produce").executes(ctx -> run(ctx, Settlements::testProduce, "Production ran once.")))
 						.then(Commands.literal("reset").executes(ctx -> run(ctx, Settlements::testReset, "Settlement removed. You can found a new one.")))
 						.then(Commands.literal("set").then(Commands.argument("track", StringArgumentType.word())

@@ -20,6 +20,29 @@ STYLES = {
     # Norse: wooden A-frame huts, cobblestone hem, spruce, braziers, snow on the ground
     "frozen": dict(canvas="spruce_stairs", hem="cobblestone_stairs", ridge="spruce_slab",
                    gable="spruce_planks", pole="spruce_fence", wood="spruce", path=("coarse_dirt", "podzol"), snow=True),
+    # Moorish / North African: sandstone, acacia, flat roofs, terracotta accents
+    "arid": dict(canvas="smooth_sandstone_stairs", hem="cut_sandstone_slab", ridge="smooth_sandstone_slab",
+                 gable="orange_terracotta", pole="acacia_fence", wood="acacia", path=("dirt_path", "coarse_dirt"), snow=False),
+    # Scottish Highlands: grey stone, dark slate roofs, spruce
+    "highland": dict(canvas="dark_oak_stairs", hem="cobblestone_stairs", ridge="dark_oak_slab",
+                     gable="cobblestone", pole="spruce_fence", wood="spruce", path=("coarse_dirt", "gravel"), snow=False),
+    # Southeast Asian: jungle wood and bamboo on stilts, steep leafy roofs
+    "wild": dict(canvas="bamboo_mosaic_stairs", hem="jungle_stairs", ridge="bamboo_mosaic_slab",
+                 gable="bamboo_planks", pole="bamboo_fence", wood="jungle", path=("dirt_path", "rooted_dirt"), snow=False),
+}
+
+# per style building materials for the bigger buildings
+MAT = {
+    "temperate": dict(roof="brick_stairs", roof_slab="brick_slab", wall="calcite", frame="stripped_oak_log", stone="stone_bricks",
+                      alt="mossy_stone_bricks", top="stone_brick_wall", log="oak_log"),
+    "frozen": dict(roof="spruce_stairs", roof_slab="spruce_slab", wall="spruce_planks", frame="stripped_spruce_log", stone="cobblestone",
+                   alt="mossy_cobblestone", top="cobblestone_wall", log="spruce_log"),
+    "arid": dict(roof="smooth_sandstone_stairs", roof_slab="smooth_sandstone_slab", wall="smooth_sandstone", frame="stripped_acacia_log",
+                 stone="sandstone", alt="chiseled_sandstone", top="sandstone_wall", log="acacia_log"),
+    "highland": dict(roof="deepslate_tile_stairs", roof_slab="deepslate_tile_slab", wall="cobblestone", frame="stripped_spruce_log",
+                     stone="stone_bricks", alt="cracked_stone_bricks", top="cobblestone_wall", log="spruce_log"),
+    "wild": dict(roof="jungle_stairs", roof_slab="jungle_slab", wall="bamboo_planks", frame="stripped_jungle_log", stone="mossy_cobblestone",
+                 alt="cobblestone", top="mossy_cobblestone_wall", log="jungle_log"),
 }
 
 
@@ -323,6 +346,136 @@ def house_norse(b, x0=4, z0=0):
         b.put(x, 1, z1 + 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
 
 
+def house_arid(b, x0=4, z0=0):
+    """Moorish house: thick sandstone walls, flat roof with a low parapet, arched door, terracotta and acacia accents."""
+    w, d = 7, 9
+    x1, z1 = x0 + w - 1, z0 + d - 1
+    cx = x0 + 3
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, "cut_sandstone" if edge else "orange_terracotta" if (x + z) % 2 else "white_terracotta")
+            if edge:
+                for y in range(1, 5):
+                    b.put(x, y, z, "smooth_sandstone")
+            if not edge:
+                b.put(x, 5, z, "smooth_sandstone_slab", type="bottom", waterlogged="false")
+            elif (x + z) % 2 == 0:
+                b.put(x, 5, z, "sandstone_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+            else:
+                b.put(x, 5, z, "smooth_sandstone")
+            if not edge:
+                b.put(x, 4, z, "smooth_sandstone")
+    for z in (z0 + 2, z0 + 6):
+        for x in (x0, x1):
+            b.put(x, 2, z, "acacia_trapdoor", facing="west" if x == x0 else "east", half="top", open="true", powered="false", waterlogged="false")
+    porch(b, cx, z1 + 1, "acacia")
+    b.put(cx, 1, z1, "acacia_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, z1, "acacia_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    b.put(cx, 3, z1, "smooth_sandstone_stairs", facing="south", half="top", shape="straight", waterlogged="false")
+    for x in (cx - 1, cx + 1):
+        b.put(x, 3, z1 + 1, "acacia_slab", type="top", waterlogged="false")
+    b.put(x0 + 1, 1, z0 + 1, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(x0 + 1, 1, z0 + 2, "{color}_bed", facing="north", part="foot", occupied="false")
+    b.put(x1 - 1, 1, z0 + 1, "chest", facing="west", type="single", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 2, "barrel", facing="up", open="false")
+    b.put(cx, 1, z0 + 4, "decorated_pot", facing="south", cracked="false", waterlogged="false")
+    b.put(cx, 3, z0 + 4, "lantern", hanging="true", waterlogged="false")
+    b.put(x0 + 1, 1, z1 - 1, "furnace", facing="east", lit="false")
+
+
+def house_highland(b, x0=4, z0=0):
+    """Scottish highland cottage: low grey stone walls, small windows, steep dark slate roof, chimneys at both gables."""
+    w, d = 7, 9
+    x1, z1 = x0 + w - 1, z0 + d - 1
+    cx = x0 + 3
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, ("cobblestone" if (x + z) % 3 else "mossy_cobblestone") if edge else "spruce_planks")
+            if edge:
+                for y in (1, 2, 3):
+                    b.put(x, y, z, "stone" if (x * 3 + y + z) % 5 == 0 else "cobblestone" if (x + y) % 2 else "andesite")
+    for x in (x0 + 1, x1 - 1):
+        b.put(x, 2, z1, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+    for z in (z0 + 3, z0 + 5):
+        for x in (x0, x1):
+            b.put(x, 2, z, "glass_pane", north="true", south="true", east="false", west="false", waterlogged="false")
+    porch(b, cx, z1 + 1, "spruce")
+    b.put(cx, 1, z1, "spruce_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, z1, "spruce_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    for z in range(z0 - 1, z1 + 2):
+        for i in range(4):
+            b.put(x0 - 1 + i, 3 + i, z, "deepslate_tile_stairs", facing="east", **ST)
+            b.put(x1 + 1 - i, 3 + i, z, "deepslate_tile_stairs", facing="west", **ST)
+        b.put(cx, 7, z, "deepslate_tile_slab", type="bottom", waterlogged="false")
+    for zz in (z0, z1):
+        for y in range(4, 7):
+            for x in range(x0 + y - 3, x1 - y + 4):
+                b.put(x, y, zz, "cobblestone")
+    for zz in (z0, z1):
+        for y in range(1, 9):
+            if zz == z0:
+                b.put(cx, y, zz, "cobblestone")
+    b.put(cx, 9, z0, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(cx, 1, z0 + 1, "furnace", facing="south", lit="false")
+    b.put(x0 + 1, 1, z1 - 2, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(x0 + 1, 1, z1 - 1, "{color}_bed", facing="north", part="foot", occupied="false")
+    b.put(x1 - 1, 1, z0 + 1, "chest", facing="west", type="single", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 2, "barrel", facing="up", open="false")
+    b.put(cx, 5, z0 + 4, "lantern", hanging="true", waterlogged="false")
+    b.put(x1 - 1, 1, z1 - 1, "crafting_table")
+
+
+def house_wild(b, x0=4, z0=0):
+    """Southeast Asian stilt house: bamboo walls on jungle log stilts, veranda, steep jungle roof, ladder up."""
+    w, d = 7, 9
+    x1, z1 = x0 + w - 1, z0 + d - 1
+    cx = x0 + 3
+    F = 2  # floor height
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            stilt = x in (x0, x1, cx) and z in (z0, z0 + 4, z1)
+            if stilt:
+                for y in range(0, F):
+                    b.put(x, y, z, "jungle_log", axis="y")
+            b.put(x, F, z, "jungle_planks")
+            edge = x in (x0, x1) or z in (z0, z1 - 2)
+            if edge and z <= z1 - 2:
+                for y in range(F + 1, F + 4):
+                    corner = x in (x0, x1) and z in (z0, z1 - 2)
+                    b.put(x, y, z, "stripped_jungle_log" if corner else "bamboo_planks", **({"axis": "y"} if corner else {}))
+    # veranda in front with a railing
+    for x in range(x0, x1 + 1):
+        if x != cx:
+            b.put(x, F + 1, z1, "bamboo_fence")
+    for z in (z1 - 1, z1):
+        for x in (x0, x1):
+            b.put(x, F + 1, z, "bamboo_fence")
+    b.put(cx, F + 1, z1 - 2, "jungle_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, F + 2, z1 - 2, "jungle_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    for x in (x0 + 1, x1 - 1):
+        b.put(x, F + 2, z1 - 2, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+    # steps up to the veranda
+    for i in range(F):
+        b.put(cx, i, z1 + F - i, "jungle_stairs", facing="north", **ST)
+    # steep roof with wide eaves
+    for z in range(z0 - 1, z1 + 2):
+        for i in range(5):
+            b.put(x0 - 2 + i, F + 3 + i, z, "jungle_stairs", facing="east", **ST)
+            b.put(x1 + 2 - i, F + 3 + i, z, "jungle_stairs", facing="west", **ST)
+        b.put(cx, F + 8, z, "jungle_slab", type="bottom", waterlogged="false")
+    for zz in (z0, z1 - 2):
+        for y in range(F + 4, F + 8):
+            for x in range(x0 + y - F - 3, x1 - y + F + 4):
+                b.put(x, y, zz, "bamboo_planks")
+    b.put(x0 + 1, F + 1, z0 + 1, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(x0 + 1, F + 1, z0 + 2, "{color}_bed", facing="north", part="foot", occupied="false")
+    b.put(x1 - 1, F + 1, z0 + 1, "chest", facing="west", type="single", waterlogged="false")
+    b.put(x1 - 1, F + 1, z0 + 2, "barrel", facing="up", open="false")
+    b.put(cx, F + 5, z0 + 3, "lantern", hanging="true", waterlogged="false")
+
+
 FARM = (22, 1, 9, 9)  # x0, z0, width, depth of the field
 
 
@@ -349,9 +502,16 @@ def mirror_into(b, blocks, za, zb):
         b.b[(x, y, za + zb - z)] = (name, p)
 
 
+HOUSES = {"temperate": None, "frozen": None, "arid": house_arid, "highland": house_highland, "wild": house_wild}
+
+
+def house_fn(style):
+    return {"frozen": house_norse, "arid": house_arid, "highland": house_highland, "wild": house_wild}.get(style, house_temperate)
+
+
 def house(b, style, x0, z0, facing_north=False):
     t = B()
-    (house_norse if style == "frozen" else house_temperate)(t, x0, z0)
+    house_fn(style)(t, x0, z0)
     if facing_north:
         mirror_into(b, t.b, z0, z0 + 8)
     else:
@@ -381,7 +541,7 @@ def hamlet(style, level):
     elif level >= 5:
         town_hall(b, style, 1, -4)
     else:
-        (house_norse if style == "frozen" else house_temperate)(b, 4, -3)
+        house_fn(style)(b, 4, -3)
     b.put(hx, hy, hz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
     b.put(hx - 2, 0, hz, f"{w}_stairs", facing="west", **ST)
     b.put(hx - 2, 0, hz + 1, f"{w}_stairs", facing="west", **ST)
@@ -531,7 +691,7 @@ def smithy(style, level):
     b = B()
     w = s["wood"]
     x0, x1, z0, z1 = -16, -8, 1, 8
-    log = "stripped_spruce_log" if style == "frozen" else "stripped_oak_log"
+    log = MAT[style]["frame"]
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             b.put(x, -1, z, "stone_bricks" if (x + z) % 3 else "cobblestone")
@@ -552,7 +712,7 @@ def smithy(style, level):
     for x in range(x0 - 1, x1 + 2):
         for i, z in enumerate(range(z0 - 1, z1 + 2)):
             y = 5 - i // 3
-            b.put(x, y, z, "deepslate_tile_stairs" if style == "frozen" else "brick_stairs", facing="north", **ST)
+            b.put(x, y, z, MAT[style]["roof"], facing="north", **ST)
     # forge: chimney, lava, blast furnace, anvil, smithing table, grindstone, quench trough
     cx = x0 + 5
     for y in range(0, 8):
@@ -583,7 +743,7 @@ def woodcutter(style, level):
     s = STYLES[style]
     b = B()
     w = s["wood"]
-    log = "spruce_log" if style == "frozen" else "oak_log"
+    log = MAT[style]["log"]
     x0, x1, z0, z1 = -30, -23, 21, 29
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
@@ -639,7 +799,7 @@ def walls(style, level):
     FOLLOW.add(id(b.b))
     ANCHORS_OF[id(b.b)] = b.anchors
     w = s["wood"]
-    log = "spruce_log" if style == "frozen" else "oak_log"
+    log = MAT[style]["log"]
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
@@ -707,6 +867,7 @@ SEGMENTS = [
     ("library", [("library", 1)]),
     ("brewery", [("brewery", 1)]),
     ("stables", [("stables", 1)]),
+    ("barracks", [("barracks", 1)]),
 ]
 SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
 
@@ -747,6 +908,7 @@ def road_cells():
     strip("brewery", [-17], range(20, 25), core_x=-17)
     strip("stables", range(35, 48), range(18, 20), core_z=18)
     strip("stables", [47], range(20, 26), core_x=47)
+    strip("barracks", range(9, 17), range(31, 33), core_z=31)
     for x in (1, 2, 3):
         for z in (12, 13, 14):
             cells.pop((x, z), None)                                      # the well
@@ -900,11 +1062,8 @@ def town_hall(b, style, x0=1, z0=-1):
     W, D = 13, 10
     x1, z1 = x0 + W - 1, z0 + D - 1
     cx = x0 + W // 2
-    frame = "stripped_spruce_log" if frozen else "stripped_oak_log"
-    infill = "spruce_planks" if frozen else "calcite"
-    roof = "spruce_stairs" if frozen else "brick_stairs"
-    ridge = "spruce_slab" if frozen else "brick_slab"
-    stone = "cobblestone" if frozen else "stone_bricks"
+    m = MAT[style]
+    frame, infill, roof, ridge, stone = m["frame"], m["wall"], m["roof"], m["roof_slab"], m["stone"]
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             edge = x in (x0, x1) or z in (z0, z1)
@@ -1007,10 +1166,8 @@ def stone_hut(b, x0, z0, x1, z1, walls_h, wall, corner, floor, door, roof_stairs
 
 
 def mats(style):
-    frozen = style == "frozen"
-    return dict(wall="spruce_planks" if frozen else "calcite", corner="stripped_spruce_log" if frozen else "stripped_oak_log",
-                stone="cobblestone" if frozen else "stone_bricks",
-                roof="spruce_stairs" if frozen else "brick_stairs", slab="spruce_slab" if frozen else "brick_slab")
+    m = MAT[style]
+    return dict(wall=m["wall"], corner=m["frame"], stone=m["stone"], roof=m["roof"], slab=m["roof_slab"])
 
 
 LIB = (-33, -6, -23, 4)      # x0, z0, x1, z1 (door south)
@@ -1087,7 +1244,7 @@ def stables(style, level):
     b = B()
     w = STYLES[style]["wood"]
     x0, z0, x1, z1 = STABLE
-    log = "spruce_log" if style == "frozen" else "oak_log"
+    log = MAT[style]["log"]
     for x in range(x0, x1 + 1):
         for z in range(z0, z0 + 5):
             b.put(x, -1, z, "coarse_dirt" if (x + z) % 3 else "dirt")
@@ -1125,7 +1282,7 @@ def gate(style, level):
     s = STYLES[style]
     b = B()
     w = s["wood"]
-    log = "spruce_log" if style == "frozen" else "oak_log"
+    log = MAT[style]["log"]
     stone = "cobblestone" if style == "frozen" else "stone_bricks"
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
@@ -1233,8 +1390,7 @@ def castle_keep(b, style, z_shift=0):
     """Castle tier: a square stone keep replaces the town hall. Great hall with a carpet to the throne,
     upper floor, walkable battlements and four corner towers rising above the roof."""
     frozen = style == "frozen"
-    stone, alt = ("cobblestone", "mossy_cobblestone") if frozen else ("stone_bricks", "mossy_stone_bricks")
-    wall_top = "cobblestone_wall" if frozen else "stone_brick_wall"
+    stone, alt, wall_top = MAT[style]["stone"], MAT[style]["alt"], MAT[style]["top"]
     wood = "spruce"
     x0, z0, x1, z1 = -1, -12 + z_shift, 15, 4 + z_shift
     cx = (x0 + x1) // 2
@@ -1365,6 +1521,33 @@ def cellar(style, level):
     return b.b
 
 
+BARRACKS = (11, 33, 21, 37)  # door north
+BARRACKS_STORE = (12, 0, 36)
+
+
+def barracks(style, level):
+    """Barracks add-on by the gate: stone hall with bunks and weapon racks, a training yard with dummies;
+    level 2 adds a second floor of bunks and an armory. The guards (iron golems) are spawned by the mod."""
+    m = mats(style)
+    b = B()
+    x0, z0, x1, z1 = BARRACKS
+    stone_hut(b, x0, z0, x1, z1, 4, m["stone"], m["corner"], "spruce_planks", "n", m["roof"], m["slab"])
+    for x in range(x0 + 2, x1 - 1, 3):
+        b.put(x, 1, z1 - 1, "white_bed", facing="south", part="head", occupied="false")
+        b.put(x, 1, z1 - 2, "white_bed", facing="south", part="foot", occupied="false")
+    b.put(*BARRACKS_STORE, "barrel", facing="up", open="false")
+    for x in (x0 + 1, x1 - 1):
+        b.put(x, 1, z0 + 1, "grindstone", face="floor", facing="north")
+    b.put((x0 + x1) // 2, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 2, "smithing_table")
+    if level >= 2:
+        b.put(x0 + 1, 1, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
+        b.put(x0 + 1, 1, z0 + 3, "chest", facing="east", type="single", waterlogged="false")
+        for x in (x0 + 3, x1 - 3):
+            b.put(x, 4, z0 - 1, "{color}_wall_banner", facing="north")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -1437,6 +1620,7 @@ if __name__ == "__main__":
         for level in (1, 2, 3, 4):
             jobs.append((style, f"gate_{level}", gate(style, level), 120 + 60 * level, None, None, 6))
         for level in (1, 2):
+            jobs.append((style, f"barracks_{level}", barracks(style, level), 200, BARRACKS_STORE, None))
             jobs.append((style, f"library_{level}", library(style, level), 180, LIB_STORE, None))
             jobs.append((style, f"brewery_{level}", brewery(style, level), 180, BREW_STORE, None))
             jobs.append((style, f"stables_{level}", stables(style, level), 180, STABLE_STORE,

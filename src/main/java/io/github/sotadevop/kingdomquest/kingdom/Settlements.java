@@ -87,7 +87,7 @@ public final class Settlements {
 		});
 		// no monsters spawn inside a settlement
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
-			if (entity instanceof net.minecraft.world.entity.monster.Enemy && level.dimension() == Level.OVERWORLD && insideSettlement(level.getServer(), entity.blockPosition())) {
+			if (entity instanceof net.minecraft.world.entity.monster.Enemy && !Defense.isRaider(entity) && level.dimension() == Level.OVERWORLD && insideSettlement(level.getServer(), entity.blockPosition())) {
 				entity.discard();
 			}
 		});
@@ -412,6 +412,24 @@ public final class Settlements {
 		return ok;
 	}
 
+	public static boolean testAttack(ServerPlayer player) {
+		Settlement s = nearestOwned(player);
+		if (s != null) {
+			Defense.start(player.level().getServer(), s, player);
+		}
+		return s != null;
+	}
+
+	public static boolean testAttacksToggle(ServerPlayer player) {
+		Settlement s = nearestOwned(player);
+		if (s != null) {
+			boolean off = s.level(Defense.OFF) == 0;
+			put(player.level().getServer(), s.withLevel(Defense.OFF, off ? 1 : 0));
+			player.sendSystemMessage(Component.literal(off ? "Attacks are off for " + s.name() : "Attacks are on for " + s.name()));
+		}
+		return s != null;
+	}
+
 	public static boolean testProduce(ServerPlayer player) {
 		Settlement s = nearestOwned(player);
 		if (s != null) {
@@ -554,6 +572,12 @@ public final class Settlements {
 		for (Settlement s : all(server)) {
 			if (people) {
 				People.ensureArchitect(server.overworld(), s);
+			}
+			if (server.getTickCount() % 1200 == 0) {
+				Defense.guards(server.overworld(), s);
+			}
+			if (server.getTickCount() % 100 == 0) {
+				Defense.attacks(server, s);
 			}
 			if (!s.job().isEmpty()) {
 				step(server, s, false);
