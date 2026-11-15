@@ -29,7 +29,7 @@ import java.util.UUID;
  * <ul>
  * <li>Barracks: iron golem guards (2 at level 1, 4 at level 2) stay around the settlement and come back if they
  * die (one per minute).</li>
- * <li>Attacks: from the Castle on, every third night an army of pillagers and vindicators marches on the gate. The
+ * <li>Attacks: from the Castle on, every third day an army of pillagers and vindicators marches on the gate. The
  * Warchief warns 30 seconds before; when every attacker is beaten the kingdom gets a reward.</li>
  * </ul>
  */
@@ -94,15 +94,14 @@ final class Defense {
 			return;
 		}
 		long time = level.getGameTime();
-		long day = level.getDayTime() / 24000L;
-		long tod = level.getDayTime() % 24000L;
+		long day = time / 24000L; // game days since the world started (26.3 has no plain day time getter)
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 		Long arrive = PENDING.get(s.id());
 		if (arrive == null && s.level(NEXT) == 0) {
 			Settlements.putState(server, s.withLevel(NEXT, (int) day + 3));
 			return;
 		}
-		if (arrive == null && day >= s.level(NEXT) && tod > 13000 && tod < 14000) {
+		if (arrive == null && day >= s.level(NEXT)) {
 			start(server, s, owner);
 			return;
 		}
@@ -125,7 +124,7 @@ final class Defense {
 				People.say(owner, "Warchief", "Victory! The army is beaten. The people send you their thanks.");
 				ItemStack reward = new ItemStack(Items.EMERALD, 8 + 4 * Math.max(1, s.level(Settlement.MAIN) - 8));
 				if (!owner.getInventory().add(reward)) {
-					owner.drop(reward, false);
+					level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(level, owner.getX(), owner.getY(), owner.getZ(), reward));
 				}
 			}
 			return;
