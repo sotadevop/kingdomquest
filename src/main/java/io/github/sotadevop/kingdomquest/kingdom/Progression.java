@@ -221,7 +221,7 @@ public final class Progression {
 					new Step("music", "music_1", 1, "kingdomquest.trade.music_1", 7, adv("adventure/play_jukebox_in_meadows"), "kingdomquest.req.jukebox", List.of(item(Items.JUKEBOX, 1), item(Items.NOTE_BLOCK, 4), tag(ItemTags.LOGS, "logs", 32))),
 					new Step("music", "music_2", 2, "kingdomquest.trade.music_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.NOTE_BLOCK, 8), item(Items.AMETHYST_SHARD, 8))))),
 				Map.entry("workshop", List.of(
-					new Step("workshop", "workshop_1", 1, "kingdomquest.trade.workshop_1", 5, adv("husbandry/wax_on"), "kingdomquest.req.wax", List.of(item(Items.COPPER_BLOCK, 4), item(Items.REDSTONE, 16), item(Items.COBBLESTONE, 64))),
+					new Step("workshop", "workshop_1", 1, "kingdomquest.trade.workshop_1", 5, adv("husbandry/wax_on"), "kingdomquest.req.wax", List.of(item(Items.COPPER_INGOT, 16), item(Items.REDSTONE, 16), item(Items.COBBLESTONE, 64))),
 					new Step("workshop", "workshop_2", 2, "kingdomquest.trade.workshop_2", 8, adv("adventure/minecraft_trials_edition"), "kingdomquest.req.trials", List.of(item(Items.CRAFTER, 1), item(Items.REPEATER, 4))))),
 				Map.entry("armorer", List.of(
 					new Step("armorer", "armorer_1", 1, "kingdomquest.trade.armorer_1", 8, adv("adventure/trim_with_any_armor_pattern"), "kingdomquest.req.trim", List.of(item(Items.BLAST_FURNACE, 1), item(Items.ANVIL, 1), item(Items.STONE_BRICKS, 64))),
