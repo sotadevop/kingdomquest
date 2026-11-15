@@ -46,6 +46,8 @@ final class KingdomCommand {
 						}
 					}
 					List<String> errors = Template.selfTest(ids);
+					errors = new ArrayList<>(errors);
+					errors.addAll(Settlements.siteTest(ctx.getSource().getServer().overworld()));
 					errors.forEach(e -> KingdomQuest.LOG.error("Template error: {}", e));
 					int blocks = Settlements.buildAllForTest(ctx.getSource().getServer().overworld(), new BlockPos(0, -60, 40));
 					String result = errors.isEmpty() ? "Template self-test passed" : "Template self-test failed";

@@ -30,7 +30,7 @@ public final class SiteWork {
 	/** Flat strip outside a wall before the slope starts. */
 	private static final int FLAT = 4;
 
-	record Column(int dx, int dz, int floor) {
+	public record Column(int dx, int dz, int floor) {
 	}
 
 	private static final Map<String, List<Column>> CACHE = new HashMap<>();
@@ -48,7 +48,7 @@ public final class SiteWork {
 	private SiteWork() {
 	}
 
-	static List<Column> columns(String job, Template t, Rotation rotation) {
+	public static List<Column> columns(String job, Template t, Rotation rotation) {
 		return CACHE.computeIfAbsent(job + "|" + rotation.ordinal(), k -> {
 			List<Column> list = new ArrayList<>();
 			int a = t.apron;
@@ -94,8 +94,49 @@ public final class SiteWork {
 				|| state.is(Blocks.SANDSTONE) || state.is(Blocks.RED_SANDSTONE) || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.PACKED_ICE);
 	}
 
-	/** Clears one column and, inside the area itself, fills holes under the ground layer. */
-	static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built) {
+	/** Deepest a foundation is filled (over rivers and holes). */
+	private static final int FOUNDATION = 16;
+	private static final Map<Long, BlockState> SURFACE = new HashMap<>();
+
+	/**
+	 * The ground block of the area around a heart (grass, sand, snow, podzol...): the most common exposed block at
+	 * ground level within 40 blocks. Cached per heart.
+	 */
+	public static BlockState surface(ServerLevel level, BlockPos heart) {
+		return SURFACE.computeIfAbsent(heart.asLong(), k -> {
+			Map<Block, Integer> count = new HashMap<>();
+			int y = heart.getY() - 1;
+			for (int dx = -40; dx <= 40; dx += 4) {
+				for (int dz = -40; dz <= 40; dz += 4) {
+					BlockPos p = new BlockPos(heart.getX() + dx, y, heart.getZ() + dz);
+					BlockState st = level.getBlockState(p);
+					BlockState above = level.getBlockState(p.above());
+					if (isTopSoil(st) && !above.isSolid()) {
+						count.merge(st.getBlock(), 1, Integer::sum);
+					}
+				}
+			}
+			Block best = count.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(Blocks.GRASS_BLOCK);
+			return best.defaultBlockState();
+		});
+	}
+
+	private static boolean isTopSoil(BlockState st) {
+		return st.is(Blocks.GRASS_BLOCK) || st.is(Blocks.SAND) || st.is(Blocks.RED_SAND) || st.is(Blocks.PODZOL) || st.is(Blocks.MYCELIUM)
+				|| st.is(Blocks.SNOW_BLOCK) || st.is(Blocks.COARSE_DIRT) || st.is(Blocks.MUD) || st.is(Blocks.MOSS_BLOCK);
+	}
+
+	/** Dirt or stone that only shows because a hill was cut away; it gets the surface block on top. */
+	private static boolean exposedInside(BlockState st) {
+		return st.is(Blocks.DIRT) || st.is(BlockTags.BASE_STONE_OVERWORLD) || st.is(Blocks.GRAVEL)
+				|| BuiltInRegistries.BLOCK.getKey(st.getBlock()).getPath().endsWith("_ore");
+	}
+
+	/**
+	 * Clears one column down to its floor, puts the area's surface block on cut ground, and inside the area itself
+	 * fills holes and water under the ground layer down to solid ground (at most {@link #FOUNDATION} deep).
+	 */
+	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface) {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
 		int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
@@ -110,15 +151,24 @@ public final class SiteWork {
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
 			}
 		}
+		pos.set(x, floor - 1, z);
+		if (!built.contains(pos.asLong()) && exposedInside(level.getBlockState(pos)) && level.getBlockState(pos.above()).isAir()) {
+			level.setBlock(pos, surface, Block.UPDATE_CLIENTS);
+		}
 		if (c.floor() > 0) {
 			return;
 		}
-		for (int y = heart.getY() - 1; y >= heart.getY() - 4; y--) {
+		for (int y = heart.getY() - 1; y >= heart.getY() - FOUNDATION; y--) {
 			pos.set(x, y, z);
-			BlockState state = level.getBlockState(pos);
-			if (state.isAir() || state.canBeReplaced() && state.getFluidState().isEmpty()) {
-				level.setBlock(pos, (y == heart.getY() - 1 ? Blocks.GRASS_BLOCK : Blocks.DIRT).defaultBlockState(), Block.UPDATE_CLIENTS);
+			if (built.contains(pos.asLong())) {
+				continue;
 			}
+			BlockState state = level.getBlockState(pos);
+			boolean hole = state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock;
+			if (!hole) {
+				break; // solid ground reached
+			}
+			level.setBlock(pos, y == heart.getY() - 1 ? surface : Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
 		}
 	}
 }

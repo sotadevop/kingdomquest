@@ -17,8 +17,8 @@ public final class ClientConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
 	private static final class Values {
-		/** "auto" (follow the resource pack's windows), "light" or "dark". */
-		String theme = "auto";
+		/** "dark" (default), "light" or "auto" (follow the resource pack's windows). */
+		String theme = "dark";
 		/** "modern" (rounded, flat) or "vanilla" (square, bevelled). */
 		String style = "modern";
 		/** Particle preview of the plot while holding a sealed charter. */
@@ -53,7 +53,7 @@ public final class ClientConfig {
 	}
 
 	public static String theme() {
-		return values.theme == null ? "auto" : values.theme;
+		return values.theme == null ? "dark" : values.theme;
 	}
 
 	public static void setTheme(String theme) {

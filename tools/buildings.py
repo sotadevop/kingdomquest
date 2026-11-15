@@ -26,10 +26,14 @@ STYLES = {
 class B:
     def __init__(self):
         self.b = {}
+        self.seg = None  # road/lamp segment of the next blocks (see SEGMENTS), None = always
+        self.segs = {}
 
     def put(self, x, y, z, name, **p):
         self.b[(x, y, z)] = (name if ":" in name or name.startswith("{") else "minecraft:" + name,
                              {k: str(v).lower() for k, v in p.items()})
+        if self.seg is not None:
+            self.segs[(x, y, z)] = self.seg
 
 
 ST = dict(half="bottom", shape="straight", waterlogged="false")
@@ -499,7 +503,7 @@ def farm(style, level):
     b.put(sx, 2, sz, "carved_pumpkin", facing="south")
     # storehouse barrel: the farmer puts the harvest in here
     b.put(x0 - 2, 0, zc - 1, "barrel", facing="up", open="false")
-    b.put(x0 - 2, 0, zc + 1, "composter", level="0")
+    b.put(x0 - 2, 0, zc - 2, "composter", level="0")
     if level >= 2:
         pasture(b, s)
     if level >= 3:
@@ -667,34 +671,66 @@ def walls(style, level):
     return b.b
 
 
+# Road segments and when they appear: a segment is built once any of its (track, level) rules holds,
+# so roads only lead to buildings that exist. The mod adds new segments when a building is finished.
+SEGMENTS = [
+    ("gate", [("main", 1)]),                       # the road out of the village and to the heart
+    ("well", [("main", 4)]),
+    ("square", [("main", 7)]),
+    ("smith", [("smith", 1)]),
+    ("street_w1", [("main", 5), ("wood", 1)]),
+    ("street_w2", [("wood", 1)]),
+    ("house2", [("main", 5)]),
+    ("street_e1", [("main", 6)]),
+    ("house3", [("main", 6)]),
+    ("street_e2", [("main", 7)]),
+    ("house4", [("main", 7)]),
+    ("wood", [("wood", 1)]),
+    ("farm", [("farm", 1)]),
+    ("pasture", [("farm", 2)]),
+    ("smokehouse", [("farm", 3)]),
+]
+SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
+
+
 def road_cells():
-    """The road network of the full village (fixed plots: roads lead to every plot, built or not).
-    Returns {(x, z): kind} with kind 'core' (centre line) or 'side'."""
+    """The full road network. Returns {(x, z): (kind, segment)}; kind 'core' (centre line) or 'side'."""
     cells = {}
 
-    def strip(xs, zs, core_x=None, core_z=None):
+    def strip(seg, xs, zs, core_x=None, core_z=None):
         for x in xs:
             for z in zs:
                 core = (core_x is not None and x == core_x) or (core_z is not None and z == core_z)
-                if cells.get((x, z)) != "core":
-                    cells[(x, z)] = "core" if core else "side"
+                old = cells.get((x, z))
+                if old is None or (core and old[0] != "core"):
+                    cells[(x, z)] = ("core" if core else "side", old[1] if old else seg)
 
-    strip(range(0, 15), range(9, 17), core_x=7)                                  # square
-    strip(range(6, 9), range(16, WALL[3] + 1), core_x=7)                         # main road to the gate
-    strip(range(-14, 0), range(12, 14), core_z=12)                               # west road
-    strip(range(-13, -10), range(9, 12), core_x=-12)                             # smithy
-    strip(range(15, 43), range(12, 14), core_z=12)                               # east road
-    strip([26], [11], core_x=26)                                                 # field gate
-    strip([39], [10, 11], core_x=39)                                             # pasture gate
-    strip([38], [14], core_x=38)                                                 # smokehouse
-    strip([20], range(5, 12), core_x=20)                                         # farm barrel
-    strip(range(-26, 35), range(18, 20), core_z=18)                              # street of houses
-    for x in (-5, 19, 31, -26):                                                  # doors, woodcutter
-        strip([x], [20, 21], core_x=x)
-    for x, z in ((1, 12), (2, 12), (3, 12), (1, 13), (2, 13), (3, 13), (1, 14), (2, 14), (3, 14)):
-        cells.pop((x, z), None)                                                  # the well
+    strip("gate", range(6, 9), range(9, WALL[3] + 1), core_x=7)          # heart to the gate
+    strip("well", range(4, 6), range(12, 15), core_z=13)                 # heart to the well
+    strip("square", range(0, 15), range(9, 17), core_x=7)
+    strip("smith", range(-14, 6), range(12, 14), core_z=12)              # west road
+    strip("smith", range(-13, -10), range(9, 12), core_x=-12)
+    strip("street_w1", range(-5, 6), range(18, 20), core_z=18)          # street of houses, west part
+    strip("street_w2", range(-26, -5), range(18, 20), core_z=18)
+    strip("house2", [-5], [20, 21], core_x=-5)
+    strip("street_e1", range(9, 20), range(18, 20), core_z=18)
+    strip("house3", [19], [20, 21], core_x=19)
+    strip("street_e2", range(20, 35), range(18, 20), core_z=18)
+    strip("house4", [31], [20, 21], core_x=31)
+    strip("wood", [-26], [20, 21], core_x=-26)
+    strip("farm", range(9, 27), range(12, 14), core_z=12)                # east road to the field gate
+    strip("farm", [26], [11], core_x=26)
+    strip("farm", [20], range(5, 12), core_x=20)                         # to the farm barrel
+    strip("pasture", range(27, 43), range(12, 14), core_z=12)
+    strip("pasture", [39], [10, 11], core_x=39)
+    strip("smokehouse", [38], [14], core_x=38)
+    for x in (1, 2, 3):
+        for z in (12, 13, 14):
+            cells.pop((x, z), None)                                      # the well
     return cells
 
+
+SEGS_OF = {}  # blocks dict id -> {pos: segment index}
 
 ROAD_MATS = {
     1: ("dirt_path", "coarse_dirt"),
@@ -710,7 +746,8 @@ def roads(style, level):
     b = B()
     cells = road_cells()
     m = ROAD_MATS[level]
-    for (x, z), kind in cells.items():
+    for (x, z), (kind, seg) in cells.items():
+        b.seg = SEG[seg]
         h = (x * 73856093 ^ z * 19349663) % 20
         if level == 1:
             if kind != "core" or h >= 13:
@@ -723,13 +760,16 @@ def roads(style, level):
         else:
             border = any((x + dx, z + dz) not in cells for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)))
             b.put(x, -1, z, m[1] if border else m[2] if h < 3 else m[0])
+    SEGS_OF[id(b.b)] = b.segs
     return b.b
 
 
 # lamp posts: x, z and the direction their arm points (towards the road)
-LAMP_SPOTS = [(5, 22, 1, 0), (9, 22, -1, 0), (5, 30, 1, 0), (9, 30, -1, 0), (5, 35, 1, 0), (9, 35, -1, 0),
-              (-6, 11, 0, 1), (20, 11, 0, 1), (32, 11, 0, 1),
-              (-10, 17, 0, 1), (2, 17, 0, 1), (13, 17, 0, 1), (25, 17, 0, 1), (0, 9, 1, 0), (14, 9, -1, 0)]
+LAMP_SPOTS = [(5, 22, 1, 0, "gate"), (9, 22, -1, 0, "gate"), (5, 30, 1, 0, "gate"), (9, 30, -1, 0, "gate"),
+              (5, 35, 1, 0, "gate"), (9, 35, -1, 0, "gate"), (4, 11, 1, 0, "gate"), (10, 11, -1, 0, "gate"),
+              (-6, 11, 0, 1, "smith"), (19, 11, 0, 1, "farm"), (32, 11, 0, 1, "pasture"),
+              (-10, 17, 0, 1, "street_w2"), (2, 17, 0, 1, "street_w1"), (13, 17, 0, 1, "street_e1"), (25, 17, 0, 1, "street_e2"),
+              (0, 9, 1, 0, "square"), (14, 9, -1, 0, "square")]
 
 
 def lamps(style, level):
@@ -737,7 +777,8 @@ def lamps(style, level):
     s = STYLES[style]
     b = B()
     fence = s["wood"] + "_fence"
-    for x, z, dx, dz in LAMP_SPOTS:
+    for x, z, dx, dz, seg in LAMP_SPOTS:
+        b.seg = SEG[seg]
         if level == 1:
             b.put(x, 0, z, fence)
             b.put(x, 1, z, "torch")
@@ -752,6 +793,7 @@ def lamps(style, level):
             b.put(x + dx, 3, z + dz, fence)
             b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")
             b.put(x, 4, z, "lantern", hanging="false", waterlogged="false")
+    SEGS_OF[id(b.b)] = b.segs
     return b.b
 
 
@@ -923,7 +965,10 @@ def normalize(blocks, extra=()):
 
 
 def to_json(blocks, seconds, storage=None, animals=None):
+    segs = SEGS_OF.get(id(blocks), {})
+    orig = blocks
     blocks, heart, size, (storage,) = normalize(blocks, [storage])
+    shift = (heart[0] - HEART[0], heart[2] - HEART[2])
     names, palette, out = {}, [], []
     for (x, y, z), (name, props) in sorted(blocks.items(), key=lambda kv: (kv[0][1], kv[0][2], kv[0][0])):
         key = (name, tuple(sorted(props.items())))
@@ -933,10 +978,13 @@ def to_json(blocks, seconds, storage=None, animals=None):
             if props:
                 e["Properties"] = props
             palette.append(e)
-        out.append([x, y, z, names[key]])
+        seg = segs.get((x - shift[0], y, z - shift[1]))
+        out.append([x, y, z, names[key]] + ([seg] if seg is not None else []))
     j = {"size": list(size), "heart": list(heart), "seconds": seconds, "palette": palette, "blocks": out}
     if storage:
         j["storage"] = list(storage)
+    if segs:
+        j["segments"] = [{"name": n, "any": [[t, l] for t, l in rules]} for n, rules in SEGMENTS]
     if animals:
         dx, dz = heart[0] - HEART[0], heart[2] - HEART[2]
         j["animals"] = [[a[0], a[1] + dx, a[2], a[3] + dz] for a in animals]

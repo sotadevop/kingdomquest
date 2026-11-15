@@ -205,7 +205,7 @@ public final class Settlements {
 					BlockPos p = column.below(y);
 					BlockState state = level.getBlockState(p);
 					if (state.isAir() || state.canBeReplaced() || !state.getFluidState().isEmpty()) {
-						level.setBlock(p, (y == 1 ? Blocks.GRASS_BLOCK : Blocks.DIRT).defaultBlockState(), Block.UPDATE_ALL);
+						level.setBlock(p, y == 1 ? SiteWork.surface(level, heart) : Blocks.DIRT.defaultBlockState(), Block.UPDATE_ALL);
 					}
 				}
 			}
@@ -255,7 +255,10 @@ public final class Settlements {
 			if (next.contains(pos)) {
 				kept.add(pos);
 			} else {
-				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+				BlockPos old = BlockPos.of(pos);
+				// ground blocks (old paths) become the area's ground again, not holes
+				level.setBlock(old, old.getY() < s.heart().getY() ? SiteWork.surface(level, s.heart()) : Blocks.AIR.defaultBlockState(),
+						Block.UPDATE_ALL);
 			}
 		}
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
@@ -324,12 +327,75 @@ public final class Settlements {
 		return true;
 	}
 
+	/**
+	 * The blocks of a job for this settlement. Road and lamp segments only appear once a building they lead to
+	 * exists (the template's segment rules against the settlement's levels).
+	 */
 	private static List<Template.Placement> placements(Settlement s, String job) {
-		String key = job + "|" + s.color() + "|" + s.rotation();
+		Template t = Template.get(job);
+		if (t == null) {
+			return List.of();
+		}
+		StringBuilder mask = new StringBuilder();
+		for (Template.Segment seg : t.segments) {
+			boolean on = seg.any().stream().anyMatch(r -> s.level(r.getKey()) >= r.getValue());
+			mask.append(on ? '1' : '0');
+		}
+		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask;
 		return PLACEMENTS.computeIfAbsent(key, k -> {
-			Template t = Template.get(job);
-			return t == null ? List.of() : t.placements(dye(s.color()), Rotation.values()[s.rotation()]);
+			List<Template.Placement> all = t.placements(dye(s.color()), Rotation.values()[s.rotation()]);
+			if (t.segments.isEmpty()) {
+				return all;
+			}
+			List<Template.Placement> out = new ArrayList<>();
+			for (Template.Placement p : all) {
+				if (p.segment() < 0 || mask.charAt(p.segment()) == '1') {
+					out.add(p);
+				}
+			}
+			return List.copyOf(out);
 		});
+	}
+
+	/**
+	 * After a building is finished, roads and lamps that already exist grow to it: their new segments are
+	 * placed at once at the current road/lamp level.
+	 */
+	private static void extendInfrastructure(MinecraftServer server, Settlement s) {
+		ServerLevel level = server.overworld();
+		BlockState surface = SiteWork.surface(level, s.heart());
+		for (String track : List.of(Progression.ROADS, Progression.LAMPS)) {
+			Progression.Step current = Progression.current(s, track);
+			if (current == null) {
+				continue;
+			}
+			String job = s.style() + "/" + current.building();
+			List<Long> built = new ArrayList<>(s.built().getOrDefault(track, List.of()));
+			Set<Long> have = new HashSet<>(built);
+			Set<Long> all = new HashSet<>();
+			s.built().values().forEach(all::addAll);
+			for (Template.Placement p : placements(s, job)) {
+				BlockPos pos = s.heart().offset(p.offset());
+				if (have.contains(pos.asLong())) {
+					continue;
+				}
+				if (p.offset().getY() < 0) {
+					SiteWork.clear(level, s.heart(), new SiteWork.Column(p.offset().getX(), p.offset().getZ(), 0), all, surface);
+				}
+				level.setBlock(pos, neighbourShaped(p.state(), level, pos), Block.UPDATE_ALL);
+				built.add(pos.asLong());
+				have.add(pos.asLong());
+			}
+			s = s.withBuilt(track, built);
+		}
+		put(server, s);
+	}
+
+	private static BlockState neighbourShaped(BlockState state, ServerLevel level, BlockPos pos) {
+		if (state.getBlock() instanceof CrossCollisionBlock || state.getBlock() instanceof WallBlock) {
+			return Block.updateFromNeighbourShapes(state, level, pos); // fences, panes and walls join their neighbours
+		}
+		return state;
 	}
 
 	// ---- building over time ----
@@ -371,7 +437,7 @@ public final class Settlements {
 		// phase 1: level the ground
 		int colsPerTick = instant ? cols : Math.max(4, (int) Math.ceil(cols / (t.seconds * 8.0)));
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
-			SiteWork.clear(level, s.heart(), columns.get(index), allBuilt);
+			SiteWork.clear(level, s.heart(), columns.get(index), allBuilt, SiteWork.surface(level, s.heart()));
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 12.0)));
@@ -381,10 +447,7 @@ public final class Settlements {
 			for (int n = 0; n < perTick && index < cols + list.size(); n++, index++) {
 				Template.Placement p = list.get(index - cols);
 				BlockPos pos = s.heart().offset(p.offset());
-				BlockState state = p.state();
-				if (state.getBlock() instanceof CrossCollisionBlock || state.getBlock() instanceof WallBlock) {
-					state = Block.updateFromNeighbourShapes(state, level, pos); // fences, panes and walls join their neighbours
-				}
+				BlockState state = neighbourShaped(p.state(), level, pos);
 				if (!level.getBlockState(pos).equals(state)) {
 					level.setBlock(pos, state, Block.UPDATE_ALL);
 					if (n == 0) {
@@ -394,14 +457,19 @@ public final class Settlements {
 					}
 				}
 				// crops are harvested normally, so they are not protected
-				if (p.offset().getY() >= 0 && !(state.getBlock() instanceof CropBlock) && builtSet.add(pos.asLong())) {
+				// ground blocks (roads, farmland, water) are tracked too, so later levelling never touches them
+				if (!(state.getBlock() instanceof CropBlock) && builtSet.add(pos.asLong())) {
 					built.add(pos.asLong());
 				}
 			}
 		}
 		if (index >= cols + list.size()) {
-			put(server, s.withJob("", "", 0).withBuilt(s.jobTrack(), built));
+			Settlement done = s.withJob("", "", 0).withBuilt(s.jobTrack(), built);
+			put(server, done);
 			spawnAnimals(level, s, t);
+			if (!Progression.ROADS.equals(s.jobTrack()) && !Progression.LAMPS.equals(s.jobTrack())) {
+				extendInfrastructure(server, done.withLevel(s.jobTrack(), done.level(s.jobTrack())));
+			}
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
@@ -425,6 +493,9 @@ public final class Settlements {
 				continue;
 			}
 			BlockPos pos = s.heart().offset(t.offset(a.pos(), Rotation.values()[s.rotation()]));
+			for (int up = 0; up < 12 && !(level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir()); up++) {
+				pos = pos.above(); // never inside a block
+			}
 			e.snapTo(Vec3.atBottomCenterOf(pos), level.getRandom().nextFloat() * 360, 0);
 			level.addFreshEntity(e);
 		}
@@ -480,6 +551,64 @@ public final class Settlements {
 		Progression.Step current = Progression.current(s, Settlement.MAIN);
 		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),
 				current == null ? "" : current.titleKey(), percent, options));
+	}
+
+	/**
+	 * CI check of the ground work: builds a hill with ponds over a farm area in the sky, levels it and checks
+	 * that nothing is left above the ground and no water is left in the foundation.
+	 */
+	public static List<String> siteTest(ServerLevel level) {
+		List<String> errors = new ArrayList<>();
+		BlockPos heart = new BlockPos(0, 150, 400);
+		String job = "temperate/farm_2";
+		Template t = Template.get(job);
+		if (t == null) {
+			return List.of("missing " + job);
+		}
+		List<SiteWork.Column> columns = SiteWork.columns(job, t, Rotation.NONE);
+		int i = 0;
+		for (SiteWork.Column c : columns) {
+			BlockPos base = heart.offset(c.dx(), 0, c.dz());
+			level.setBlock(base.below(3), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+			boolean pond = i++ % 7 == 0;
+			level.setBlock(base.below(2), (pond ? Blocks.WATER : Blocks.DIRT).defaultBlockState(), Block.UPDATE_CLIENTS);
+			level.setBlock(base.below(1), (pond ? Blocks.WATER : Blocks.STONE).defaultBlockState(), Block.UPDATE_CLIENTS);
+			for (int y = 0; y < 4; y++) {
+				level.setBlock(base.above(y), (y == 3 ? Blocks.GRASS_BLOCK : Blocks.DIRT).defaultBlockState(), Block.UPDATE_CLIENTS);
+			}
+		}
+		BlockState surface = Blocks.GRASS_BLOCK.defaultBlockState();
+		for (SiteWork.Column c : columns) {
+			SiteWork.clear(level, heart, c, Set.of(), surface);
+		}
+		int left = 0;
+		int water = 0;
+		int bare = 0;
+		for (SiteWork.Column c : columns) {
+			BlockPos base = heart.offset(c.dx(), 0, c.dz());
+			for (int y = 0; y < 4; y++) {
+				if (!level.getBlockState(base.above(y)).isAir()) {
+					left++;
+				}
+			}
+			if (!level.getBlockState(base.below(1)).getFluidState().isEmpty() || !level.getBlockState(base.below(2)).getFluidState().isEmpty()) {
+				water++;
+			}
+			if (!level.getBlockState(base.below(1)).is(Blocks.GRASS_BLOCK)) {
+				bare++;
+			}
+		}
+		if (left > 0) {
+			errors.add(left + " blocks left above the ground after levelling");
+		}
+		if (water > 0) {
+			errors.add(water + " columns still have water under the foundation");
+		}
+		if (bare > 0) {
+			errors.add(bare + " columns without the surface block on top");
+		}
+		KingdomQuest.LOG.info("Site test: {} columns levelled, {} left, {} wet, {} bare", columns.size(), left, water, bare);
+		return errors;
 	}
 
 	/** Builds every level of every style at once (used by the CI self-test); returns the number of blocks. */
