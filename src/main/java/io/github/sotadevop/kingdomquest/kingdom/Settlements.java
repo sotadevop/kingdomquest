@@ -50,7 +50,7 @@ public final class Settlements {
 			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "settlements"));
 
 	/** Minimum distance between two hearts. */
-	private static final int SPACING = 48;
+	private static final int SPACING = 64;
 	private static final int CONFIRM_TICKS = 200;
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final Map<String, List<Template.Placement>> PLACEMENTS = new HashMap<>();

@@ -59,7 +59,10 @@ public final class Progression {
 									item(Items.BRICK, 16))),
 					new Step(Settlement.MAIN, "hamlet_3", 6, "kingdomquest.level.hamlet_3", 0, adv("adventure/trade"),
 							"kingdomquest.req.trade", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.COBBLESTONE, 64), item(Items.GLASS, 8),
-									tag(ItemTags.WOOL, "wool", 8), item(Items.EMERALD, 4)))),
+									tag(ItemTags.WOOL, "wool", 8), item(Items.EMERALD, 4))),
+					new Step(Settlement.MAIN, "village_1", 7, "kingdomquest.level.village_1", 0, adv("story/enchant_item"),
+							"kingdomquest.req.enchant", List.of(tag(ItemTags.LOGS, "logs", 64), item(Items.COBBLESTONE, 128), item(Items.GLASS, 8),
+									item(Items.BRICK, 16), item(Items.EMERALD, 8)))),
 			FARM, List.of(
 					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
 							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2))),
@@ -83,12 +86,20 @@ public final class Progression {
 					new Step(WOOD, "wood_2", 2, "kingdomquest.addon.wood_2", 5, adv("story/lava_bucket"), "kingdomquest.req.lava",
 							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.STONECUTTER, 1), item(Items.IRON_INGOT, 4)))));
 
+	/** Walls are their own track from the Village on; upgrading the tier keeps the wall level. */
+	public static final String WALLS = "walls";
+	public static final List<Step> WALL_STEPS = List.of(
+			new Step(WALLS, "wall_1", 1, "kingdomquest.walls.wall_1", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
+					List.of(tag(ItemTags.LOGS, "logs", 96), item(Items.STICK, 32))),
+			new Step(WALLS, "wall_2", 2, "kingdomquest.walls.wall_2", 7, adv("adventure/shoot_arrow"), "kingdomquest.req.arrow",
+					List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.PLANKS, "planks", 64), item(Items.LADDER, 8))));
+
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, FARM, SMITH, WOOD);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, FARM, SMITH, WOOD);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
-		return l != null ? l : ADDONS_2.get(track);
+		return l != null ? l : WALLS.equals(track) ? WALL_STEPS : ADDONS_2.get(track);
 	}
 
 	private Progression() {

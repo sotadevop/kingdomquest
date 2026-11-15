@@ -398,8 +398,20 @@ def hamlet(style, level):
                 b.put(x, 2, z, "{color}_wool" if z == 18 else "white_wool")
         b.put(5, 0, 16, "barrel", facing="up", open="false")
         b.put(6, 0, 16, "barrel", facing="up", open="true")
+    if level >= 4:
+        # Village: fourth house, paved roads, bell on the square, flower beds
+        house(b, style, 19, 16, facing_north=True)
+        path |= {(x, 15) for x in range(13, 23)}
+        b.put(hx + 1, 0, hz - 2, "bell", attachment="floor", facing="south", powered="false")
+        for x, z in ((9, 13), (5, 13)):
+            b.put(x, 0, z, "sweet_berry_bush" if style == "frozen" else "rose_bush", **({"age": "3"} if style == "frozen" else {"half": "lower"}))
+            if style != "frozen":
+                b.put(x, 1, z, "rose_bush", half="upper")
+        street_lamp(b, s, 18, 14)
+        street_lamp(b, s, -3, 13)
+        s = dict(s, path=("cobblestone", "gravel") if style == "frozen" else ("cobblestone", "stone_bricks"))
     ground(b, s, path)
-    snow(b, s, [(x, z) for x in range(-5, 23) for z in range(15 if level == 1 else 26) if (x * 73856093 ^ z * 19349663) % 11 == 0
+    snow(b, s, [(x, z) for x in range(-5, 27) for z in range(15 if level == 1 else 26) if (x * 73856093 ^ z * 19349663) % 11 == 0
                 and not (4 <= x <= 10 and z <= 9)])
     return b.b
 
@@ -606,6 +618,65 @@ def woodcutter(style, level):
     return b.b
 
 
+WALL = (-17, 33, -3, 28)  # x0, x1, z0, z1 of the palisade ring (village plot)
+
+
+def walls(style, level):
+    """Walls track. 1: log palisade with sharpened tops and a gate on the main road.
+    2: inner walkway, corner watchtowers and gate towers with lanterns."""
+    s = STYLES[style]
+    b = B()
+    w = s["wood"]
+    log = "spruce_log" if style == "frozen" else "oak_log"
+    x0, x1, z0, z1 = WALL
+    gx = HEART[0]
+    ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
+    ring += [(x0, z) for z in range(z0 + 1, z1)] + [(x1, z) for z in range(z0 + 1, z1)]
+    for x, z in ring:
+        if z == z1 and abs(x - gx) <= 1:
+            continue
+        h = 3 + ((x * 7 + z * 13) % 3 == 0)
+        for y in range(0, h):
+            b.put(x, y, z, log, axis="y")
+        b.put(x, h, z, w + "_fence")
+        b.put(x, -1, z, "coarse_dirt")
+    # gate: fence gates under a log lintel
+    for x in range(gx - 1, gx + 2):
+        b.put(x, 0, z1, w + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
+        b.put(x, 1, z1, w + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
+        b.put(x, 3, z1, "stripped_" + log, axis="x")
+        b.put(x, -1, z1, s["path"][0])
+    for x in (gx - 2, gx + 2):
+        for y in range(0, 5):
+            b.put(x, y, z1, "stripped_" + log, axis="y")
+    b.put(gx, 4, z1 + 1, "{color}_wall_banner", facing="south")
+    ground(b, s, {(gx, z) for z in range(15, z1)})
+    if level >= 2:
+        # walkway on the inside at y=2, reached from the towers
+        inner = {(x, z0 + 1) for x in range(x0 + 1, x1)} | {(x, z1 - 1) for x in range(x0 + 1, x1) if abs(x - gx) > 2}
+        inner |= {(x0 + 1, z) for z in range(z0 + 1, z1)} | {(x1 - 1, z) for z in range(z0 + 1, z1)}
+        for x, z in inner:
+            b.put(x, 2, z, w + "_slab", type="top", waterlogged="false")
+        for cx, cz in ((x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - 3, z1), (gx + 3, z1)):
+            tx = max(x0, min(x1 - 2, cx - 1))
+            tz = max(z0, min(z1 - 2, cz - 1))
+            for x in range(tx, tx + 3):
+                for z in range(tz, tz + 3):
+                    corner = x in (tx, tx + 2) and z in (tz, tz + 2)
+                    for y in range(0, 6):
+                        if corner:
+                            b.put(x, y, z, log, axis="y")
+                    b.put(x, 4, z, w + "_planks")
+                    if not corner:
+                        b.put(x, 5, z, w + "_fence")
+                    b.put(x, 6, z, w + "_slab", type="bottom", waterlogged="false")
+            for y in range(0, 4):
+                b.put(tx + 1, y, tz + 2, log, axis="y")  # the ladder hangs on this
+                b.put(tx + 1, y, tz + 1, "ladder", facing="north", waterlogged="false")
+            b.put(tx + 1, 4, tz + 1, "air")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -649,6 +720,9 @@ if __name__ == "__main__":
             jobs.append((style, f"tent_{level}", tent(style, level), SECONDS[level], None, None))
         for level, secs in ((1, 240), (2, 200), (3, 200)):
             jobs.append((style, f"hamlet_{level}", hamlet(style, level), secs, TAX_STORE if level >= 2 else None, None))
+        jobs.append((style, "village_1", hamlet(style, 4), 300, TAX_STORE, None))
+        for level, secs in ((1, 300), (2, 300)):
+            jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None))
         for level, secs in ((1, 120), (2, 150), (3, 180)):
             jobs.append((style, f"farm_{level}", farm(style, level), secs, STORE,
                          [["cow", 27, 0, 4], ["cow", 28, 0, 6], ["sheep", 26, 0, 7], ["sheep", 29, 0, 3], ["chicken", 25, 0, 5],

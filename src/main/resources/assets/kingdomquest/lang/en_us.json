@@ -48,5 +48,11 @@
 	"kingdomquest.req.armor": "Wear iron armor",
 	"kingdomquest.req.diamond": "Mine a diamond",
 	"kingdomquest.req.stone_tools": "Craft a stone pickaxe",
-	"kingdomquest.req.lava": "Fill a bucket with lava"
+	"kingdomquest.req.lava": "Fill a bucket with lava",
+	"kingdomquest.level.village_1": "Village - Square",
+	"kingdomquest.walls.wall_1": "Walls - Palisade",
+	"kingdomquest.walls.wall_2": "Walls - Watchtowers",
+	"kingdomquest.req.enchant": "Enchant an item",
+	"kingdomquest.req.kill": "Kill a hostile mob",
+	"kingdomquest.req.arrow": "Shoot something with an arrow"
 }

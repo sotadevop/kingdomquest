@@ -28,7 +28,7 @@ final class KingdomCommand {
 								ids.add(style + "/farm_1");
 								ids.add(style + "/farm_2");
 								ids.add(style + "/farm_3");
-								for (String n : List.of("hamlet_2", "hamlet_3", "smith_1", "smith_2", "wood_1", "wood_2")) {
+								for (String n : List.of("hamlet_2", "hamlet_3", "village_1", "wall_1", "wall_2", "smith_1", "smith_2", "wood_1", "wood_2")) {
 									ids.add(style + "/" + n);
 								}
 							}

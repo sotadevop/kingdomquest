@@ -57,6 +57,21 @@ public final class PlacementPreview {
 						p.getZ() + 0.5, 0, 0, 0);
 			}
 		}
+		// where the village walls will stand one day (every second block, white sparks)
+		Template ring = Template.get("temperate/wall_1");
+		if (ring != null) {
+			for (int x = 0; x < ring.sizeX; x += 2) {
+				for (int z = 0; z < ring.sizeZ; z += 2) {
+					if (x != 0 && z != 0 && x < ring.sizeX - 2 && z < ring.sizeZ - 2) {
+						continue;
+					}
+					BlockPos rel = Template.rotate(new BlockPos(x - ring.heart.getX(), 0, z - ring.heart.getZ()), rotation);
+					BlockPos p = heart.offset(rel.getX(), 0, rel.getZ());
+					int y = mc.level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, p.getX(), p.getZ());
+					mc.level.addParticle(ParticleTypes.CRIT, p.getX() + 0.5, Math.max(y, heart.getY()) + 0.2, p.getZ() + 0.5, 0, 0, 0);
+				}
+			}
+		}
 		for (int i = 0; i < 3; i++) {
 			mc.level.addParticle(ParticleTypes.END_ROD, heart.getX() + 0.5, heart.getY() + 0.3 + i * 0.6, heart.getZ() + 0.5, 0, 0.01, 0);
 		}
