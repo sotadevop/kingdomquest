@@ -1,6 +1,13 @@
 package io.github.sotadevop.kingdomquest.kingdom;
 
+import com.mojang.serialization.Codec;
+import io.github.sotadevop.kingdomquest.KingdomQuest;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
@@ -24,13 +31,24 @@ import java.util.List;
  * starts, stay close to the blocks being placed and leave when it's done.
  */
 final class People {
-	private static final String ARCHITECT = "kingdomquest_architect";
-	private static final String WORKER = "kingdomquest_worker";
+	private static final String ARCHITECT = "architect";
+	private static final String WORKER = "worker";
+	/** "role|settlement id" on our villagers (a Fabric attachment, saved with the entity). */
+	static final AttachmentType<String> ROLE = AttachmentRegistry.<String>builder()
+			.persistent(Codec.STRING)
+			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "role"));
+
+	private static String role(Entity e) {
+		String r = e.getAttached(ROLE);
+		return r == null ? "" : r;
+	}
 
 	private People() {
 	}
 
 	static void register() {
+		// our people can't be hurt
+		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> role(entity).isEmpty());
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			if (!(player instanceof ServerPlayer sp) || !(entity instanceof Villager)) {
 				return InteractionResult.PASS;
@@ -39,7 +57,7 @@ final class People {
 			if (s == null) {
 				return InteractionResult.PASS;
 			}
-			if (entity.getTags().contains(ARCHITECT)) {
+			if (role(entity).startsWith(ARCHITECT)) {
 				say(sp, "Architect", s.job().isEmpty() ? "Welcome back! What shall we build next?" : "My builders are hard at work.");
 				Settlements.sendInfo(sp, s);
 			} else {
@@ -50,13 +68,14 @@ final class People {
 	}
 
 	private static Settlement settlementOf(ServerPlayer player, Entity entity) {
-		for (String tag : entity.getTags()) {
-			if (tag.startsWith("kq_s_")) {
-				for (Settlement s : Settlements.all(player.level().getServer())) {
-					if (s.id().toString().equals(tag.substring(5))) {
-						return s;
-					}
-				}
+		String r = role(entity);
+		int bar = r.indexOf('|');
+		if (bar < 0) {
+			return null;
+		}
+		for (Settlement s : Settlements.all(player.level().getServer())) {
+			if (s.id().toString().equals(r.substring(bar + 1))) {
+				return s;
 			}
 		}
 		return null;
@@ -67,14 +86,13 @@ final class People {
 	}
 
 	private static List<Villager> find(ServerLevel level, Settlement s, String role) {
-		String id = "kq_s_" + s.id();
-		return level.getEntitiesOfClass(Villager.class, new AABB(s.heart()).inflate(96, 48, 96),
-				v -> v.isAlive() && v.getTags().contains(role) && v.getTags().contains(id));
+		String want = role + "|" + s.id();
+		return level.getEntitiesOfClass(Villager.class, new AABB(s.heart()).inflate(96, 48, 96), v -> v.isAlive() && want.equals(role(v)));
 	}
 
 	private static Villager spawn(ServerLevel level, Settlement s, String role, String name, BlockPos at) {
-		Villager v = EntityType.VILLAGER.create(level, EntitySpawnReason.MOB_SUMMONED);
-		if (v == null) {
+		EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace("villager"));
+		if (!(type.create(level, EntitySpawnReason.MOB_SUMMONED) instanceof Villager v)) {
 			return null;
 		}
 		BlockPos pos = at;
@@ -82,10 +100,8 @@ final class People {
 			pos = pos.above();
 		}
 		v.snapTo(Vec3.atBottomCenterOf(pos), level.getRandom().nextFloat() * 360, 0);
-		v.addTag(role);
-		v.addTag("kq_s_" + s.id());
+		v.setAttached(ROLE, role + "|" + s.id());
 		v.setCustomName(Component.literal(name));
-		v.setInvulnerable(true);
 		v.setPersistenceRequired();
 		level.addFreshEntity(v);
 		level.sendParticles(ParticleTypes.POOF, pos.getX() + 0.5, pos.getY() + 1, pos.getZ() + 0.5, 8, 0.3, 0.5, 0.3, 0.02);
