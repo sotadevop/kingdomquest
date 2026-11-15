@@ -215,11 +215,18 @@ public final class Settlements {
 		if (step == null || !Progression.requirementMet(player, step) || !Progression.canPay(player, step)) {
 			return;
 		}
-		String job = s.style() + "/" + step.building();
-		if (Template.get(job) == null) {
+		if (Template.get(s.style() + "/" + step.building()) == null) {
 			return;
 		}
 		Progression.pay(player, step);
+		start(server, s, track, step);
+		player.sendOverlayMessage(Component.translatable("kingdomquest.upgrade.started", Component.translatable(step.titleKey())));
+	}
+
+	/** Starts building {@code step} on {@code track}: takes down the track's blocks the new level doesn't use, clears the ground. */
+	private static void start(MinecraftServer server, Settlement s, String track, Progression.Step step) {
+		String job = s.style() + "/" + step.building();
+		String track0 = track;
 		ServerLevel level = server.overworld();
 		List<Template.Placement> list = placements(s, job);
 		Set<Long> next = new HashSet<>();
@@ -236,8 +243,70 @@ public final class Settlements {
 			}
 		}
 		clearFootprint(level, s, list);
-		put(server, s.withJob(job, track, 0).withLevel(track, step.level()).withBuilt(track, kept));
-		player.sendOverlayMessage(Component.translatable("kingdomquest.upgrade.started", Component.translatable(step.titleKey())));
+		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
+	}
+
+	// ---- test tools (/kingdomquest test ...) ----
+
+	/** Finishes the running build of the player's settlement at once. Returns null if there is no settlement. */
+	public static Settlement testFinish(ServerPlayer player) {
+		MinecraftServer server = player.level().getServer();
+		Settlement s = byOwner(server, player.getUUID());
+		if (s != null && !s.job().isEmpty()) {
+			step(server, s, true);
+			s = byHeart(server, s.heart());
+		}
+		return s;
+	}
+
+	/** Builds the given level of a track at once, skipping requirements and costs (also downgrades). */
+	public static boolean testSet(ServerPlayer player, String track, int lvl) {
+		Settlement s = testFinish(player);
+		List<Progression.Step> steps = Progression.steps(track);
+		if (s == null || steps == null || lvl < 1 || lvl > steps.size()) {
+			return false;
+		}
+		MinecraftServer server = player.level().getServer();
+		start(server, s, track, steps.get(lvl - 1));
+		testFinish(player);
+		return true;
+	}
+
+	/** Every track to its highest level. */
+	public static boolean testMax(ServerPlayer player) {
+		boolean ok = true;
+		for (String track : Progression.ORDER) {
+			ok &= testSet(player, track, Progression.steps(track).size());
+		}
+		return ok;
+	}
+
+	public static boolean testProduce(ServerPlayer player) {
+		Settlement s = byOwner(player.level().getServer(), player.getUUID());
+		if (s != null) {
+			Production.run(player.level().getServer().overworld(), s);
+		}
+		return s != null;
+	}
+
+	/** Removes the player's settlement and every block its builders placed. */
+	public static boolean testReset(ServerPlayer player) {
+		MinecraftServer server = player.level().getServer();
+		Settlement s = byOwner(server, player.getUUID());
+		if (s == null) {
+			return false;
+		}
+		ServerLevel level = server.overworld();
+		for (List<Long> list : s.built().values()) {
+			for (long pos : list) {
+				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+			}
+		}
+		level.setBlock(s.heart(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+		List<Settlement> rest = new ArrayList<>(all(server));
+		rest.removeIf(o -> o.id().equals(s.id()));
+		server.overworld().setAttached(DATA, List.copyOf(rest));
+		return true;
 	}
 
 	/**
