@@ -17,7 +17,7 @@ import java.util.UUID;
 
 /**
  * The drawbridge of gate level 3+: the lever inside the gatehouse raises or lowers it. It moves one row every
- * half second with piston and chain sounds: the three plank rows over the moat fold up into a wall in front of
+ * half second with piston and chain sounds: the four plank rows (five wide) over the moat fold up into a wall in front of
  * the gate, and fold back down. Its state is kept in the settlement ("drawbridge" = 1 when raised).
  */
 final class Drawbridge {
@@ -49,6 +49,21 @@ final class Drawbridge {
 		return false;
 	}
 
+	/** Bridge planks that are raised (or moving) are not damage. */
+	static boolean moving(Settlement s, BlockPos pos) {
+		if (s.level(Progression.GATE) < 3) {
+			return false;
+		}
+		for (int x = GX - 2; x <= GX + 2; x++) {
+			for (int k = 0; k < 4; k++) {
+				if (pos.equals(at(s, x, -1, GZ + 3 + k))) {
+					return s.level(STATE) == 1 || MOVING.containsKey(s.id());
+				}
+			}
+		}
+		return false;
+	}
+
 	static void tick(MinecraftServer server) {
 		if (MOVING.isEmpty() || server.getTickCount() % 10 != 0) {
 			return;
@@ -62,9 +77,9 @@ final class Drawbridge {
 			BlockState plank = Blocks.CRIMSON_PLANKS.defaultBlockState();
 			BlockState air = Blocks.AIR.defaultBlockState();
 			boolean raising = m[1] == 1;
-			// row k (k = 0 near the gate .. 2 far out) lies over the moat at z = GZ+3+k and stands up at height k
-			int k = raising ? m[0] : 2 - m[0];
-			for (int x = GX - 1; x <= GX + 1; x++) {
+			// row k (k = 0 near the gate .. 3 far out) lies over the moat at z = GZ+3+k and stands up at height k
+			int k = raising ? m[0] : 3 - m[0];
+			for (int x = GX - 2; x <= GX + 2; x++) {
 				BlockPos flat = at(s, x, -1, GZ + 3 + k);
 				BlockPos up = at(s, x, k, GZ + 2);
 				level.setBlock(raising ? flat : up, air, Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS);
@@ -73,7 +88,7 @@ final class Drawbridge {
 			BlockPos sound = at(s, GX, 0, GZ + 2);
 			level.playSound(null, sound, raising ? SoundEvents.PISTON_CONTRACT : SoundEvents.PISTON_EXTEND, SoundSource.BLOCKS, 0.8f, 0.6f);
 			level.playSound(null, sound, SoundEvents.IRON_DOOR_CLOSE, SoundSource.BLOCKS, 0.6f, 0.5f);
-			if (++m[0] >= 3) {
+			if (++m[0] >= 4) {
 				MOVING.remove(s.id());
 				Settlements.putState(server, s.withLevel(STATE, raising ? 1 : 0));
 			}

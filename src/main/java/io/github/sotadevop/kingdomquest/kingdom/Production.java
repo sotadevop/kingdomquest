@@ -300,7 +300,7 @@ public final class Production {
 			return level.getBlockEntity(p) instanceof Container c ? c : null;
 		}
 		BlockPos offset = t == null ? null : t.storageOffset(Rotation.values()[s.rotation()]);
-		return offset != null && level.getBlockEntity(s.heart().offset(offset)) instanceof Container c ? c : null;
+		return offset != null && level.getBlockEntity(s.heart().offset(offset).above(Settlements.lift(s, job))) instanceof Container c ? c : null;
 	}
 
 	/** Merges into matching stacks first, then empty slots. */

@@ -32,7 +32,11 @@ public final class SiteWork {
 	/** Flat strip outside a wall before the slope starts. */
 	private static final int FLAT = 4;
 
-	public record Column(int dx, int dz, int floor) {
+	/** {@code edge}: the outermost ring of the flat pad, where a terrace gets its retaining wall. */
+	public record Column(int dx, int dz, int floor, boolean edge) {
+		public Column(int dx, int dz, int floor) {
+			this(dx, dz, floor, false);
+		}
 	}
 
 	private static final Map<String, List<Column>> CACHE = new HashMap<>();
@@ -101,7 +105,7 @@ public final class SiteWork {
 				// smooth 1:1 slope (like natural hill steps), no per-column noise: that made holes
 				int floor = d <= flat ? 0 : d - flat;
 				BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
-				list.add(new Column(rel.getX(), rel.getZ(), d == 0 ? 0 : floor));
+				list.add(new Column(rel.getX(), rel.getZ(), d == 0 ? 0 : floor, d == flat));
 			}
 			list.sort(java.util.Comparator.comparingInt(Column::dx).thenComparingInt(Column::dz));
 			return List.copyOf(list);
@@ -202,12 +206,19 @@ public final class SiteWork {
 				continue;
 			}
 			BlockState st = level.getBlockState(pos);
-			// in the flat margin everything natural goes (trees too); further out only the land is shaped
-			if (margin ? natural(st) : terrain(st)) {
-				if (st.is(BlockTags.LOGS)) {
-					fellTree(level, pos.immutable(), built);
+			if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+				// any part of a tree in the way takes the whole tree: no half trees or floating crowns
+				if (margin || st.is(BlockTags.LOGS) && y <= floor + 1) {
+					removeTreeAt(level, pos.immutable(), built);
 				}
+				continue;
+			}
+			// in the flat margin everything natural goes; further out only the land is shaped
+			if (margin ? natural(st) : terrain(st)) {
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+				if (level.getBlockState(pos.above()).is(BlockTags.LOGS) && !built.contains(pos.above().asLong())) {
+					removeTreeAt(level, pos.above(), built); // the ground under a tree was cut: the tree goes too
+				}
 			}
 		}
 		// the new ground layer: cut stone, dirt, leaves or logs at ground level become the area's surface block
@@ -217,40 +228,228 @@ public final class SiteWork {
 				&& (exposedInside(ground) || margin && (ground.is(BlockTags.LEAVES) || ground.is(BlockTags.LOGS)))) {
 			level.setBlock(pos, surface, FLAGS);
 		}
-		// foundation: fill holes, water and leaves below the ground layer; outside the building the fill slopes away
+		// foundation: fill holes, water and leaves below the ground layer
 		int fillTop = heart.getY() - 1 - c.floor();
+		int depth = 0;
 		for (int y = fillTop; y >= fillTop - FOUNDATION; y--) {
 			pos.set(x, y, z);
-			if (built.contains(pos.asLong())) {
-				continue;
-			}
 			BlockState state = level.getBlockState(pos);
-			boolean hole = state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock || state.is(BlockTags.LEAVES);
-			if (!hole) {
-				break; // solid ground reached
+			if (built.contains(pos.asLong()) || !(state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock
+					|| state.is(BlockTags.LEAVES))) {
+				break;
 			}
-			level.setBlock(pos, y == fillTop ? surface : Blocks.DIRT.defaultBlockState(), FLAGS);
+			depth++;
+		}
+		if (depth == 0 || !margin && depth > 2) {
+			return; // a steep drop outside the pad stays natural: the pad ends in a retaining wall instead of a dirt cliff
+		}
+		BlockState wall = wallFor(surface);
+		for (int y = fillTop; y > fillTop - depth; y--) {
+			pos.set(x, y, z);
+			BlockState fill = c.edge() && depth > 2 ? ((x * 31 + y * 7 + z * 13) % 5 == 0 ? mossy(wall) : wall)
+					: y == fillTop ? surface : Blocks.DIRT.defaultBlockState();
+			level.setBlock(pos, fill, FLAGS);
 		}
 	}
 
-	/** Removes a whole tree (connected logs and leaves) so no leaves are left floating. */
+	/** Stone for retaining walls, matching the ground: sandstone in deserts, cobblestone in the snow, stone bricks elsewhere. */
+	static BlockState wallFor(BlockState surface) {
+		if (surface.is(Blocks.SAND) || surface.is(Blocks.RED_SAND)) {
+			return Blocks.SMOOTH_SANDSTONE.defaultBlockState();
+		}
+		return surface.is(Blocks.SNOW_BLOCK) ? Blocks.COBBLESTONE.defaultBlockState() : Blocks.STONE_BRICKS.defaultBlockState();
+	}
+
+	private static BlockState mossy(BlockState wall) {
+		return wall.is(Blocks.STONE_BRICKS) ? Blocks.MOSSY_STONE_BRICKS.defaultBlockState()
+				: wall.is(Blocks.COBBLESTONE) ? Blocks.MOSSY_COBBLESTONE.defaultBlockState() : wall;
+	}
+
+	/** A log or leaf block of a tree is in the way: every tree it belongs to goes, whole. */
+	public static void removeTreeAt(ServerLevel level, BlockPos pos, Set<Long> built) {
+		BlockState st = level.getBlockState(pos);
+		if (st.is(BlockTags.LOGS)) {
+			fellTree(level, pos, built);
+			return;
+		}
+		if (!st.is(BlockTags.LEAVES)) {
+			return;
+		}
+		boolean any = false;
+		for (BlockPos p : BlockPos.betweenClosed(pos.offset(-5, -6, -5), pos.offset(5, 3, 5))) {
+			if (level.getBlockState(p).is(BlockTags.LOGS) && !built.contains(p.asLong())) {
+				fellTree(level, p.immutable(), built);
+				any = true;
+			}
+		}
+		if (!any && !built.contains(pos.asLong())) {
+			level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS); // stray leaves
+		}
+	}
+
+	/** Clears what stands on a ground block that a road or path now covers: plants go, trees go whole. */
+	public static void clearAbove(ServerLevel level, BlockPos ground, Set<Long> built) {
+		for (int up = 1; up <= 3; up++) {
+			BlockPos p = ground.above(up);
+			if (built.contains(p.asLong())) {
+				return;
+			}
+			BlockState st = level.getBlockState(p);
+			if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+				removeTreeAt(level, p, built);
+			} else if (natural(st) && !terrain(st)) {
+				level.setBlock(p, Blocks.AIR.defaultBlockState(), FLAGS);
+			} else {
+				return;
+			}
+		}
+	}
+
+	/**
+	 * Removes a whole tree: every log connected to {@code start}, then the leaves that belonged to it (within four
+	 * blocks of its logs and not closer to another tree), so nothing is left floating.
+	 */
 	static void fellTree(ServerLevel level, BlockPos start, Set<Long> built) {
 		java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
 		Set<Long> seen = new java.util.HashSet<>();
+		List<BlockPos> logs = new ArrayList<>();
 		queue.add(start);
-		int count = 0;
-		while (!queue.isEmpty() && count < 600) {
+		seen.add(start.asLong());
+		while (!queue.isEmpty() && logs.size() < 400) {
 			BlockPos p = queue.poll();
+			if (!level.getBlockState(p).is(BlockTags.LOGS)) {
+				continue;
+			}
+			logs.add(p);
 			for (BlockPos n : BlockPos.betweenClosed(p.offset(-1, -1, -1), p.offset(1, 1, 1))) {
-				long key = n.asLong();
-				if (!seen.add(key) || built.contains(key)) {
-					continue;
-				}
-				BlockState st = level.getBlockState(n);
-				if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
-					level.setBlock(n, Blocks.AIR.defaultBlockState(), FLAGS);
+				if (!built.contains(n.asLong()) && seen.add(n.asLong()) && level.getBlockState(n).is(BlockTags.LOGS)) {
 					queue.add(n.immutable());
-					count++;
+				}
+			}
+		}
+		if (logs.isEmpty()) {
+			return;
+		}
+		int x0 = Integer.MAX_VALUE, y0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, y1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+		for (BlockPos p : logs) {
+			level.setBlock(p, Blocks.AIR.defaultBlockState(), FLAGS);
+			x0 = Math.min(x0, p.getX()); y0 = Math.min(y0, p.getY()); z0 = Math.min(z0, p.getZ());
+			x1 = Math.max(x1, p.getX()); y1 = Math.max(y1, p.getY()); z1 = Math.max(z1, p.getZ());
+		}
+		for (BlockPos p : BlockPos.betweenClosed(x0 - 4, y0 - 1, z0 - 4, x1 + 4, y1 + 4, z1 + 4)) {
+			if (built.contains(p.asLong()) || !level.getBlockState(p).is(BlockTags.LEAVES)) {
+				continue;
+			}
+			int mine = Integer.MAX_VALUE;
+			for (BlockPos l : logs) {
+				mine = Math.min(mine, Math.max(Math.abs(l.getX() - p.getX()), Math.max(Math.abs(l.getY() - p.getY()), Math.abs(l.getZ() - p.getZ()))));
+			}
+			if (mine <= 4 && !otherLogNear(level, p, Math.min(mine - 1, 2))) {
+				level.setBlock(p, Blocks.AIR.defaultBlockState(), FLAGS);
+			}
+		}
+	}
+
+	private static boolean otherLogNear(ServerLevel level, BlockPos p, int r) {
+		if (r < 1) {
+			return false;
+		}
+		for (BlockPos n : BlockPos.betweenClosed(p.offset(-r, -r, -r), p.offset(r, r, r))) {
+			if (level.getBlockState(n).is(BlockTags.LOGS)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Evens out the ground inside a settlement after a build: single-block holes are filled and single-block
+	 * bumps cut (terraces of two and more blocks stay), and the banks along roads are matched to the road so
+	 * paths don't run in trenches. Only natural ground is touched.
+	 */
+	public static void smooth(ServerLevel level, BlockPos heart, int x0, int z0, int x1, int z1, Set<Long> built, Set<Long> roads,
+			BlockState surface) {
+		int w = x1 - x0 + 1;
+		int d = z1 - z0 + 1;
+		int[] h = new int[w * d];
+		boolean[] free = new boolean[w * d];
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < w; i++) {
+			for (int k = 0; k < d; k++) {
+				int x = x0 + i;
+				int z = z0 + k;
+				int y = groundTop(level, x, z, heart.getY());
+				h[i * d + k] = y;
+				pos.set(x, y, z);
+				free[i * d + k] = !built.contains(pos.asLong()) && natural(level.getBlockState(pos)) && !built.contains(pos.above().asLong())
+						&& !level.getBlockState(pos.above()).is(BlockTags.LOGS); // never undercut a tree
+			}
+		}
+		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+		for (int pass = 0; pass < 2; pass++) {
+			for (int i = 1; i < w - 1; i++) {
+				for (int k = 1; k < d - 1; k++) {
+					int c = i * d + k;
+					if (!free[c]) {
+						continue;
+					}
+					int lo = Integer.MAX_VALUE;
+					int hi = Integer.MIN_VALUE;
+					int roadY = Integer.MIN_VALUE;
+					for (int[] dd : dirs) {
+						int n = (i + dd[0]) * d + k + dd[1];
+						lo = Math.min(lo, h[n]);
+						hi = Math.max(hi, h[n]);
+						pos.set(x0 + i + dd[0], h[n], z0 + k + dd[1]);
+						if (roads.contains(pos.asLong())) {
+							roadY = Math.max(roadY, h[n]);
+						}
+					}
+					int x = x0 + i;
+					int z = z0 + k;
+					int target = h[c];
+					if (roadY != Integer.MIN_VALUE && Math.abs(h[c] - roadY) == 1) {
+						target = roadY; // road banks: level with the road
+					} else if (h[c] < lo && lo - h[c] <= 2) {
+						target = lo; // hole
+					} else if (h[c] > hi && h[c] - hi <= 2) {
+						target = hi; // bump
+					}
+					if (target > h[c]) {
+						for (int y = h[c] + 1; y <= target; y++) {
+							pos.set(x, y, z);
+							if (built.contains(pos.asLong()) || !level.getBlockState(pos).canBeReplaced()) {
+								break;
+							}
+							level.setBlock(pos, y == target ? surface : Blocks.DIRT.defaultBlockState(), FLAGS);
+						}
+						pos.set(x, h[c], z);
+						if (isTopSoil(level.getBlockState(pos))) {
+							level.setBlock(pos, Blocks.DIRT.defaultBlockState(), FLAGS);
+						}
+						h[c] = target;
+					} else if (target < h[c]) {
+						BlockState top = level.getBlockState(pos.set(x, h[c], z));
+						for (int y = h[c] + 1; y <= h[c] + 2; y++) {
+							pos.set(x, y, z);
+							BlockState above = level.getBlockState(pos);
+							if (!built.contains(pos.asLong()) && natural(above) && !terrain(above) && !above.is(BlockTags.LOGS)) {
+								level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+							}
+						}
+						for (int y = h[c]; y > target; y--) {
+							pos.set(x, y, z);
+							if (!terrain(level.getBlockState(pos))) {
+								break;
+							}
+							level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+						}
+						pos.set(x, target, z);
+						if (exposedInside(level.getBlockState(pos))) {
+							level.setBlock(pos, isTopSoil(top) ? top : surface, FLAGS);
+						}
+						h[c] = target;
+					}
 				}
 			}
 		}

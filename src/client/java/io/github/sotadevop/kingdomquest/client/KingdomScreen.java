@@ -66,7 +66,14 @@ public class KingdomScreen extends Screen {
 		this.tab = Math.min(lastTab, TABS.size() - 1);
 	}
 
+	private static net.minecraft.core.BlockPos lastHeart = net.minecraft.core.BlockPos.ZERO;
+
+	static net.minecraft.core.BlockPos lastHeart() {
+		return lastHeart;
+	}
+
 	public static void open(KingdomInfoPayload info) {
+		lastHeart = info.heart();
 		Minecraft.getInstance().setScreenAndShow(new KingdomScreen(info));
 	}
 
@@ -148,11 +155,10 @@ public class KingdomScreen extends Screen {
 			}).bounds(fx, this.top + H - 24, 110, 18).build();
 			this.tabButtons.add(this.addRenderableWidget(repair));
 		}
-		KingdomInfoPayload.Option roads = this.byTrack.get("roads");
-		if (tabKey.equals("kingdomquest.tab.streets") && roads != null && roads.level() > 0) {
-			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.link.kingdom", "link_kingdom", fx, 140)));
-			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.link.village", "link_village", fx + 144, 132)));
-		}
+		// the realm: map of all settlements, villages and roads, plus the register of buildings, people and animals
+		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.open"), b ->
+				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "realm")))
+				.bounds(this.left + W - 8 - 70 - 4 - 70, this.top + H - 24, 70, 18).build()));
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 70, this.top + H - 24, 70, 18).build());
 	}

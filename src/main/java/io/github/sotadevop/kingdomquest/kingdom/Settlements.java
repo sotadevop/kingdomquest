@@ -96,6 +96,7 @@ public final class Settlements {
 		Guild.register();
 		Companion.register();
 		PayloadTypeRegistry.clientboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(RealmPayload.TYPE, RealmPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(NamePayload.TYPE, (payload, context) -> rename(context.player(), payload));
 		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
@@ -311,11 +312,71 @@ public final class Settlements {
 		player.sendOverlayMessage(Component.translatable("kingdomquest.upgrade.started", Component.translatable(step.titleKey())));
 	}
 
+	/** Add-ons that stand on their own terrace: at the height of the land where they are built. */
+	static final Set<String> LIFTED = Set.of("farm", "smith", "wood", "library", "brewery", "stables", "barracks", "guild", "apiary", "kennel",
+			"trophy", "tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether");
+
+	static String trackOf(String job) {
+		String b = job.substring(job.indexOf('/') + 1);
+		int i = b.lastIndexOf('_');
+		return i < 0 ? b : b.substring(0, i);
+	}
+
+	/** How many blocks above (or below) the heart the job's building stands: its terrace height. */
+	static int lift(Settlement s, String job) {
+		String track = trackOf(job);
+		return LIFTED.contains(track) ? s.level("lift_" + track) : 0;
+	}
+
+	/**
+	 * The terrace height for a new add-on: the median height of the natural ground under it, at most 4 blocks
+	 * from the square; differences of a block are levelled out instead.
+	 */
+	private static int terraceHeight(ServerLevel level, Settlement s, String job) {
+		Template t = Template.get(job);
+		if (t == null) {
+			return 0;
+		}
+		Set<Long> cols = new HashSet<>();
+		for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
+			cols.add(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()));
+		}
+		List<Integer> hs = new ArrayList<>();
+		int n = 0;
+		for (long c : cols) {
+			if (n++ % 3 != 0) {
+				continue; // a sample is enough
+			}
+			int x = s.heart().getX() + BlockPos.getX(c);
+			int z = s.heart().getZ() + BlockPos.getZ(c);
+			hs.add(SiteWork.groundTop(level, x, z, s.heart().getY()) + 1 - s.heart().getY());
+		}
+		if (hs.isEmpty()) {
+			return 0;
+		}
+		java.util.Collections.sort(hs);
+		int dy = Math.max(-4, Math.min(4, hs.get(hs.size() / 2)));
+		return Math.abs(dy) < 2 ? 0 : dy;
+	}
+
+	/** Evens out the land inside the settlement's ring after a build. */
+	static void smoothGround(ServerLevel level, Settlement s) {
+		Rotation r = Rotation.values()[s.rotation()];
+		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(-63, 0, -56), r));
+		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(69, 0, 40), r));
+		Set<Long> all = new HashSet<>();
+		s.built().values().forEach(all::addAll);
+		Set<Long> roads = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
+		SiteWork.smooth(level, s.heart(), Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()),
+				Math.max(a.getZ(), b.getZ()), all, roads, SiteWork.surface(level, s.heart()));
+	}
+
 	/** Starts building {@code step} on {@code track}: takes down the track's blocks the new level doesn't use, clears the ground. */
-	private static void start(MinecraftServer server, Settlement s, String track, Progression.Step step) {
-		String job = s.style() + "/" + step.building();
+	private static void start(MinecraftServer server, Settlement s0, String track, Progression.Step step) {
+		String job = s0.style() + "/" + step.building();
 		String track0 = track;
 		ServerLevel level = server.overworld();
+		Settlement s = LIFTED.contains(track) && s0.level(track) == 0 ? s0.withLevel("lift_" + track, terraceHeight(level, s0, job)) : s0;
 		FOLLOWED.keySet().removeIf(k -> k.startsWith(s.id() + "|" + job + "|")); // sample the ground again
 		List<Template.Placement> list = placements(s, job);
 		Set<Long> next = new HashSet<>();
@@ -332,7 +393,7 @@ public final class Settlements {
 			} else {
 				BlockPos old = BlockPos.of(pos);
 				// ground blocks (old paths) become the area's ground again, not holes
-				level.setBlock(old, old.getY() < s.heart().getY() ? SiteWork.surface(level, s.heart()) : Blocks.AIR.defaultBlockState(),
+				level.setBlock(old, old.getY() < s.heart().getY() + lift(s, job) ? SiteWork.surface(level, s.heart()) : Blocks.AIR.defaultBlockState(),
 						NO_DROPS);
 			}
 		}
@@ -358,6 +419,11 @@ public final class Settlements {
 			case "link_village" -> RoadLink.connect(player, s, true);
 			case "repair" -> startRepair(player, s);
 			default -> {
+				if (action.equals("realm")) {
+					Realm.send(player, s);
+				} else if (action.startsWith("realm")) {
+					Realm.handle(player, s, action);
+				}
 			}
 		}
 	}
@@ -373,14 +439,19 @@ public final class Settlements {
 				continue;
 			}
 			Template t = Template.get(s.style() + "/" + step.building());
-			if (t == null || t.follow) {
+			if (t == null || track.equals(s.jobTrack())) {
 				continue;
 			}
+			// every block the builders placed for this track (walls, roads, foundations, moat bridge...) is checked
+			Set<Long> mine = new HashSet<>(s.built().getOrDefault(track, List.of()));
 			for (Template.Placement p : placements(s, s.style() + "/" + step.building())) {
-				if (p.state().isAir() || p.state().getBlock() instanceof CropBlock || p.offset().getY() < 0) {
+				if (p.state().isAir() || p.state().getBlock() instanceof CropBlock || !p.state().getFluidState().isEmpty()) {
 					continue;
 				}
 				BlockPos pos = s.heart().offset(p.offset());
+				if (!mine.contains(pos.asLong()) || Drawbridge.moving(s, pos)) {
+					continue;
+				}
 				if (level.getBlockState(pos).getBlock() != p.state().getBlock()) {
 					out.add(new Template.Placement(p.offset(), p.state(), p.segment(), p.anchor()));
 				}
@@ -600,7 +671,8 @@ public final class Settlements {
 	static boolean findDockSite(MinecraftServer srv, Settlement s) {
 		ServerLevel level = srv.overworld();
 		BlockPos h = s.heart();
-		for (int r = 12; r <= 160; r += 4) {
+		java.util.Set<Long> small = new HashSet<>();
+		for (int r = 12; r <= 256; r += 4) {
 			for (int i = 0; i < r * 2; i++) {
 				double a = Math.PI * i / r;
 				int x = h.getX() + (int) Math.round(Math.cos(a) * r);
@@ -609,6 +681,9 @@ public final class Settlements {
 				BlockPos p = new BlockPos(x, y, z);
 				if (!level.getFluidState(p).isSource() || !level.getFluidState(p.below()).isSource() || !level.getFluidState(p).is(net.minecraft.tags.FluidTags.WATER)) {
 					continue;
+				}
+				if (small.contains(p.asLong()) || !bigWater(level, p, small)) {
+					continue; // ponds don't get a harbor: only a river, a lake or the sea
 				}
 				// walk back toward the heart to the shore
 				int dx = Integer.signum(h.getX() - x);
@@ -622,6 +697,14 @@ public final class Settlements {
 					}
 					water = next;
 				}
+				boolean open = true;
+				for (int k = 1; k <= 14 && open; k++) {
+					BlockPos out = alongX ? water.offset(-dx * k, 0, 0) : water.offset(0, 0, -dz * k);
+					open = level.getFluidState(out).is(net.minecraft.tags.FluidTags.WATER);
+				}
+				if (!open) {
+					continue; // the pier needs open water ahead
+				}
 				// facing: from the shore out over the water (away from the heart)
 				Rotation rot = alongX ? (dx > 0 ? Rotation.CLOCKWISE_90 : Rotation.COUNTERCLOCKWISE_90) : (dz > 0 ? Rotation.CLOCKWISE_180 : Rotation.NONE);
 				BlockPos rel = water.subtract(h);
@@ -630,6 +713,29 @@ public final class Settlements {
 				return true;
 			}
 		}
+		return false;
+	}
+
+	/** True if the water surface around {@code p} is at least 400 blocks big; smaller ones are remembered in {@code small}. */
+	private static boolean bigWater(ServerLevel level, BlockPos p, java.util.Set<Long> small) {
+		java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+		java.util.Set<Long> seen = new HashSet<>();
+		queue.add(p);
+		seen.add(p.asLong());
+		while (!queue.isEmpty() && seen.size() < 400) {
+			BlockPos c = queue.poll();
+			for (Direction d : Direction.Plane.HORIZONTAL) {
+				BlockPos n = c.relative(d);
+				if (seen.size() < 400 && level.getFluidState(n).is(net.minecraft.tags.FluidTags.WATER) && level.getBlockState(n.above()).isAir()
+						&& seen.add(n.asLong())) {
+					queue.add(n);
+				}
+			}
+		}
+		if (seen.size() >= 400) {
+			return true;
+		}
+		small.addAll(seen);
 		return false;
 	}
 
@@ -655,9 +761,13 @@ public final class Settlements {
 			boolean on = seg.any().stream().anyMatch(r -> s.level(r.getKey()) >= r.getValue());
 			mask.append(on ? '1' : '0');
 		}
-		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask;
+		int dy = lift(s, job);
+		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy;
 		return PLACEMENTS.computeIfAbsent(key, k -> {
-			List<Template.Placement> all = new ArrayList<>(t.placements(dye(s.color()), Rotation.values()[s.rotation()]));
+			List<Template.Placement> all = new ArrayList<>();
+			for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
+				all.add(dy == 0 ? p : new Template.Placement(p.offset().above(dy), p.state(), p.segment(), p.anchor()));
+			}
 			// blocks that hang on others (ladders, torches, banners, doors, beds...) come after the solid ones
 			all.sort(java.util.Comparator.comparingInt((Template.Placement p) -> attached(p.state()) ? 1 : 0));
 			if (t.segments.isEmpty()) {
@@ -721,6 +831,7 @@ public final class Settlements {
 					SiteWork.clear(level, s.heart(), new SiteWork.Column(p.offset().getX(), p.offset().getZ(), 0), all, surface);
 				}
 				level.setBlock(pos, neighbourShaped(p.state(), level, pos), NO_DROPS);
+				SiteWork.clearAbove(level, pos, all);
 				built.add(pos.asLong());
 				have.add(pos.asLong());
 			}
@@ -754,6 +865,8 @@ public final class Settlements {
 		for (Settlement s : all(server)) {
 			if (people) {
 				People.ensureArchitect(server.overworld(), s);
+				People.ensureBuilders(server.overworld(), s);
+				People.spread(server.overworld(), s);
 				Workers.tick(server.overworld(), s);
 			}
 			repairTick(server, s);
@@ -804,7 +917,7 @@ public final class Settlements {
 		int colsPerTick = instant ? cols : fast ? Math.max(1, (int) Math.ceil(cols / (CREATIVE_TICKS * 0.4)))
 				: Math.max(4, (int) Math.ceil(cols / (t.seconds * 8.0)));
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
-			SiteWork.clear(level, s.heart(), columns.get(index), allBuilt, SiteWork.surface(level, s.heart()));
+			SiteWork.clear(level, s.heart().above(lift(s, s.job())), columns.get(index), allBuilt, SiteWork.surface(level, s.heart()));
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
@@ -818,8 +931,8 @@ public final class Settlements {
 				Template.Placement p = list.get(index - cols);
 				BlockPos pos = s.heart().offset(p.offset());
 				BlockState state = neighbourShaped(p.state(), level, pos);
-				if (t.follow && SiteWork.natural(level.getBlockState(pos.above())) && !SiteWork.terrain(level.getBlockState(pos.above()))) {
-					level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(), NO_DROPS); // grass, flowers, leaves
+				if (t.follow) {
+					SiteWork.clearAbove(level, pos, allBuilt); // grass and flowers go, trees go whole
 				}
 				if (n == 0) {
 					first = pos;
@@ -827,6 +940,9 @@ public final class Settlements {
 				last = pos;
 				if (!level.getBlockState(pos).equals(state)) {
 					level.setBlock(pos, state, NO_DROPS);
+					if (!state.getCollisionShape(level, pos).isEmpty()) {
+						pushOut(level, pos);
+					}
 					if (n == 0) {
 						SoundType sound = state.getSoundType();
 						level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
@@ -850,6 +966,7 @@ public final class Settlements {
 			People.removeWorkers(level, s);
 			Set<Long> nowBuilt = new HashSet<>(allBuilt);
 			nowBuilt.addAll(built);
+			smoothGround(level, done);
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			Production.armTraps(level, done, list);
 			if (Progression.KENNEL.equals(s.jobTrack())) {
@@ -859,8 +976,11 @@ public final class Settlements {
 					ServerPlayNetworking.send(o, new NamePayload(s.heart(), "pet_" + kind, Collections.defaultName(kind)));
 				}
 			}
+			if (Progression.ROADS.equals(s.jobTrack()) && done.level(Progression.ROADS) == 3) {
+				RoadLink.upgradeAll(server, done); // country roads get gravel, cobble and lanterns too
+			}
 			if (Progression.DOCK.equals(s.jobTrack()) && done.level(Progression.DOCK) == 1) {
-				RoadLink.connectTo(server, done, dockPoint(done, 0, 0, -1), "the dock");
+				RoadLink.link(server, null, done, "dock", dockPoint(done, 0, 0, -1), "the dock");
 			}
 			if (!Progression.ROADS.equals(s.jobTrack()) && !Progression.LAMPS.equals(s.jobTrack())) {
 				extendInfrastructure(server, done.withLevel(s.jobTrack(), done.level(s.jobTrack())));
@@ -868,6 +988,24 @@ public final class Settlements {
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
+			}
+			Settlement latest = byHeart(server, s.heart());
+			if (latest != null) {
+				Progression.Step cur = Progression.current(latest, s.jobTrack());
+				Component title = cur == null ? Component.literal(s.jobTrack()) : Component.translatable(cur.titleKey());
+				if (LIFTED.contains(s.jobTrack()) || Progression.LAIR.equals(s.jobTrack())) {
+					Set<Long> taken = new HashSet<>();
+					latest.built().values().forEach(taken::addAll);
+					Component label = Component.translatable("kingdomquest.track." + s.jobTrack());
+					List<Long> sign = Landmarks.sign(level, latest, s.jobTrack(), label, taken);
+					if (!sign.isEmpty()) {
+						List<Long> with = new ArrayList<>(latest.built().getOrDefault(s.jobTrack(), List.of()));
+						with.addAll(sign);
+						latest = latest.withBuilt(s.jobTrack(), with);
+					}
+				}
+				put(server, latest.withName("last_built", s.jobTrack()));
+				Landmarks.celebrate(level, latest, s.jobTrack(), title, owner);
 			}
 			return;
 		}
@@ -884,6 +1022,20 @@ public final class Settlements {
 		}
 	}
 
+	/** Nobody gets stuck in a wall that was just built: people and animals inside the block step up and out. */
+	static void pushOut(ServerLevel level, BlockPos pos) {
+		for (net.minecraft.world.entity.LivingEntity e : level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, new net.minecraft.world.phys.AABB(pos))) {
+			BlockPos p = pos;
+			for (int up = 0; up < 12; up++) {
+				p = p.above();
+				if (level.getBlockState(p).getCollisionShape(level, p).isEmpty() && level.getBlockState(p.above()).getCollisionShape(level, p.above()).isEmpty()) {
+					break;
+				}
+			}
+			e.teleportTo(e.getX(), p.getY(), e.getZ());
+		}
+	}
+
 	/** Spawns the template's animals once its building is finished. */
 	private static void spawnAnimals(ServerLevel level, Settlement s, Template t) {
 		for (Template.Animal a : t.animals) {
@@ -892,11 +1044,12 @@ public final class Settlements {
 			if (e == null) {
 				continue;
 			}
-			BlockPos pos = s.heart().offset(t.offset(a.pos(), Rotation.values()[s.rotation()]));
+			BlockPos pos = s.heart().offset(t.offset(a.pos(), Rotation.values()[s.rotation()])).above(lift(s, s.job()));
 			for (int up = 0; up < 12 && !(level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir()); up++) {
 				pos = pos.above(); // never inside a block
 			}
 			e.snapTo(Vec3.atBottomCenterOf(pos), level.getRandom().nextFloat() * 360, 0);
+			e.setAttached(People.ROLE, "animal|" + s.id() + "|" + a.type().getPath()); // shows up in the realm register
 			level.addFreshEntity(e);
 		}
 	}

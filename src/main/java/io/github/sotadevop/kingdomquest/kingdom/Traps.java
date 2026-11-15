@@ -18,8 +18,8 @@ import java.util.Map;
 
 /**
  * Mechanisms run by the mod (more reliable than redstone in a generated build):
- * the lava curtain over the gate (gate level 5, lever on the gatehouse roof) and the secret door of the vault
- * (cellar level 3, button in the cellar). Both close again by themselves.
+ * the lava curtain over the gate (gate level 5, stands while its roof lever is on), the arrow slits (gate level 4,
+ * volleys while their roof lever is on) and the secret door of the vault (cellar level 3, button; closes by itself).
  */
 final class Traps {
 	private static final int GX = 7;
@@ -40,16 +40,10 @@ final class Traps {
 	static boolean use(MinecraftServer server, BlockPos pos) {
 		ServerLevel level = server.overworld();
 		for (Settlement s : Settlements.all(server)) {
-			if (s.level(Progression.GATE) >= 5 && pos.equals(at(s, GX, 8, GZ - 1)) && !OPEN.containsKey(s.id() + "lava")) {
-				List<BlockPos> lava = new ArrayList<>();
-				for (int x = GX - 1; x <= GX + 1; x++) {
-					BlockPos p = at(s, x, 8, GZ + 1);
-					level.setBlock(p, Blocks.LAVA.defaultBlockState(), Block.UPDATE_ALL);
-					lava.add(p);
-				}
-				level.playSound(null, lava.get(1), SoundEvents.PISTON_CONTRACT, SoundSource.BLOCKS, 1f, 0.7f);
-				level.playSound(null, lava.get(1), SoundEvents.BUCKET_EMPTY_LAVA, SoundSource.BLOCKS, 1f, 1f);
-				OPEN.put(s.id() + "lava", new Timer(level.getGameTime() + 160, lava, Blocks.AIR.defaultBlockState()));
+			if (s.level(Progression.GATE) >= 5 && pos.equals(lavaLever(s))) {
+				return true; // the lava follows the lever in tick()
+			}
+			if (s.level(Progression.GATE) >= 4 && pos.equals(arrowLever(s))) {
 				return true;
 			}
 			BlockState wall = Template.get(s.style() + "/cellar_3") == null ? null : level.getBlockState(at(s, 2, -5, 1));
@@ -70,7 +64,65 @@ final class Traps {
 		return false;
 	}
 
+	static BlockPos lavaLever(Settlement s) {
+		return at(s, GX, 8, GZ - 1);
+	}
+
+	static BlockPos arrowLever(Settlement s) {
+		return at(s, GX - 2, 8, GZ);
+	}
+
+	private static boolean on(ServerLevel level, BlockPos lever) {
+		BlockState st = level.getBlockState(lever);
+		return st.getBlock() instanceof net.minecraft.world.level.block.LeverBlock && st.getValue(net.minecraft.world.level.block.LeverBlock.POWERED);
+	}
+
+	/** Every half second: the lava curtain stands while its lever is on; the arrow slits fire volleys while theirs is. */
+	private static void mechanisms(MinecraftServer server) {
+		ServerLevel level = server.overworld();
+		for (Settlement s : Settlements.all(server)) {
+			if (s.level(Progression.GATE) < 4 || !level.isLoaded(s.heart())) {
+				continue;
+			}
+			if (s.level(Progression.GATE) >= 5) {
+				boolean lava = on(level, lavaLever(s));
+				for (int x = GX - 1; x <= GX + 1; x++) {
+					BlockPos p = at(s, x, 8, GZ + 1);
+					BlockState now = level.getBlockState(p);
+					if (lava && now.isAir()) {
+						level.setBlock(p, Blocks.LAVA.defaultBlockState(), Block.UPDATE_ALL);
+						if (x == GX) {
+							level.playSound(null, p, SoundEvents.BUCKET_EMPTY_LAVA, SoundSource.BLOCKS, 1f, 1f);
+						}
+					} else if (!lava && now.is(Blocks.LAVA)) {
+						level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+						if (x == GX) {
+							level.playSound(null, p, SoundEvents.PISTON_EXTEND, SoundSource.BLOCKS, 1f, 0.8f);
+						}
+					}
+				}
+			}
+			if (on(level, arrowLever(s))) {
+				for (int x : new int[] {GX - 3, GX - 1, GX + 1, GX + 3}) {
+					BlockPos d = at(s, x, 5, GZ + 1);
+					BlockPos out = at(s, x, 5, GZ + 3);
+					net.minecraft.world.phys.Vec3 dir = net.minecraft.world.phys.Vec3.atCenterOf(out).subtract(net.minecraft.world.phys.Vec3.atCenterOf(d));
+					net.minecraft.world.entity.projectile.arrow.Arrow arrow = new net.minecraft.world.entity.projectile.arrow.Arrow(level,
+							d.getX() + 0.5 + dir.x * 0.35, d.getY() + 0.5, d.getZ() + 0.5 + dir.z * 0.35,
+							new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.ARROW), null);
+					arrow.shoot(dir.x, -0.35, dir.z, 1.4f, 9f);
+					arrow.pickup = net.minecraft.world.entity.projectile.arrow.AbstractArrow.Pickup.DISALLOWED;
+					level.addFreshEntity(arrow);
+				}
+				level.playSound(null, at(s, GX, 5, GZ + 1), SoundEvents.DISPENSER_LAUNCH, SoundSource.BLOCKS, 1f, 1f);
+			}
+		}
+	}
+
 	static void tick(MinecraftServer server) {
+		if (server.getTickCount() % 10 == 0) {
+			mechanisms(server);
+		}
 		if (OPEN.isEmpty()) {
 			return;
 		}

@@ -48,6 +48,10 @@ public record Settlement(UUID id, UUID owner, String name, int color, Identifier
 		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built, Map.copyOf(m));
 	}
 
+	public Settlement renamed(String newName) {
+		return new Settlement(id, owner, newName, color, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built, names);
+	}
+
 	public int level(String track) {
 		return this.levels.getOrDefault(track, 0);
 	}

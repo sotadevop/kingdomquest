@@ -114,7 +114,7 @@ final class Collections {
 			return;
 		}
 		var holder = server.getAdvancements().get(Identifier.withDefaultNamespace("end/dragon_egg"));
-		BlockPos nest = at(s, 89, 1, -3);
+		BlockPos nest = at(s, 9, 1, -32);
 		if (holder != null && owner.getAdvancements().getOrStartProgress(holder).isDone() && level.getBlockState(nest).isAir()) {
 			level.setBlock(nest, Blocks.DRAGON_EGG.defaultBlockState(), Block.UPDATE_ALL);
 			level.sendParticles(ParticleTypes.PORTAL, nest.getX() + 0.5, nest.getY() + 0.5, nest.getZ() + 0.5, 60, 0.6, 0.6, 0.6, 0.4);
@@ -133,7 +133,7 @@ final class Collections {
 			if (holder == null || !owner.getAdvancements().getOrStartProgress(holder).isDone()) {
 				continue;
 			}
-			BlockPos pos = at(s, t.x(), t.y(), t.z());
+			BlockPos pos = at(s, t.x(), t.y() + s.level("lift_" + Progression.TROPHY), t.z());
 			BlockState now = level.getBlockState(pos);
 			if (now.isAir()) {
 				level.setBlock(pos, t.block().defaultBlockState(), Block.UPDATE_ALL);

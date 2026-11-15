@@ -88,7 +88,7 @@ final class Defense {
 			if (g == null) {
 				continue;
 			}
-			BlockPos post = at(s, 16, 31);
+			BlockPos post = at(s, 16, 33);
 			g.setup("guard", level.getRandom().nextInt(9), s.owner());
 			g.guardGear(lvl, rgb);
 			g.setTier(lvl);

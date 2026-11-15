@@ -108,6 +108,10 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		}
 	}
 
+	public void setSkin(int skin) {
+		this.entityData.set(SKIN, Math.floorMod(skin, 9));
+	}
+
 	public int tier() {
 		return this.tier;
 	}

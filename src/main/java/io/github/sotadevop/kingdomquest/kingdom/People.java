@@ -14,6 +14,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -38,7 +39,7 @@ final class People {
 			.persistent(Codec.STRING)
 			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "role"));
 
-	private static String role(Entity e) {
+	static String role(Entity e) {
 		String r = e.getAttached(ROLE);
 		return r == null ? "" : r;
 	}
@@ -53,6 +54,9 @@ final class People {
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			if (!(player instanceof ServerPlayer sp) || !(entity instanceof KingdomNpc npc)) {
 				return InteractionResult.PASS;
+			}
+			if (hand != InteractionHand.MAIN_HAND) {
+				return InteractionResult.SUCCESS; // the event fires for both hands: answer once
 			}
 			if (npc.role().equals("companion")) {
 				say(sp, "Aldric", sp.getUUID().equals(npc.lord()) ? "Right behind you. I'll keep an eye out for anything useful." : "I travel with someone else.");
@@ -142,19 +146,85 @@ final class People {
 		}
 	}
 
+	/** The architect stays at his post, and nobody stands inside anybody else. */
+	static void spread(ServerLevel level, Settlement s) {
+		List<KingdomNpc> all = level.getEntitiesOfClass(KingdomNpc.class, new AABB(s.heart()).inflate(110, 48, 110), Entity::isAlive);
+		for (int i = 0; i < all.size(); i++) {
+			for (int j = i + 1; j < all.size(); j++) {
+				KingdomNpc a = all.get(i);
+				KingdomNpc b = all.get(j);
+				if (a.distanceToSqr(b) < 0.5 * 0.5) {
+					KingdomNpc mover = a.isNoAi() ? b : a;
+					double ang = level.getRandom().nextDouble() * Math.PI * 2;
+					BlockPos to = BlockPos.containing(mover.getX() + Math.cos(ang) * 1.5, mover.getY(), mover.getZ() + Math.sin(ang) * 1.5);
+					if (level.getBlockState(to).getCollisionShape(level, to).isEmpty()
+							&& level.getBlockState(to.above()).getCollisionShape(level, to.above()).isEmpty()) {
+						mover.teleportTo(to.getX() + 0.5, mover.getY(), to.getZ() + 0.5);
+					}
+				}
+			}
+		}
+	}
+
+	/** How many builders live in the village: two in camp days, up to four in a castle. */
+	private static int builders(Settlement s) {
+		int main = s.level(Settlement.MAIN);
+		return main < 4 ? 2 : main < 7 ? 3 : 4;
+	}
+
+	/** Where builder i sleeps: in the houses around the square once there are some, by the camp fire before. */
+	private static BlockPos builderHome(Settlement s, int i) {
+		if (s.level(Settlement.MAIN) < 4) {
+			return s.heart().offset(Template_rotate(s, -3 + i * 2, 3));
+		}
+		int[][] homes = {{-5, 26}, {19, 26}, {31, 26}, {7, 1}};
+		int[] h = homes[i % homes.length];
+		return s.heart().offset(Template_rotate(s, h[0] - 7, h[1] - 10));
+	}
+
+	/**
+	 * Every 10 seconds: the builders live in the village. Missing ones move in (out of sight, at their home);
+	 * without a job they stroll around the square by day and go home at night.
+	 */
+	static void ensureBuilders(ServerLevel level, Settlement s) {
+		if (!level.isLoaded(s.heart())) {
+			return;
+		}
+		List<KingdomNpc> have = find(level, s, WORKER);
+		for (int i = have.size(); i < builders(s); i++) {
+			BlockPos home = builderHome(s, i);
+			if (level.getNearestPlayer(home.getX(), home.getY(), home.getZ(), 16, false) != null) {
+				return; // nobody appears in front of the player
+			}
+			KingdomNpc v = spawn(level, s, WORKER, "Builder", home);
+			if (v != null) {
+				v.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.IRON_PICKAXE));
+			}
+		}
+		if (!s.job().isEmpty()) {
+			return;
+		}
+		for (int i = 0; i < have.size(); i++) {
+			KingdomNpc v = have.get(i);
+			BlockPos home = builderHome(s, i);
+			if (level.getSkyDarken() >= 4) {
+				v.getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 0.7);
+			} else if (level.getRandom().nextInt(3) == 0) {
+				BlockPos sq = s.heart().offset(Template_rotate(s, level.getRandom().nextInt(13) - 6, level.getRandom().nextInt(7)));
+				v.getNavigation().moveTo(sq.getX() + 0.5, sq.getY(), sq.getZ() + 0.5, 0.5);
+			}
+		}
+	}
+
 	private static BlockPos Template_rotate(Settlement s, int dx, int dz) {
 		return io.github.sotadevop.kingdomquest.building.Template.rotate(new BlockPos(dx, 0, dz), Rotation.values()[s.rotation()]);
 	}
 
-	/** A build starts: the Architect sends his builders, more for bigger jobs. */
+	/** A build starts: the Architect sends the village's builders over. */
 	static void sendWorkers(ServerLevel level, Settlement s, int blocks, ServerPlayer owner) {
-		removeWorkers(level, s);
-		int count = Math.max(1, Math.min(4, blocks / 200 + 1));
-		for (int i = 0; i < count; i++) {
-			spawn(level, s, WORKER, "Builder", s.heart().offset(Template_rotate(s, -2 + i * 2, 2)));
-		}
-		if (owner != null && s.level(Settlement.MAIN) >= 4) {
-			say(owner, "Architect", count == 1 ? "I'll send a builder right away." : "I'll send " + count + " builders right away.");
+		int count = find(level, s, WORKER).size();
+		if (owner != null && s.level(Settlement.MAIN) >= 4 && count > 0) {
+			say(owner, "Architect", count == 1 ? "I'll send our builder right away." : "I'll send our " + count + " builders right away.");
 		}
 	}
 
@@ -162,6 +232,10 @@ final class People {
 	static void herdWorkers(ServerLevel level, Settlement s, BlockPos target) {
 		for (KingdomNpc v : find(level, s, WORKER)) {
 			if (v.distanceToSqr(Vec3.atCenterOf(target)) > 8 * 8) {
+				// they walk to the site; only one who is stuck (no path) is helped over
+				if (!v.getNavigation().isDone() || v.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.9)) {
+					continue;
+				}
 				BlockPos spot = target.offset(level.getRandom().nextInt(5) - 2, 0, level.getRandom().nextInt(5) - 2);
 				for (int up = 0; up < 16 && !(level.getBlockState(spot).isAir() && level.getBlockState(spot.above()).isAir()); up++) {
 					spot = spot.above();
@@ -183,7 +257,16 @@ final class People {
 		}
 	}
 
+	/** The job is done: the builders walk home (they live in the village now). */
 	static void removeWorkers(ServerLevel level, Settlement s) {
+		List<KingdomNpc> list = find(level, s, WORKER);
+		for (int i = 0; i < list.size(); i++) {
+			BlockPos home = builderHome(s, i);
+			list.get(i).getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 0.7);
+		}
+	}
+
+	private static void discardWorkers(ServerLevel level, Settlement s) {
 		for (KingdomNpc v : find(level, s, WORKER)) {
 			level.sendParticles(ParticleTypes.POOF, v.getX(), v.getY() + 1, v.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
 			v.discard();
@@ -191,7 +274,7 @@ final class People {
 	}
 
 	static void removeAll(ServerLevel level, Settlement s) {
-		removeWorkers(level, s);
+		discardWorkers(level, s);
 		find(level, s, ARCHITECT).forEach(Entity::discard);
 	}
 }

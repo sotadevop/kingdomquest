@@ -33,19 +33,19 @@ final class Workers {
 			new Spec("stables", 1, "Stable Hand", "lead", 47, 25, "The horses are brushed and fed, my lord."),
 			new Spec("apiary", 1, "Beekeeper", "glass_bottle", 52, 11, "Mind the bees! The honey is in the barrel."),
 			new Spec("smith", 1, "Blacksmith", "iron_ingot", -12, 9, "Iron in, steel out. Fresh ingots in the barrel."),
-			new Spec("wood", 1, "Lumberjack", "iron_axe", -26, 20, "Plenty of logs stacked and ready."),
+			new Spec("wood", 1, "Lumberjack", "iron_axe", -29, 20, "Plenty of logs stacked and ready."),
 			new Spec("library", 1, "Librarian", "book", -28, 5, "Knowledge is power. More shelves, stronger enchantments."),
-			new Spec("brewery", 1, "Alchemist", "blaze_rod", -17, 24, "Healing draughts are brewing. Don't drink the green one."),
-			new Spec("barracks", 1, "Guard Captain", "iron_sword", 16, 32, "The guards are drilled and ready."),
+			new Spec("brewery", 1, "Alchemist", "blaze_rod", -16, 25, "Healing draughts are brewing. Don't drink the green one."),
+			new Spec("barracks", 1, "Guard Captain", "iron_sword", 16, 34, "The guards are drilled and ready."),
 			new Spec("tavern", 1, "Innkeeper", "honey_bottle", 28, -13, "Welcome, my lord! Travelers bring news from afar."),
-			new Spec("market", 1, "Merchant", "emerald", 45, -15, "Fine wares from every corner of the land."),
-			new Spec("cartographer", 1, "Cartographer", "map", 60, -13, "Every map I draw shows a little more of the world."),
+			new Spec("market", 1, "Merchant", "emerald", 46, -15, "Fine wares from every corner of the land."),
+			new Spec("cartographer", 1, "Cartographer", "map", 62, -13, "Every map I draw shows a little more of the world."),
 			new Spec("music", 1, "Bard", "note_block", -37, -19, "Shall I play you a song of your victories?"),
 			new Spec("workshop", 1, "Tinkerer", "redstone", -42, 29, "Copper, redstone and a little bit of magic."),
 			new Spec("armorer", 1, "Armorer", "iron_chestplate", -20, 37, "Good armor saves lives. And it can look splendid, too."),
 			new Spec("tannery", 1, "Tanner", "leather", 30, 37, "Hides cured and ready. Don't mind the smell."),
 			new Spec("archaeology", 1, "Archaeologist", "brush", 63, 23, "Every sherd tells a story of the old world."),
-			new Spec("mine", 1, "Miner", "iron_pickaxe", 64, 11, "The deep galleries are rich today."),
+			new Spec("mine", 1, "Miner", "iron_pickaxe", 65, 11, "The deep galleries are rich today."),
 			new Spec("nether", 1, "Nether Trader", "gold_ingot", -43, 14, "The piglins drive a hard bargain, but gold speaks every language."),
 			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch is in the barrel on the pier."));
 
@@ -63,7 +63,8 @@ final class Workers {
 		if (spec.track().equals(Progression.DOCK)) {
 			return Settlements.dockPoint(s, 0, 1, 6);
 		}
-		return s.heart().offset(Template.rotate(new BlockPos(spec.x() - 7, 0, spec.z() - 10), Rotation.values()[s.rotation()]));
+		int lift = Settlements.LIFTED.contains(spec.track()) ? s.level("lift_" + spec.track()) : 0;
+		return s.heart().offset(Template.rotate(new BlockPos(spec.x() - 7, lift, spec.z() - 10), Rotation.values()[s.rotation()]));
 	}
 
 	/** Every 10 seconds: workers appear at their buildings, wanderers go back, workers of removed buildings leave. */
