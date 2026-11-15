@@ -74,6 +74,7 @@ public class KingdomScreen extends Screen {
 
 	public static void open(KingdomInfoPayload info) {
 		lastHeart = info.heart();
+		RealmScreen.forget();
 		Minecraft.getInstance().setScreenAndShow(new KingdomScreen(info));
 	}
 

@@ -94,6 +94,10 @@ public class RealmScreen extends Screen {
 	/** The realm screen on display (refreshed in place when the server answers an action). */
 	private static RealmScreen shown;
 
+	static void forget() {
+		shown = null;
+	}
+
 	@Override
 	public void onClose() {
 		shown = null;
