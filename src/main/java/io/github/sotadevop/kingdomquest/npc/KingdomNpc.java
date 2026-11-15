@@ -190,10 +190,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 	/** Arm swing seen by everyone nearby (builders at work, attacks, spells). */
 	public void swingArm() {
-		if (this.level() instanceof ServerLevel level) {
-			level.getChunkSource().broadcastAndSend(this, new net.minecraft.network.protocol.game.ClientboundAnimatePacket(this,
-					net.minecraft.network.protocol.game.ClientboundAnimatePacket.SWING_MAIN_HAND));
-		}
+		this.swing(InteractionHand.MAIN_HAND, this.getMainHandItem().getOrDefault(net.minecraft.core.component.DataComponents.SWING_ANIMATION,
+				net.minecraft.world.item.component.SwingAnimation.DEFAULT));
 	}
 
 	@Override
