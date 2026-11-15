@@ -11,18 +11,23 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 
 /**
- * Upgrade steps. Until StoryQuest has the Kingdom questline, each step is unlocked by a vanilla
+ * Upgrade steps per track. Until StoryQuest has the Kingdom questline, each step is unlocked by a vanilla
  * advancement (placeholder for the quest), then paid for with items.
  */
 public final class Progression {
 	public record Cost(String label, int count, Predicate<ItemStack> matches) {
 	}
 
-	/** @param building template name without style, e.g. "tent_2" */
-	public record Step(String building, int level, String titleKey, Identifier advancement, String requirementKey, List<Cost> costs) {
+	/**
+	 * @param building template name without style, e.g. "tent_2"
+	 * @param minMain  main-track level needed before this step is offered (add-ons)
+	 */
+	public record Step(String track, String building, int level, String titleKey, int minMain, Identifier advancement,
+			String requirementKey, List<Cost> costs) {
 	}
 
 	private static Cost item(Item item, int count) {
@@ -33,18 +38,47 @@ public final class Progression {
 		return new Cost(label, count, s -> s.is(tag));
 	}
 
-	public static final List<Step> TENT = List.of(
-			new Step("tent_1", 1, "kingdomquest.level.tent_1", null, null, List.of()),
-			new Step("tent_2", 2, "kingdomquest.level.tent_2", Identifier.withDefaultNamespace("story/smelt_iron"),
-					"kingdomquest.req.smelt_iron", List.of(tag(ItemTags.LOGS, "logs", 16), tag(ItemTags.WOOL, "wool", 8))),
-			new Step("tent_3", 3, "kingdomquest.level.tent_3", Identifier.withDefaultNamespace("story/iron_tools"),
-					"kingdomquest.req.iron_tools", List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.COBBLESTONE, 16), item(Items.IRON_INGOT, 8))));
+	private static Identifier adv(String path) {
+		return Identifier.withDefaultNamespace(path);
+	}
+
+	public static final String FARM = "farm";
+
+	public static final Map<String, List<Step>> TRACKS = Map.of(
+			Settlement.MAIN, List.of(
+					new Step(Settlement.MAIN, "tent_1", 1, "kingdomquest.level.tent_1", 0, null, null, List.of()),
+					new Step(Settlement.MAIN, "tent_2", 2, "kingdomquest.level.tent_2", 0, adv("story/smelt_iron"), "kingdomquest.req.smelt_iron",
+							List.of(tag(ItemTags.LOGS, "logs", 16), tag(ItemTags.WOOL, "wool", 8))),
+					new Step(Settlement.MAIN, "tent_3", 3, "kingdomquest.level.tent_3", 0, adv("story/iron_tools"), "kingdomquest.req.iron_tools",
+							List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.COBBLESTONE, 16), item(Items.IRON_INGOT, 8))),
+					new Step(Settlement.MAIN, "hamlet_1", 4, "kingdomquest.level.hamlet_1", 0, adv("husbandry/breed_an_animal"),
+							"kingdomquest.req.breed", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.COBBLESTONE, 48), item(Items.GLASS, 8),
+									item(Items.BRICK, 16)))),
+			FARM, List.of(
+					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
+							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2)))));
+
+	/** Order the tracks appear in the menu. */
+	public static final List<String> ORDER = List.of(Settlement.MAIN, FARM);
 
 	private Progression() {
 	}
 
-	public static Step next(int level) {
-		return level < TENT.size() ? TENT.get(level) : null;
+	/** The next step of a track, or null if the track is done or not open yet. */
+	public static Step next(Settlement s, String track) {
+		List<Step> steps = TRACKS.get(track);
+		int level = s.level(track);
+		if (steps == null || level >= steps.size()) {
+			return null;
+		}
+		Step step = steps.get(level);
+		return s.level(Settlement.MAIN) >= step.minMain() ? step : null;
+	}
+
+	public static Step current(Settlement s, String track) {
+		List<Step> steps = TRACKS.get(track);
+		int level = s.level(track);
+		return steps == null || level <= 0 || level > steps.size() ? null : steps.get(level - 1);
 	}
 
 	public static boolean requirementMet(ServerPlayer player, Step step) {

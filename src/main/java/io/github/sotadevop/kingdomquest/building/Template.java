@@ -41,6 +41,8 @@ public final class Template {
 	public final int sizeX;
 	public final int sizeZ;
 	public final List<Entry> entries;
+	/** Container the add-on fills with its production (relative to the plot), or null. */
+	public final BlockPos storage;
 
 	private Template(String id, JsonObject json) {
 		this.id = id;
@@ -69,6 +71,8 @@ public final class Template {
 			list.add(new Entry(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt(), names.get(i), props.get(i)));
 		}
 		this.entries = List.copyOf(list);
+		JsonArray st = json.getAsJsonArray("storage");
+		this.storage = st == null ? null : new BlockPos(st.get(0).getAsInt(), st.get(1).getAsInt(), st.get(2).getAsInt());
 	}
 
 	/** Loads "style/name" from the mod jar (kingdomquest/buildings/style/name.json); null if missing. */
@@ -98,6 +102,11 @@ public final class Template {
 			out.add(new Placement(rel, state.rotate(rotation)));
 		}
 		return out;
+	}
+
+	/** The storage container's offset from the heart for this rotation, or null. */
+	public BlockPos storageOffset(Rotation rotation) {
+		return this.storage == null ? null : rotate(this.storage.subtract(this.heart), rotation);
 	}
 
 	/** Rotates an offset around the heart the same way {@link Rotation} turns directions. */

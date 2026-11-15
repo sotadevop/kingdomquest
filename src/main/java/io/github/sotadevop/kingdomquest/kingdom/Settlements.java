@@ -24,9 +24,11 @@ import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,7 +60,7 @@ public final class Settlements {
 	public static void register() {
 		PayloadTypeRegistry.clientboundPlay().register(KingdomInfoPayload.TYPE, KingdomInfoPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(UpgradePayload.TYPE, UpgradePayload.CODEC);
-		ServerPlayNetworking.registerGlobalReceiver(UpgradePayload.TYPE, (payload, context) -> upgrade(context.player(), payload.heart()));
+		ServerPlayNetworking.registerGlobalReceiver(UpgradePayload.TYPE, (payload, context) -> upgrade(context.player(), payload.heart(), payload.track()));
 		ServerTickEvents.END_SERVER_TICK.register(Settlements::tick);
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
@@ -154,7 +156,7 @@ public final class Settlements {
 		String style = Style.forBiome(level.getBiome(heart).getRegisteredName());
 		Rotation rotation = rotationFor(player.getDirection());
 		Settlement s = new Settlement(UUID.randomUUID(), player.getUUID(), data.name(), data.color(), data.logo(), style, heart,
-				rotation.ordinal(), 1, style + "/tent_1", 0, List.of());
+				rotation.ordinal(), Map.of(Settlement.MAIN, 1), style + "/tent_1", Settlement.MAIN, 0, Map.of());
 		Template t = Template.get(s.job());
 		if (t == null) {
 			player.sendOverlayMessage(Component.literal("Missing building " + s.job()));
@@ -192,38 +194,66 @@ public final class Settlements {
 
 	// ---- upgrades ----
 
-	static void upgrade(ServerPlayer player, BlockPos heart) {
+	static void upgrade(ServerPlayer player, BlockPos heart, String track) {
 		MinecraftServer server = player.level().getServer();
 		Settlement s = byHeart(server, heart);
-		if (s == null || !s.owner().equals(player.getUUID()) || !s.job().isEmpty() || player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(heart)) > 64 * 64) {
+		if (s == null || !s.owner().equals(player.getUUID()) || !s.job().isEmpty() || player.distanceToSqr(Vec3.atCenterOf(heart)) > 64 * 64) {
 			return;
 		}
-		Progression.Step step = Progression.next(s.level());
+		Progression.Step step = Progression.next(s, track);
 		if (step == null || !Progression.requirementMet(player, step) || !Progression.canPay(player, step)) {
 			return;
 		}
-		Progression.pay(player, step);
 		String job = s.style() + "/" + step.building();
-		Template t = Template.get(job);
-		if (t == null) {
+		if (Template.get(job) == null) {
 			return;
 		}
-		// blocks of the old level that the new one doesn't use are taken down (they drop nothing)
+		Progression.pay(player, step);
 		ServerLevel level = server.overworld();
+		List<Template.Placement> list = placements(s, job);
 		Set<Long> next = new HashSet<>();
-		for (Template.Placement p : placements(s, job)) {
+		for (Template.Placement p : list) {
 			next.add(s.heart().offset(p.offset()).asLong());
 		}
+		// blocks of this track's old level that the new one doesn't use are taken down (they drop nothing)
 		List<Long> kept = new ArrayList<>();
-		for (long pos : s.built()) {
+		for (long pos : s.built().getOrDefault(track, List.of())) {
 			if (next.contains(pos)) {
 				kept.add(pos);
 			} else {
 				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
 			}
 		}
-		put(server, s.withJob(job, 0, step.level()).withBuilt(List.copyOf(kept)));
+		clearFootprint(level, s, list);
+		put(server, s.withJob(job, track, 0).withLevel(track, step.level()).withBuilt(track, kept));
 		player.sendOverlayMessage(Component.translatable("kingdomquest.upgrade.started", Component.translatable(step.titleKey())));
+	}
+
+	/**
+	 * Makes room for a new building: in every column it uses, natural blocks up to 10 above the ground are removed
+	 * (blocks of other buildings stay) and holes under it are filled.
+	 */
+	private static void clearFootprint(ServerLevel level, Settlement s, List<Template.Placement> list) {
+		Set<Long> columns = new HashSet<>();
+		for (Template.Placement p : list) {
+			BlockPos column = s.heart().offset(p.offset().getX(), 0, p.offset().getZ());
+			if (!columns.add(column.asLong())) {
+				continue;
+			}
+			for (int y = 0; y < 10; y++) {
+				BlockPos pos = column.above(y);
+				if (!level.getBlockState(pos).isAir() && !s.isBuilt(pos.asLong()) && !pos.equals(s.heart())) {
+					level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+				}
+			}
+			for (int y = 1; y <= 3; y++) {
+				BlockPos pos = column.below(y);
+				BlockState state = level.getBlockState(pos);
+				if (state.isAir() || state.canBeReplaced()) {
+					level.setBlock(pos, (y == 1 ? Blocks.GRASS_BLOCK : Blocks.DIRT).defaultBlockState(), Block.UPDATE_ALL);
+				}
+			}
+		}
 	}
 
 	private static List<Template.Placement> placements(Settlement s, String job) {
@@ -237,9 +267,13 @@ public final class Settlements {
 	// ---- building over time ----
 
 	static void tick(MinecraftServer server) {
+		boolean produce = server.getTickCount() % Production.INTERVAL == 0;
 		for (Settlement s : all(server)) {
 			if (!s.job().isEmpty()) {
 				step(server, s);
+			}
+			if (produce) {
+				Production.run(server.overworld(), s);
 			}
 		}
 	}
@@ -252,12 +286,12 @@ public final class Settlements {
 		Template t = Template.get(s.job());
 		List<Template.Placement> list = placements(s, s.job());
 		if (t == null || list.isEmpty()) {
-			put(server, s.withJob("", 0, s.level()));
+			put(server, s.withJob("", "", 0));
 			return;
 		}
 		int perTick = Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 20.0)));
 		int index = s.jobIndex();
-		List<Long> built = new ArrayList<>(s.built());
+		List<Long> built = new ArrayList<>(s.built().getOrDefault(s.jobTrack(), List.of()));
 		for (int n = 0; n < perTick && index < list.size(); n++, index++) {
 			Template.Placement p = list.get(index);
 			BlockPos pos = s.heart().offset(p.offset());
@@ -269,21 +303,22 @@ public final class Settlements {
 					level.levelEvent(2001, pos, Block.getId(p.state()));
 				}
 			}
-			if (p.offset().getY() >= 0 && !built.contains(pos.asLong())) {
+			// crops are harvested normally, so they are not protected
+			if (p.offset().getY() >= 0 && !(p.state().getBlock() instanceof CropBlock) && !built.contains(pos.asLong())) {
 				built.add(pos.asLong());
 			}
 		}
 		if (index >= list.size()) {
-			put(server, s.withJob("", 0, s.level()).withBuilt(List.copyOf(built)));
+			put(server, s.withJob("", "", 0).withBuilt(s.jobTrack(), built));
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
 			}
 			return;
 		}
-		put(server, s.withJob(s.job(), index, s.level()).withBuilt(List.copyOf(built)));
+		put(server, s.withJob(s.job(), s.jobTrack(), index).withBuilt(s.jobTrack(), built));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(s.heart())) < 48 * 48) {
+		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 48 * 48) {
 			owner.sendOverlayMessage(Component.translatable("kingdomquest.build.progress", s.name(), index * 100 / list.size()));
 		}
 	}
@@ -301,12 +336,14 @@ public final class Settlements {
 				player.sendOverlayMessage(Component.translatable("kingdomquest.heart.protected", s.name()));
 				return false;
 			}
-			if (s.built().contains(pos.asLong())) {
-				level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
-				List<Long> built = new ArrayList<>(s.built());
-				built.remove(pos.asLong());
-				put(server, s.withBuilt(List.copyOf(built)));
-				return false;
+			for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
+				if (e.getValue().contains(pos.asLong())) {
+					level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+					List<Long> built = new ArrayList<>(e.getValue());
+					built.remove(pos.asLong());
+					put(server, s.withBuilt(e.getKey(), built));
+					return false;
+				}
 			}
 		}
 		return true;
@@ -320,14 +357,18 @@ public final class Settlements {
 			int total = placements(s, s.job()).size();
 			percent = total == 0 ? 100 : s.jobIndex() * 100 / total;
 		}
-		Progression.Step next = Progression.next(s.level());
 		boolean mine = s.owner().equals(player.getUUID());
-		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(), s.level(), percent,
-				next == null ? "" : next.titleKey(),
-				next == null || next.requirementKey() == null ? "" : next.requirementKey(),
-				next != null && mine && Progression.requirementMet(player, next),
-				next == null ? "" : Progression.costText(next),
-				next != null && mine && Progression.canPay(player, next)));
+		List<KingdomInfoPayload.Option> options = new ArrayList<>();
+		for (String track : Progression.ORDER) {
+			Progression.Step next = Progression.next(s, track);
+			if (next != null) {
+				options.add(new KingdomInfoPayload.Option(track, next.titleKey(), next.requirementKey() == null ? "" : next.requirementKey(),
+						mine && Progression.requirementMet(player, next), Progression.costText(next), mine && Progression.canPay(player, next)));
+			}
+		}
+		Progression.Step current = Progression.current(s, Settlement.MAIN);
+		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),
+				current == null ? "" : current.titleKey(), percent, options));
 	}
 
 	/** Builds every level of every style at once (used by the CI self-test); returns the number of blocks. */
@@ -335,12 +376,12 @@ public final class Settlements {
 		int count = 0;
 		int i = 0;
 		for (String style : List.of(Style.TEMPERATE, Style.FROZEN)) {
-			for (Progression.Step step : Progression.TENT) {
+			for (Progression.Step step : Progression.ORDER.stream().flatMap(t -> Progression.TRACKS.get(t).stream()).toList()) {
 				Template t = Template.get(style + "/" + step.building());
 				if (t == null) {
 					continue;
 				}
-				BlockPos heart = start.offset(i * 20, 0, 0);
+				BlockPos heart = start.offset(i * 30, 0, 0);
 				prepareSite(level, heart, t, Rotation.NONE);
 				for (Template.Placement p : t.placements("blue", Rotation.NONE)) {
 					level.setBlock(heart.offset(p.offset()), p.state(), Block.UPDATE_ALL);

@@ -187,7 +187,204 @@ def tent(style, level):
     return b.b
 
 
-def to_json(blocks, seconds):
+# ---------------- Hamlet ----------------
+HAMLET_SIZE = (23, 12, 15)
+
+
+def house_temperate(b, x0=4, z0=0):
+    """Central European half-timbered house (Fachwerk): cobblestone base, oak frame, calcite plaster, red tile roof."""
+    w, d = 7, 9
+    x1, z1 = x0 + w - 1, z0 + d - 1
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            if not edge:
+                b.put(x, 0, z, "spruce_planks")
+                continue
+            b.put(x, 0, z, "mossy_cobblestone" if (x * 3 + z) % 5 == 0 else "cobblestone")
+            for y in (1, 2, 3):
+                post = (x in (x0, x0 + 3, x1) and z in (z0, z1)) or (z in (z0, z0 + 4, z1) and x in (x0, x1))
+                if post:
+                    b.put(x, y, z, "stripped_oak_log", axis="y")
+                elif y == 3:
+                    b.put(x, y, z, "stripped_oak_log", axis="x" if z in (z0, z1) else "z")
+                else:
+                    b.put(x, y, z, "calcite")
+    # windows (front, sides, back) with flower boxes under the front ones
+    for x in (x0 + 1, x1 - 1):
+        b.put(x, 2, z1, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+        b.put(x, 1, z1 + 1, "spruce_trapdoor", facing="south", half="top", open="false", powered="false", waterlogged="false")
+        b.put(x, 2, z1 + 1, "azalea")
+    for z in (z0 + 2, z0 + 6):
+        for x in (x0, x1):
+            b.put(x, 2, z, "glass_pane", north="true", south="true", east="false", west="false", waterlogged="false")
+    b.put(x0 + 5, 2, z0, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+    # door
+    cx = x0 + 3
+    b.put(cx, 1, z1, "oak_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, z1, "oak_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    # steep gable roof, ridge along z, 1 block overhang all around
+    for z in range(z0 - 1, z1 + 2):
+        for i in range(4):
+            b.put(x0 - 1 + i, 3 + i, z, "brick_stairs", facing="east", **ST)
+            b.put(x1 + 1 - i, 3 + i, z, "brick_stairs", facing="west", **ST)
+        b.put(cx, 7, z, "brick_slab", type="bottom", waterlogged="false")
+        # eave trim: upside-down stairs under the overhang
+        b.put(x0 - 1, 2, z, "spruce_stairs", facing="west", half="top", shape="straight", waterlogged="false") if z in (z0 - 1, z1 + 1) else None
+    # gable walls
+    for zz in (z0, z1):
+        for y in range(4, 7):
+            for x in range(x0 + y - 3, x1 - y + 4):
+                b.put(x, y, zz, "stripped_oak_log" if x == cx else "calcite", **({"axis": "y"} if x == cx else {}))
+    b.put(cx - 1, 5, z1, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+    # chimney with smoke
+    for y in range(1, 9):
+        b.put(x1 - 1, y, z0 + 2, "cobblestone")
+    b.put(x1 - 1, 9, z0 + 2, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 3, "furnace", facing="west", lit="false")
+    # interior
+    b.put(x0 + 1, 1, z0 + 1, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(x0 + 1, 1, z0 + 2, "{color}_bed", facing="north", part="foot", occupied="false")
+    b.put(cx, 1, z0 + 4, "spruce_fence")
+    b.put(cx, 2, z0 + 4, "spruce_pressure_plate", powered="false")
+    b.put(cx - 1, 1, z0 + 4, "spruce_stairs", facing="east", **ST)
+    b.put(cx + 1, 1, z0 + 4, "spruce_stairs", facing="west", **ST)
+    b.put(x1 - 1, 1, z0 + 6, "chest", facing="west", type="single", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 7, "barrel", facing="up", open="false")
+    b.put(x0 + 1, 1, z0 + 6, "crafting_table")
+    b.put(cx, 6, z0 + 4, "lantern", hanging="true", waterlogged="false")
+    b.put(x0 + 1, 1, z0 + 7, "white_carpet")
+
+
+def house_norse(b, x0=4, z0=0):
+    """Norse longhouse: stone footing, low spruce log walls, steep spruce roof to the ground, carved gable boards."""
+    w, d = 7, 9
+    x1, z1 = x0 + w - 1, z0 + d - 1
+    cx = x0 + 3
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, ("cobblestone" if (x + z) % 3 else "mossy_cobblestone") if edge else "spruce_planks")
+            if edge:
+                for y in (1, 2):
+                    corner = x in (x0, x1) and z in (z0, z1)
+                    b.put(x, y, z, "spruce_log", axis="y" if corner else ("x" if z in (z0, z1) else "z"))
+    # roof: from the wall top straight to the ridge, overhang at the gables
+    for z in range(z0 - 1, z1 + 2):
+        for i in range(4):
+            b.put(x0 - 1 + i, 2 + i, z, "spruce_stairs", facing="east", **ST)
+            b.put(x1 + 1 - i, 2 + i, z, "spruce_stairs", facing="west", **ST)
+        b.put(cx, 6, z, "dark_oak_slab", type="bottom", waterlogged="false")
+    for zz in (z0, z1):
+        for y in range(3, 6):
+            for x in range(x0 + y - 2, x1 - y + 3):
+                b.put(x, y, zz, "stripped_spruce_log" if x == cx else "spruce_planks", **({"axis": "y"} if x == cx else {}))
+        # crossed carved boards over the gable
+        b.put(cx - 1, 6, zz - 1 if zz == z0 else zz + 1, "spruce_fence")
+        b.put(cx + 1, 6, zz - 1 if zz == z0 else zz + 1, "spruce_fence")
+    b.put(cx, 1, z1, "spruce_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, z1, "spruce_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    for z in (z0 + 3, z0 + 5):
+        for x in (x0, x1):
+            b.put(x, 2, z, "spruce_trapdoor", facing="west" if x == x0 else "east", half="top", open="false", powered="false", waterlogged="false")
+    # long hearth in the middle of the hall
+    for z in (z0 + 3, z0 + 4, z0 + 5):
+        b.put(cx, 0, z, "cobblestone")
+    b.put(cx, 1, z0 + 4, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(x0 + 1, 1, z0 + 1, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(x0 + 1, 1, z0 + 2, "{color}_bed", facing="north", part="foot", occupied="false")
+    for z in range(z0 + 4, z0 + 8):
+        b.put(x0 + 1, 1, z, "spruce_slab", type="bottom", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 1, "chest", facing="west", type="single", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 2, "barrel", facing="up", open="false")
+    b.put(x1 - 1, 1, z0 + 6, "crafting_table")
+    b.put(x1 - 1, 1, z0 + 7, "furnace", facing="west", lit="false")
+    b.put(cx, 5, z0 + 2, "lantern", hanging="true", waterlogged="false")
+    b.put(cx, 5, z0 + 6, "lantern", hanging="true", waterlogged="false")
+    for x in (cx - 2, cx + 2):
+        b.put(x, 0, z1 + 1, "cobblestone_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+        b.put(x, 1, z1 + 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+
+
+FARM = (13, 1, 9, 9)  # x0, z0, width, depth of the field
+
+
+def farm_plot_markers(b, s):
+    x0, z0, w, d = FARM
+    for x in (x0 - 1, x0 + w):
+        for z in (z0 - 1, z0 + d):
+            b.put(x, 0, z, s["pole"])
+
+
+def hamlet(style, level):
+    s = STYLES[style]
+    b = B()
+    w = s["wood"]
+    hx, hy, hz = HEART
+    (house_norse if style == "frozen" else house_temperate)(b)
+    b.put(hx, hy, hz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(hx - 2, 0, hz, f"{w}_stairs", facing="west", **ST)
+    b.put(hx - 2, 0, hz + 1, f"{w}_stairs", facing="west", **ST)
+    b.put(hx + 2, 0, hz, f"{w}_stairs", facing="east", **ST)
+    b.put(hx + 2, 0, hz + 1, f"{w}_stairs", facing="east", **ST)
+    banner_pole(b, s, 2, 9, 3)
+    # well
+    for x in (1, 3):
+        for z in (12, 14):
+            b.put(x, 0, z, "cobblestone_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+            b.put(x, 1, z, s["pole"])
+    for x in (1, 2, 3):
+        for z in (12, 13, 14):
+            if (x, z) != (2, 13):
+                b.put(x, -1, z, "cobblestone")
+            b.put(x, 2, z, s["ridge"], type="bottom", waterlogged="false")
+    b.put(2, -1, 13, "water", level="0")
+    b.put(2, -2, 13, "cobblestone")
+    farm_plot_markers(b, s)
+    path = {(hx, z) for z in range(9, 15)} | {(hx + dx, hz + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1)}
+    path |= {(x, 10) for x in range(3, 13)}
+    ground(b, s, path)
+    snow(b, s, [(x, z) for x in range(23) for z in range(15) if (x * 73856093 ^ z * 19349663) % 11 == 0 and not (4 <= x <= 10 and z <= 9)])
+    return b.b
+
+
+def farm(style, level):
+    s = STYLES[style]
+    b = B()
+    x0, z0, w, d = FARM
+    zc = z0 + d // 2
+    for x in range(x0, x0 + w):
+        for z in range(z0, z0 + d):
+            if z == zc:
+                b.put(x, -1, z, "water", level="0")
+                b.put(x, -2, z, "dirt")
+                continue
+            b.put(x, -1, z, "farmland", moisture="7")
+            crop = ("wheat", "carrots", "potatoes")[(z - z0) % 3 if z < zc else (z - zc) % 3]
+            b.put(x, 0, z, crop, age="3")
+    # fence with a gate facing the hamlet (west side)
+    for x in range(x0 - 1, x0 + w + 1):
+        for z in (z0 - 1, z0 + d):
+            b.put(x, 0, z, s["wood"] + "_fence")
+    for z in range(z0, z0 + d):
+        for x in (x0 - 1, x0 + w):
+            if (x, z) == (x0 - 1, zc):
+                b.put(x, 0, z, s["wood"] + "_fence_gate", facing="west", in_wall="false", open="false", powered="false")
+            else:
+                b.put(x, 0, z, s["wood"] + "_fence")
+    # scarecrow
+    sx, sz = x0 + 2, z0 + 1
+    b.put(sx, -1, sz, "coarse_dirt")
+    b.put(sx, 0, sz, s["wood"] + "_fence")
+    b.put(sx, 1, sz, "hay_block", axis="y")
+    b.put(sx, 2, sz, "carved_pumpkin", facing="south")
+    # storehouse barrel: the farmer puts the harvest in here
+    b.put(x0 - 2, 0, zc - 1, "barrel", facing="up", open="false")
+    b.put(x0 - 2, 0, zc + 1, "composter", level="0")
+    return b.b
+
+
+def to_json(blocks, seconds, size=PLOT, storage=None):
     names, palette, out = {}, [], []
     for (x, y, z), (name, props) in sorted(blocks.items(), key=lambda kv: (kv[0][1], kv[0][2], kv[0][0])):
         key = (name, tuple(sorted(props.items())))
@@ -198,28 +395,33 @@ def to_json(blocks, seconds):
                 e["Properties"] = props
             palette.append(e)
         out.append([x, y, z, names[key]])
-    return {"size": list(PLOT), "heart": list(HEART), "seconds": seconds, "palette": palette, "blocks": out}
+    j = {"size": list(size), "heart": list(HEART), "seconds": seconds, "palette": palette, "blocks": out}
+    if storage:
+        j["storage"] = list(storage)
+    return j
 
 
 SECONDS = {1: 60, 2: 90, 3: 150}
 
 if __name__ == "__main__":
+    jobs = []
     for style in STYLES:
-        os.makedirs(os.path.join(OUT, style), exist_ok=True)
         for level in (1, 2, 3):
-            blocks = tent(style, level)
-            with open(os.path.join(OUT, style, f"tent_{level}.json"), "w") as f:
-                json.dump(to_json(blocks, SECONDS[level]), f, separators=(",", ":"))
-            if "--render" in sys.argv:
-                sys.path.insert(0, os.path.dirname(__file__))
-                from render import render, add_ground
-                colored = {p: (n.replace("{color}", "minecraft:blue"), pr) for p, (n, pr) in blocks.items()}
-                g = add_ground({p: v for p, v in colored.items() if p[1] >= 0}, PLOT, pad=0)
-                if style == "frozen":
-                    g = {p: (("minecraft:grass_block", {"snowy": "true"}) if v[0] == "minecraft:grass_block" else v) for p, v in g.items()}
-                for p, v in colored.items():
-                    if p[1] < 0:
-                        g[p] = v
-                os.makedirs("build/previews", exist_ok=True)
-                render(g, PLOT, 0, 3, bg=(170, 200, 230, 255)).save(f"build/previews/{style}_tent_{level}.png")
-        print(style, "ok")
+            jobs.append((style, f"tent_{level}", tent(style, level), SECONDS[level], PLOT, None))
+        jobs.append((style, "hamlet_1", hamlet(style, 1), 240, HAMLET_SIZE, None))
+        jobs.append((style, "farm_1", farm(style, 1), 120, HAMLET_SIZE, (FARM[0] - 2, 0, FARM[1] + FARM[3] // 2 - 1)))
+    for style, name, blocks, seconds, size, storage in jobs:
+        os.makedirs(os.path.join(OUT, style), exist_ok=True)
+        with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
+            json.dump(to_json(blocks, seconds, size, storage), f, separators=(",", ":"))
+        if "--render" in sys.argv and (len(sys.argv) < 3 or name in sys.argv[2:]):
+            sys.path.insert(0, os.path.dirname(__file__))
+            from render import render, add_ground
+            colored = {p: (n.replace("{color}", "minecraft:blue"), pr) for p, (n, pr) in blocks.items()}
+            g = add_ground({p: v for p, v in colored.items() if p[1] >= 0}, size, pad=0)
+            for p, v in colored.items():
+                if p[1] < 0:
+                    g[p] = v
+            os.makedirs("build/previews", exist_ok=True)
+            render(g, size, 0, 3, bg=(170, 200, 230, 255)).save(f"build/previews/{style}_{name}.png")
+    print(len(jobs), "templates")

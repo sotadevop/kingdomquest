@@ -23,6 +23,10 @@ final class KingdomCommand {
 					for (String style : List.of("temperate", "frozen")) {
 						for (int i = 1; i <= 3; i++) {
 							ids.add(style + "/tent_" + i);
+							if (i == 1) {
+								ids.add(style + "/hamlet_1");
+								ids.add(style + "/farm_1");
+							}
 						}
 					}
 					List<String> errors = Template.selfTest(ids);

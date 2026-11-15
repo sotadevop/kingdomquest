@@ -27,5 +27,10 @@
 	"kingdomquest.menu.next": "Next: %s",
 	"kingdomquest.menu.requires": "Requires: %s",
 	"kingdomquest.menu.cost": "Cost: %s",
-	"kingdomquest.menu.max": "The Hamlet comes in the next version."
+	"kingdomquest.menu.max": "Nothing more to build yet - the Village comes in a later version.",
+	"kingdomquest.level.hamlet_1": "Hamlet - Cottage",
+	"kingdomquest.addon.farm_1": "Farm - Fields",
+	"kingdomquest.req.breed": "Breed two animals",
+	"kingdomquest.req.plant_seed": "Plant a seed",
+	"kingdomquest.farm.harvest": "The fields of %s brought in a harvest."
 }

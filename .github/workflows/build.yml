@@ -48,6 +48,8 @@ jobs:
                    io/github/sotadevop/kingdomquest/client/KingdomScreen.class \
                    kingdomquest/buildings/temperate/tent_1.json \
                    kingdomquest/buildings/frozen/tent_3.json \
+                   kingdomquest/buildings/temperate/hamlet_1.json \
+                   kingdomquest/buildings/frozen/farm_1.json \
                    assets/kingdomquest/textures/item/royal_charter.png \
                    data/kingdomquest/recipe/royal_charter.json \
                    data/kingdomquest/advancement/recipes/misc/royal_charter.json; do
