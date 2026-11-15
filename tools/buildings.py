@@ -534,7 +534,10 @@ def hamlet(style, level):
     b = B()
     w = s["wood"]
     hx, hy, hz = HEART
-    if level >= 7:
+    if level >= 8:
+        motte(b, style)
+        donjon(b, style)
+    elif level >= 7:
         motte(b, style)
     elif level >= 6:
         castle_keep(b, style)
@@ -728,6 +731,12 @@ def smithy(style, level):
     b.put(*SMITH_STORE, "barrel", facing="up", open="false")
     b.put(x0 + 1, 0, z0 + 3, "chest", facing="east", type="single", waterlogged="false")
     b.put(cx, 3, z0 + 3, "lantern", hanging="true", waterlogged="false")
+    if level >= 3:
+        # the citadel smith: a netherite anvil corner and an end rod lamp for the elytra work
+        b.put(x0 + 3, 0, z0 + 6, "netherite_block")
+        b.put(x0 + 3, 1, z0 + 6, "smithing_table")
+        b.put(x1 - 2, 2, z0 + 3, "end_rod", facing="up")
+        b.put(x1 - 3, 0, z0 + 6, "purpur_block")
     if level >= 2:
         # second anvil, iron bars window, tool rack, kingdom banner on the front post
         b.put(cx - 2, 0, z0 + 5, "chipped_anvil", facing="south")
@@ -872,7 +881,7 @@ SEGMENTS = [
     ("apiary", [("apiary", 1), ("kennel", 1)]),
     ("kennel", [("kennel", 1)]),
     ("trophy", [("trophy", 1)]),
-] + [(n, [(n, 1)]) for n in ("tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine")]
+] + [(n, [(n, 1)]) for n in ("tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether")]
 SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
 
 
@@ -1759,6 +1768,7 @@ SHOPS = {
     "tannery": ((26, 38, 34, 44), "n"),
     "archaeology": ((58, 24, 68, 32), "n"),
     "mine": ((60, 2, 68, 10), "s"),
+    "nether": ((-47, 4, -39, 12), "s"),
 }
 
 
@@ -1773,8 +1783,11 @@ def shop(style, name, level):
     b = B()
     (x0, z0, x1, z1), door = SHOPS[name]
     h = 5 if name in ("tavern", "market", "music") else 4
-    stone_hut(b, x0, z0, x1, z1, h, m["stone"] if name in ("mine", "armorer", "workshop") else m["wall"], m["corner"], "spruce_planks", door,
-              m["roof"], m["slab"])
+    if name == "nether":
+        stone_hut(b, x0, z0, x1, z1, h, "nether_bricks", "red_nether_bricks", "blackstone", door, "nether_brick_stairs", "nether_brick_slab")
+    else:
+        stone_hut(b, x0, z0, x1, z1, h, m["stone"] if name in ("mine", "armorer", "workshop") else m["wall"], m["corner"], "spruce_planks", door,
+                  m["roof"], m["slab"])
     back = z0 + 1 if door == "s" else z1 - 1
     front = z1 - 1 if door == "s" else z0 + 1
     cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
@@ -1797,6 +1810,9 @@ def shop(style, name, level):
         "archaeology": [("decorated_pot", (x0 + 2, back), dict(facing=fb, cracked="false", waterlogged="false")),
                         ("decorated_pot", (x0 + 4, back), dict(facing=fb, cracked="false", waterlogged="false")),
                         ("suspicious_sand", (x1 - 2, back), dict(dusted="0")), ("chiseled_bookshelf", (x1 - 3, back), dict(facing=fb))],
+        "nether": [("gold_block", (cx, back), {}), ("crying_obsidian", (x0 + 1, back), {}),
+                   ("soul_campfire", (x1 - 1, back), dict(facing=fb, lit="true", signal_fire="false", waterlogged="false")),
+                   ("respawn_anchor", (x0 + 2, back), dict(charges="2"))],
         "mine": [("rail", (cx, front), dict(shape="north_south", waterlogged="false")), ("chest", (x1 - 1, back), dict(facing=fb, type="single", waterlogged="false"))],
     }[name]
     for block, (x, z), props in inside:
@@ -1869,6 +1885,74 @@ def dock(style, level):
     return b.b
 
 
+def donjon(b, style):
+    """Citadel: a tall square tower rises from the keep's roof (motte frame: keep at y 4, roof at 16), with
+    windows, battlements, the kingdom's banners and a beacon on a small iron pyramid at the very top."""
+    stone, alt, top = MAT[style]["stone"], MAT[style]["alt"], MAT[style]["top"]
+    cx, cz = 7, -7
+    base, height = 17, 18
+    for x in range(cx - 3, cx + 4):
+        for z in range(cz - 3, cz + 4):
+            edge = x in (cx - 3, cx + 3) or z in (cz - 3, cz + 3)
+            for y in range(base, base + height):
+                if edge:
+                    window = y % 5 == 2 and (x == cx or z == cz)
+                    b.put(x, y, z, "iron_bars" if window else (alt if (x + y + z) % 7 == 0 else stone),
+                          **(dict(north="true", south="true", east="false", west="false", waterlogged="false") if window and x != cx
+                             else dict(north="false", south="false", east="true", west="true", waterlogged="false") if window else {}))
+                else:
+                    b.put(x, y, z, "air")
+            b.put(x, base + height, z, stone)
+            if edge and (x + z) % 2 == 0:
+                b.put(x, base + height + 1, z, top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+    for y in range(base, base + height):
+        b.put(cx + 2, y, cz, "ladder", facing="west", waterlogged="false")
+    b.put(cx + 2, base + height, cz, "air")
+    for x in range(cx - 1, cx + 2):
+        for z in range(cz - 1, cz + 2):
+            b.put(x, base + height + 1, z, "iron_block")
+    b.put(cx, base + height + 2, cz, "beacon")
+    for x, z, f in ((cx, cz + 4, "south"), (cx, cz - 4, "north"), (cx + 4, cz, "east"), (cx - 4, cz, "west")):
+        b.put(x, base + height - 3, z, "{color}_wall_banner", facing=f)
+
+
+LAIR = (78, -14, 100, 8)  # outside the east wall
+
+
+def lair(style, level):
+    """Dragon lair outside the east wall: a crater of end stone ringed by obsidian pillars with end rods,
+    a nest in the middle; level 2 adds purpur arches, chorus plants and the dragon egg pedestal (the egg is
+    placed by the mod once the lord has it)."""
+    b = B()
+    x0, z0, x1, z1 = LAIR
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
+    r = (x1 - x0) // 2
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            d = ((x - cx) ** 2 + (z - cz) ** 2) ** 0.5
+            if d <= r:
+                b.put(x, -1, z, "end_stone" if d > 3 else "end_stone_bricks")
+                if d <= 3:
+                    b.put(x, -2, z, "obsidian")
+    for i in range(8):
+        import math
+        a = math.pi * 2 * i / 8
+        px, pz = cx + round(math.cos(a) * (r - 2)), cz + round(math.sin(a) * (r - 2))
+        for y in range(0, 6 + (i % 3)):
+            b.put(px, y, pz, "obsidian" if y % 4 else "crying_obsidian")
+        b.put(px, 6 + (i % 3), pz, "end_rod", facing="up")
+    b.put(cx, 0, cz, "end_stone_brick_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+    if level >= 2:
+        for dx, dz in ((-6, 0), (6, 0), (0, -6), (0, 6)):
+            for y in range(0, 4):
+                b.put(cx + dx, y, cz + dz, "purpur_pillar", axis="y")
+            b.put(cx + dx, 4, cz + dz, "purpur_slab", type="bottom", waterlogged="false")
+        for dx, dz in ((-3, 5), (4, -4), (-5, -3)):
+            b.put(cx + dx, 0, cz + dz, "chorus_flower", age="5")
+        b.put(cx, 1, cz, "air")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -1934,6 +2018,9 @@ if __name__ == "__main__":
         jobs.append((style, "town_1", hamlet(style, 5), 420, TAX_STORE, None))
         jobs.append((style, "castle_1", hamlet(style, 6), 600, TAX_STORE, None))
         jobs.append((style, "castle_2", hamlet(style, 7), 720, TAX_STORE, None))
+        jobs.append((style, "citadel_1", hamlet(style, 8), 900, TAX_STORE, None))
+        for level in (1, 2):
+            jobs.append((style, f"lair_{level}", lair(style, level), 300, None, None))
         for level in (1, 2):
             jobs.append((style, f"cellar_{level}", cellar(style, level), 150, CELLAR_STORE, None))
         for level, secs in ((1, 300), (2, 300), (3, 420), (4, 480)):
@@ -1969,7 +2056,7 @@ if __name__ == "__main__":
             jobs.append((style, f"farm_{level}", farm(style, level), secs, STORE,
                          [["cow", 39, 0, 4], ["cow", 40, 0, 6], ["sheep", 38, 0, 7], ["sheep", 41, 0, 3], ["chicken", 37, 0, 5],
                           ["chicken", 38, 0, 3]] if level == 2 else None))
-        for level, secs in ((1, 150), (2, 150)):
+        for level, secs in ((1, 150), (2, 150), (3, 180)):
             jobs.append((style, f"smith_{level}", smithy(style, level), secs, SMITH_STORE, None))
             jobs.append((style, f"wood_{level}", woodcutter(style, level), secs, WOOD_STORE, None))
     def apron(name):

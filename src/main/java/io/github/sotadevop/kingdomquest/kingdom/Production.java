@@ -119,6 +119,14 @@ public final class Production {
 						g.add(new ItemStack(SMITH_GEAR.get(random.nextInt(SMITH_GEAR.size()))));
 					}
 				}
+				if (lvl >= 3) { // the citadel smith: elytra only after the dragon
+					if (random.nextInt(6) == 0) {
+						g.add(new ItemStack(Items.NETHERITE_SCRAP));
+					}
+					if (random.nextInt(24) == 0) {
+						g.add(new ItemStack(Items.ELYTRA));
+					}
+				}
 			}
 			case Progression.WOOD -> {
 				String wood = Style.FROZEN.equals(style) ? "spruce" : "oak";
@@ -218,6 +226,20 @@ public final class Production {
 					g.add(new ItemStack(Items.TROPICAL_FISH, 1));
 					if (random.nextInt(6) == 0) {
 						g.add(new ItemStack(Items.NAUTILUS_SHELL));
+					}
+				}
+			}
+			case Progression.NETHER -> { // the piglin traders' barter
+				g.add(new ItemStack(Items.QUARTZ, 4));
+				g.add(new ItemStack(Items.SOUL_SAND, 2));
+				g.add(new ItemStack(Items.OBSIDIAN, 1));
+				if (random.nextInt(3) == 0) {
+					g.add(new ItemStack(Items.ENDER_PEARL, 2));
+				}
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.CRYING_OBSIDIAN, 1));
+					if (random.nextInt(4) == 0) {
+						g.add(PotionContents.createItemStack(Items.POTION, Potions.FIRE_RESISTANCE));
 					}
 				}
 			}

@@ -724,6 +724,7 @@ public final class Settlements {
 				Defense.guards(server.overworld(), s);
 				Collections.pets(server, s);
 				Collections.trophies(server, s);
+				Collections.lair(server, s);
 			}
 			if (server.getTickCount() % 100 == 0) {
 				Defense.attacks(server, s);

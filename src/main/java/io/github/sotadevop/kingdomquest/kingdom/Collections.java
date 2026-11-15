@@ -88,6 +88,21 @@ final class Collections {
 		}
 	}
 
+	/** The dragon egg comes home to the lair's nest once the lord has collected it. */
+	static void lair(MinecraftServer server, Settlement s) {
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		ServerLevel level = server.overworld();
+		if (s.level(Progression.LAIR) < 2 || owner == null || !level.isLoaded(s.heart())) {
+			return;
+		}
+		var holder = server.getAdvancements().get(Identifier.withDefaultNamespace("end/dragon_egg"));
+		BlockPos nest = at(s, 89, 1, -3);
+		if (holder != null && owner.getAdvancements().getOrStartProgress(holder).isDone() && level.getBlockState(nest).isAir()) {
+			level.setBlock(nest, Blocks.DRAGON_EGG.defaultBlockState(), Block.UPDATE_ALL);
+			level.sendParticles(ParticleTypes.PORTAL, nest.getX() + 0.5, nest.getY() + 0.5, nest.getZ() + 0.5, 60, 0.6, 0.6, 0.6, 0.4);
+		}
+	}
+
 	/** Every minute: trophies of reached milestones appear on their pedestals. */
 	static void trophies(MinecraftServer server, Settlement s) {
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());

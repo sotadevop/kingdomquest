@@ -44,7 +44,11 @@ final class Workers {
 			new Spec("tannery", 1, "Tanner", "leather", 30, 37, "Hides cured and ready. Don't mind the smell."),
 			new Spec("archaeology", 1, "Archaeologist", "brush", 63, 23, "Every sherd tells a story of the old world."),
 			new Spec("mine", 1, "Miner", "iron_pickaxe", 64, 11, "The deep galleries are rich today."),
+			new Spec("nether", 1, "Nether Trader", "gold_ingot", -43, 14, "The piglins drive a hard bargain, but gold speaks every language."),
 			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch is in the barrel on the pier."));
+
+	/** Inside the houses (base frame): main house, then the three houses on the street. */
+	private static final int[][] HOMES = {{7, 1}, {-5, 26}, {19, 26}, {31, 26}};
 
 	private Workers() {
 	}
@@ -91,6 +95,11 @@ final class Workers {
 				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, home.getX(), home.getZ());
 				npc.snapTo(home.getX() + 0.5, y, home.getZ() + 0.5, 0, 0);
 				level.addFreshEntity(npc);
+			} else if (level.getSkyDarken() >= 4) {
+				// night: everyone goes home to the houses around the square
+				BlockPos bed = s.heart().offset(Template.rotate(new BlockPos(HOMES[Math.floorMod(spec.name().hashCode(), HOMES.length)][0] - 7, 0,
+						HOMES[Math.floorMod(spec.name().hashCode(), HOMES.length)][1] - 10), Rotation.values()[s.rotation()]));
+				npc.getNavigation().moveTo(bed.getX() + 0.5, s.heart().getY() + 1, bed.getZ() + 0.5, 0.7);
 			} else if (npc.distanceToSqr(Vec3.atCenterOf(home)) > 10 * 10) {
 				npc.getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 0.8);
 			} else if (level.getRandom().nextInt(3) == 0) {

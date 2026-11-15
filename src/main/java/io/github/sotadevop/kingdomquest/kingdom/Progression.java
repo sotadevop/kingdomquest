@@ -70,7 +70,9 @@ public final class Progression {
 							"kingdomquest.req.fortress", List.of(item(Items.STONE_BRICKS, 1024), item(Items.IRON_BARS, 32), tag(ItemTags.LOGS, "logs", 64),
 									item(Items.EMERALD, 32), item(Items.GOLD_BLOCK, 4))),
 					new Step(Settlement.MAIN, "castle_2", 10, "kingdomquest.level.castle_2", 0, adv("nether/obtain_blaze_rod"),
-							"kingdomquest.req.blaze", List.of(item(Items.STONE_BRICKS, 512), tag(ItemTags.DIRT, "dirt", 512), item(Items.LANTERN, 4)))),
+							"kingdomquest.req.blaze", List.of(item(Items.STONE_BRICKS, 512), tag(ItemTags.DIRT, "dirt", 512), item(Items.LANTERN, 4))),
+					new Step(Settlement.MAIN, "citadel_1", 11, "kingdomquest.level.citadel_1", 0, adv("end/kill_dragon"), "kingdomquest.req.dragon",
+							List.of(item(Items.STONE_BRICKS, 768), item(Items.IRON_BLOCK, 9), item(Items.BEACON, 1)))),
 			FARM, List.of(
 					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
 							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2))),
@@ -87,7 +89,9 @@ public final class Progression {
 					new Step(SMITH, "smith_1", 1, "kingdomquest.addon.smith_1", 4, adv("story/obtain_armor"), "kingdomquest.req.armor",
 							List.of(item(Items.COBBLESTONE, 48), tag(ItemTags.LOGS, "logs", 8), item(Items.BLAST_FURNACE, 1), item(Items.IRON_INGOT, 8))),
 					new Step(SMITH, "smith_2", 2, "kingdomquest.addon.smith_2", 5, adv("story/mine_diamond"), "kingdomquest.req.diamond",
-							List.of(item(Items.COBBLESTONE, 32), item(Items.IRON_INGOT, 16), item(Items.GOLD_INGOT, 4)))),
+							List.of(item(Items.COBBLESTONE, 32), item(Items.IRON_INGOT, 16), item(Items.GOLD_INGOT, 4))),
+					new Step(SMITH, "smith_3", 3, "kingdomquest.addon.smith_3", 11, adv("end/elytra"), "kingdomquest.req.elytra",
+							List.of(item(Items.NETHERITE_INGOT, 1), item(Items.PURPUR_BLOCK, 8), item(Items.PHANTOM_MEMBRANE, 8)))),
 			WOOD, List.of(
 					new Step(WOOD, "wood_1", 1, "kingdomquest.addon.wood_1", 4, adv("story/upgrade_tools"), "kingdomquest.req.stone_tools",
 							List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.IRON_AXE, 1))),
@@ -239,9 +243,22 @@ public final class Progression {
 					new Step("dock", "dock_1", 1, "kingdomquest.trade.dock_1", 4, adv("husbandry/fishy_business"), "kingdomquest.req.fish", List.of(tag(ItemTags.LOGS, "logs", 32), tag(ItemTags.PLANKS, "planks", 64), item(Items.FISHING_ROD, 1))),
 					new Step("dock", "dock_2", 2, "kingdomquest.trade.dock_2", 6, adv("husbandry/tactical_fishing"), "kingdomquest.req.bucket_fish", List.of(tag(ItemTags.PLANKS, "planks", 48), item(Items.LANTERN, 2))))));
 
+	public static final String LAIR = "lair";
+	public static final String NETHER = "nether";
+	public static final List<Step> LAIR_STEPS = List.of(
+			new Step(LAIR, "lair_1", 1, "kingdomquest.lair.lair_1", 11, adv("end/kill_dragon"), "kingdomquest.req.dragon",
+					List.of(item(Items.END_STONE, 128), item(Items.OBSIDIAN, 64), item(Items.END_ROD, 8))),
+			new Step(LAIR, "lair_2", 2, "kingdomquest.lair.lair_2", 11, adv("end/dragon_egg"), "kingdomquest.req.egg",
+					List.of(item(Items.PURPUR_BLOCK, 32), item(Items.CHORUS_FLOWER, 3))));
+	public static final List<Step> NETHER_STEPS = List.of(
+			new Step(NETHER, "nether_1", 1, "kingdomquest.trade.nether_1", 7, adv("nether/distract_piglin"), "kingdomquest.req.piglin",
+					List.of(item(Items.NETHER_BRICKS, 64), item(Items.GOLD_BLOCK, 1), item(Items.CRYING_OBSIDIAN, 2))),
+			new Step(NETHER, "nether_2", 2, "kingdomquest.trade.nether_2", 9, adv("nether/ride_strider"), "kingdomquest.req.strider",
+					List.of(item(Items.GOLD_BLOCK, 2), item(Items.RESPAWN_ANCHOR, 1))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
-			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -252,6 +269,8 @@ public final class Progression {
 			case WALLS -> WALL_STEPS;
 			case GATE -> GATE_STEPS;
 			case CELLAR -> CELLAR_STEPS;
+			case LAIR -> LAIR_STEPS;
+			case NETHER -> NETHER_STEPS;
 			case GUILD -> GUILD_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
