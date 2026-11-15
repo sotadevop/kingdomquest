@@ -54,6 +54,10 @@ public final class Settlements {
 	/** Minimum distance between two hearts. */
 	private static final int SPACING = 160;
 	private static final int CONFIRM_TICKS = 200;
+	/** Replaced or removed builder blocks never drop items (banners, beds, torches popping off...). */
+	private static final int NO_DROPS = Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS;
+	/** Creative builds take this long, whatever the size (survival uses the template's time). */
+	private static final int CREATIVE_TICKS = 60;
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final Map<String, List<Template.Placement>> PLACEMENTS = new HashMap<>();
 
@@ -66,6 +70,8 @@ public final class Settlements {
 	public static void register() {
 		PayloadTypeRegistry.clientboundPlay().register(KingdomInfoPayload.TYPE, KingdomInfoPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(UpgradePayload.TYPE, UpgradePayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(RecolorPayload.TYPE, RecolorPayload.CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(RecolorPayload.TYPE, (payload, context) -> recolor(context.player(), payload.heart(), payload.color()));
 		ServerPlayNetworking.registerGlobalReceiver(UpgradePayload.TYPE, (payload, context) -> upgrade(context.player(), payload.heart(), payload.track()));
 		ServerTickEvents.END_SERVER_TICK.register(Settlements::tick);
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
@@ -198,7 +204,7 @@ public final class Settlements {
 				for (int y = 0; y < 10; y++) {
 					BlockPos p = column.above(y);
 					if (!level.getBlockState(p).isAir()) {
-						level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+						level.setBlock(p, Blocks.AIR.defaultBlockState(), NO_DROPS);
 					}
 				}
 				for (int y = 1; y <= 4; y++) {
@@ -258,10 +264,42 @@ public final class Settlements {
 				BlockPos old = BlockPos.of(pos);
 				// ground blocks (old paths) become the area's ground again, not holes
 				level.setBlock(old, old.getY() < s.heart().getY() ? SiteWork.surface(level, s.heart()) : Blocks.AIR.defaultBlockState(),
-						Block.UPDATE_ALL);
+						NO_DROPS);
 			}
 		}
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
+	}
+
+	/** Swaps every kingdom-colored block (banners, beds, carpets, wool) of all built levels to a new color. */
+	static void recolor(ServerPlayer player, BlockPos heart, int color) {
+		MinecraftServer server = player.level().getServer();
+		Settlement s = byHeart(server, heart);
+		if (s == null || !s.owner().equals(player.getUUID()) || !s.job().isEmpty() || color < 0 || color > 15 || color == s.color()
+				|| player.distanceToSqr(Vec3.atCenterOf(heart)) > 64 * 64) {
+			return;
+		}
+		ServerLevel level = server.overworld();
+		Settlement after = s.withColor(color);
+		for (String track : Progression.ORDER) {
+			Progression.Step step = Progression.current(s, track);
+			if (step == null) {
+				continue;
+			}
+			String job = s.style() + "/" + step.building();
+			List<Template.Placement> before = placements(s, job);
+			List<Template.Placement> now = placements(after, job);
+			for (int i = 0; i < Math.min(before.size(), now.size()); i++) {
+				if (!before.get(i).state().equals(now.get(i).state())) {
+					BlockPos pos = s.heart().offset(now.get(i).offset());
+					if (level.getBlockState(pos).equals(before.get(i).state())) {
+						level.setBlock(pos, now.get(i).state(), NO_DROPS);
+					}
+				}
+			}
+		}
+		put(server, after);
+		player.sendOverlayMessage(Component.translatable("kingdomquest.recolored", s.name()));
+		sendInfo(player, after);
 	}
 
 	// ---- test tools (/kingdomquest test ...) ----
@@ -317,10 +355,10 @@ public final class Settlements {
 		ServerLevel level = server.overworld();
 		for (List<Long> list : s.built().values()) {
 			for (long pos : list) {
-				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), NO_DROPS);
 			}
 		}
-		level.setBlock(s.heart(), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+		level.setBlock(s.heart(), Blocks.AIR.defaultBlockState(), NO_DROPS);
 		List<Settlement> rest = new ArrayList<>(all(server));
 		rest.removeIf(o -> o.id().equals(s.id()));
 		server.overworld().setAttached(DATA, List.copyOf(rest));
@@ -343,9 +381,11 @@ public final class Settlements {
 		}
 		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask;
 		return PLACEMENTS.computeIfAbsent(key, k -> {
-			List<Template.Placement> all = t.placements(dye(s.color()), Rotation.values()[s.rotation()]);
+			List<Template.Placement> all = new ArrayList<>(t.placements(dye(s.color()), Rotation.values()[s.rotation()]));
+			// blocks that hang on others (ladders, torches, banners, doors, beds...) come after the solid ones
+			all.sort(java.util.Comparator.comparingInt((Template.Placement p) -> attached(p.state()) ? 1 : 0));
 			if (t.segments.isEmpty()) {
-				return all;
+				return List.copyOf(all);
 			}
 			List<Template.Placement> out = new ArrayList<>();
 			for (Template.Placement p : all) {
@@ -382,13 +422,23 @@ public final class Settlements {
 				if (p.offset().getY() < 0) {
 					SiteWork.clear(level, s.heart(), new SiteWork.Column(p.offset().getX(), p.offset().getZ(), 0), all, surface);
 				}
-				level.setBlock(pos, neighbourShaped(p.state(), level, pos), Block.UPDATE_ALL);
+				level.setBlock(pos, neighbourShaped(p.state(), level, pos), NO_DROPS);
 				built.add(pos.asLong());
 				have.add(pos.asLong());
 			}
 			s = s.withBuilt(track, built);
 		}
 		put(server, s);
+	}
+
+	private static boolean attached(BlockState st) {
+		Block b = st.getBlock();
+		return b instanceof net.minecraft.world.level.block.LadderBlock || b instanceof net.minecraft.world.level.block.BaseTorchBlock
+				|| b instanceof net.minecraft.world.level.block.LanternBlock || b instanceof net.minecraft.world.level.block.AbstractBannerBlock
+				|| b instanceof net.minecraft.world.level.block.BellBlock || b instanceof net.minecraft.world.level.block.CarpetBlock
+				|| b instanceof net.minecraft.world.level.block.DoorBlock || b instanceof net.minecraft.world.level.block.BedBlock
+				|| b instanceof net.minecraft.world.level.block.LeverBlock || b instanceof net.minecraft.world.level.block.TrapDoorBlock
+				|| b instanceof net.minecraft.world.level.block.SnowLayerBlock || b instanceof CropBlock;
 	}
 
 	private static BlockState neighbourShaped(BlockState state, ServerLevel level, BlockPos pos) {
@@ -435,12 +485,16 @@ public final class Settlements {
 		Set<Long> allBuilt = new HashSet<>();
 		s.built().values().forEach(allBuilt::addAll);
 		// phase 1: level the ground
-		int colsPerTick = instant ? cols : Math.max(4, (int) Math.ceil(cols / (t.seconds * 8.0)));
+		ServerPlayer ownerNow = server.getPlayerList().getPlayer(s.owner());
+		boolean fast = ownerNow != null && ownerNow.isCreative();
+		int colsPerTick = instant ? cols : fast ? Math.max(1, (int) Math.ceil(cols / (CREATIVE_TICKS * 0.4)))
+				: Math.max(4, (int) Math.ceil(cols / (t.seconds * 8.0)));
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
 			SiteWork.clear(level, s.heart(), columns.get(index), allBuilt, SiteWork.surface(level, s.heart()));
 		}
 		// phase 2: place the blocks
-		int perTick = instant ? list.size() : Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 12.0)));
+		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
+				: Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 12.0)));
 		List<Long> built = new ArrayList<>(s.built().getOrDefault(s.jobTrack(), List.of()));
 		Set<Long> builtSet = new HashSet<>(built);
 		if (index >= cols) {
@@ -449,7 +503,7 @@ public final class Settlements {
 				BlockPos pos = s.heart().offset(p.offset());
 				BlockState state = neighbourShaped(p.state(), level, pos);
 				if (!level.getBlockState(pos).equals(state)) {
-					level.setBlock(pos, state, Block.UPDATE_ALL);
+					level.setBlock(pos, state, NO_DROPS);
 					if (n == 0) {
 						SoundType sound = state.getSoundType();
 						level.playSound(null, pos, sound.getPlaceSound(), SoundSource.BLOCKS, (sound.getVolume() + 1) / 2, sound.getPitch() * 0.8f);
@@ -467,6 +521,10 @@ public final class Settlements {
 			Settlement done = s.withJob("", "", 0).withBuilt(s.jobTrack(), built);
 			put(server, done);
 			spawnAnimals(level, s, t);
+			Set<Long> nowBuilt = new HashSet<>(allBuilt);
+			nowBuilt.addAll(built);
+			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
+			Production.armTraps(level, done, list);
 			if (!Progression.ROADS.equals(s.jobTrack()) && !Progression.LAMPS.equals(s.jobTrack())) {
 				extendInfrastructure(server, done.withLevel(s.jobTrack(), done.level(s.jobTrack())));
 			}
@@ -516,7 +574,7 @@ public final class Settlements {
 			}
 			for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
 				if (e.getValue().contains(pos.asLong())) {
-					level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+					level.setBlock(pos, Blocks.AIR.defaultBlockState(), NO_DROPS);
 					List<Long> built = new ArrayList<>(e.getValue());
 					built.remove(pos.asLong());
 					put(server, s.withBuilt(e.getKey(), built));
@@ -542,7 +600,8 @@ public final class Settlements {
 			List<Progression.Step> steps = Progression.steps(track);
 			int lvl = s.level(track);
 			Progression.Step next = lvl < steps.size() ? steps.get(lvl) : null;
-			String lockedBy = next != null && s.level(Settlement.MAIN) < next.minMain() ? mainSteps.get(next.minMain() - 1).titleKey() : "";
+			String lockedBy = next == null ? "" : s.level(Settlement.MAIN) < next.minMain() ? mainSteps.get(next.minMain() - 1).titleKey()
+					: !Progression.wallsOk(s, next) ? Progression.WALL_STEPS.get(Progression.GATE_MIN_WALLS[next.level() - 1] - 1).titleKey() : "";
 			options.add(new KingdomInfoPayload.Option(track, lvl, steps.stream().map(Progression.Step::titleKey).toList(),
 					next == null || next.requirementKey() == null ? "" : next.requirementKey(),
 					next != null && mine && Progression.requirementMet(player, next), next == null ? "" : Progression.costText(next),
@@ -586,6 +645,9 @@ public final class Settlements {
 		int water = 0;
 		int bare = 0;
 		for (SiteWork.Column c : columns) {
+			if (c.floor() > 0) {
+				continue; // slope zone: only shaped, not flattened
+			}
 			BlockPos base = heart.offset(c.dx(), 0, c.dz());
 			for (int y = base.equals(heart) ? 1 : 0; y < 4; y++) {
 				BlockState st = level.getBlockState(base.above(y));

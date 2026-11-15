@@ -27,6 +27,8 @@ import java.util.Set;
  * buildings stay.
  */
 public final class SiteWork {
+	/** Block updates without item drops: replaced banners, beds and the like just vanish. */
+	public static final int FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS;
 	/** Flat strip outside a wall before the slope starts. */
 	private static final int FLAT = 4;
 
@@ -52,21 +54,64 @@ public final class SiteWork {
 	private SiteWork() {
 	}
 
+	/**
+	 * The ground a job works on: every column within {@code apron} of the template's footprint (its blocks,
+	 * not its bounding box), so cleared land follows the buildings instead of being one big rectangle.
+	 * Distance is Chebyshev with a little noise, so the edge is irregular; floor = 0 in the flat margin, then the
+	 * allowed height rises gently with distance (natural slope, slightly uneven).
+	 */
 	public static List<Column> columns(String job, Template t, Rotation rotation) {
 		return CACHE.computeIfAbsent(job + "|" + rotation.ordinal(), k -> {
-			List<Column> list = new ArrayList<>();
 			int a = t.apron;
-			for (int x = -a; x < t.sizeX + a; x++) {
-				for (int z = -a; z < t.sizeZ + a; z++) {
-					int dx = x < 0 ? -x : Math.max(0, x - t.sizeX + 1);
-					int dz = z < 0 ? -z : Math.max(0, z - t.sizeZ + 1);
-					int d = Math.max(dx, dz);
-					BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
-					list.add(new Column(rel.getX(), rel.getZ(), d == 0 ? 0 : Math.max(0, d - FLAT)));
+			int flat = t.apron >= 12 ? FLAT : Math.max(1, a / 2);
+			Map<Long, Integer> dist = new HashMap<>();
+			java.util.ArrayDeque<long[]> queue = new java.util.ArrayDeque<>();
+			for (Template.Entry e : t.entries) {
+				if (e.y() < -1 || e.name().endsWith(":snow") || e.name().endsWith(":air")) {
+					continue;
+				}
+				long key = BlockPos.asLong(e.x(), 0, e.z());
+				if (dist.putIfAbsent(key, 0) == null) {
+					queue.add(new long[] {e.x(), e.z(), 0});
 				}
 			}
+			while (!queue.isEmpty()) {
+				long[] c = queue.poll();
+				if (c[2] >= a) {
+					continue;
+				}
+				for (int dx = -1; dx <= 1; dx++) {
+					for (int dz = -1; dz <= 1; dz++) {
+						long key = BlockPos.asLong((int) c[0] + dx, 0, (int) c[1] + dz);
+						if (!dist.containsKey(key)) {
+							dist.put(key, (int) c[2] + 1);
+							queue.add(new long[] {c[0] + dx, c[1] + dz, c[2] + 1});
+						}
+					}
+				}
+			}
+			List<Column> list = new ArrayList<>();
+			for (Map.Entry<Long, Integer> e : dist.entrySet()) {
+				int x = BlockPos.getX(e.getKey());
+				int z = BlockPos.getZ(e.getKey());
+				int d = e.getValue();
+				int noise = (int) Math.floorMod((long) x * 73856093L ^ (long) z * 19349663L, 3L) - 1; // -1, 0 or 1
+				if (d > 0 && d + noise > a) {
+					continue; // ragged edge
+				}
+				int floor = d <= flat ? 0 : Math.max(1, (d - flat) * 3 / 4 + noise);
+				BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
+				list.add(new Column(rel.getX(), rel.getZ(), d == 0 ? 0 : floor));
+			}
+			list.sort(java.util.Comparator.comparingInt(Column::dx).thenComparingInt(Column::dz));
 			return List.copyOf(list);
 		});
+	}
+
+	/** Terrain only (no plants or trees): what the slope zone outside the flat margin may cut. */
+	static boolean terrain(BlockState state) {
+		return !state.is(BlockTags.LOGS) && !state.is(BlockTags.LEAVES) && !state.is(BlockTags.REPLACEABLE) && !state.is(BlockTags.FLOWERS)
+				&& !state.is(BlockTags.SAPLINGS) && natural(state) && state.isSolid();
 	}
 
 	static boolean natural(BlockState state) {
@@ -128,7 +173,7 @@ public final class SiteWork {
 		});
 	}
 
-	private static boolean isTopSoil(BlockState st) {
+	static boolean isTopSoil(BlockState st) {
 		return st.is(Blocks.GRASS_BLOCK) || st.is(Blocks.SAND) || st.is(Blocks.RED_SAND) || st.is(Blocks.PODZOL) || st.is(Blocks.MYCELIUM)
 				|| st.is(Blocks.SNOW_BLOCK) || st.is(Blocks.COARSE_DIRT) || st.is(Blocks.MUD) || st.is(Blocks.MOSS_BLOCK);
 	}
@@ -147,6 +192,7 @@ public final class SiteWork {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
 		int floor = heart.getY() + c.floor();
+		boolean margin = c.floor() == 0;
 		// the heightmap alone missed blocks (CI site test); scan at least 64 blocks above the floor as well
 		int top = Math.min(level.getMaxY(), Math.max(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), floor + 64));
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -155,28 +201,61 @@ public final class SiteWork {
 			if (built.contains(pos.asLong()) || pos.equals(heart)) {
 				continue;
 			}
-			if (natural(level.getBlockState(pos))) {
-				level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+			BlockState st = level.getBlockState(pos);
+			// in the flat margin everything natural goes (trees too); further out only the land is shaped
+			if (margin ? natural(st) : terrain(st)) {
+				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
 			}
 		}
+		// the new ground layer: cut stone, dirt, leaves or logs at ground level become the area's surface block
 		pos.set(x, floor - 1, z);
-		if (!built.contains(pos.asLong()) && exposedInside(level.getBlockState(pos)) && level.getBlockState(pos.above()).isAir()) {
-			level.setBlock(pos, surface, Block.UPDATE_CLIENTS);
+		BlockState ground = level.getBlockState(pos);
+		if (!built.contains(pos.asLong()) && level.getBlockState(pos.above()).isAir() && !isTopSoil(ground)
+				&& (exposedInside(ground) || margin && (ground.is(BlockTags.LEAVES) || ground.is(BlockTags.LOGS)))) {
+			level.setBlock(pos, surface, FLAGS);
 		}
-		if (c.floor() > 0) {
-			return;
-		}
-		for (int y = heart.getY() - 1; y >= heart.getY() - FOUNDATION; y--) {
+		// foundation: fill holes, water and leaves below the ground layer; outside the building the fill slopes away
+		int fillTop = heart.getY() - 1 - c.floor();
+		for (int y = fillTop; y >= fillTop - FOUNDATION; y--) {
 			pos.set(x, y, z);
 			if (built.contains(pos.asLong())) {
 				continue;
 			}
 			BlockState state = level.getBlockState(pos);
-			boolean hole = state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock;
+			boolean hole = state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock || state.is(BlockTags.LEAVES);
 			if (!hole) {
 				break; // solid ground reached
 			}
-			level.setBlock(pos, y == heart.getY() - 1 ? surface : Blocks.DIRT.defaultBlockState(), Block.UPDATE_CLIENTS);
+			level.setBlock(pos, y == fillTop ? surface : Blocks.DIRT.defaultBlockState(), FLAGS);
+		}
+	}
+
+	private static final Block[] GRASSY = {Blocks.SHORT_GRASS, Blocks.SHORT_GRASS, Blocks.SHORT_GRASS, Blocks.FERN, Blocks.DANDELION,
+			Blocks.POPPY, Blocks.OXEYE_DAISY, Blocks.CORNFLOWER, Blocks.AZURE_BLUET};
+
+	/**
+	 * Makes cleared but unused ground look natural: grass tufts and flowers on some of the grass blocks of the area.
+	 * They are natural blocks, so a later building simply clears them again.
+	 */
+	public static void decorate(ServerLevel level, BlockPos heart, List<Column> columns, Set<Long> built) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (Column c : columns) {
+			int x = heart.getX() + c.dx();
+			int z = heart.getZ() + c.dz();
+			int h = (int) Math.floorMod((long) x * 83492791L ^ (long) z * 2654435761L, 100L);
+			if (h >= 22) {
+				continue;
+			}
+			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+			pos.set(x, y - 1, z);
+			if (built.contains(pos.asLong()) || !level.getBlockState(pos).is(Blocks.GRASS_BLOCK)) {
+				continue;
+			}
+			pos.set(x, y, z);
+			if (!level.getBlockState(pos).isAir() || built.contains(pos.asLong())) {
+				continue;
+			}
+			level.setBlock(pos, GRASSY[h % GRASSY.length].defaultBlockState(), Block.UPDATE_CLIENTS);
 		}
 	}
 }

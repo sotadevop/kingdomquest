@@ -43,6 +43,10 @@ public record Settlement(UUID id, UUID owner, String name, int color, Identifier
 		return this.levels.getOrDefault(track, 0);
 	}
 
+	public Settlement withColor(int newColor) {
+		return new Settlement(id, owner, name, newColor, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built);
+	}
+
 	public Settlement withJob(String job, String track, int index) {
 		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, track, index, built);
 	}

@@ -139,8 +139,21 @@ public final class Progression {
 					new Step(STABLES, "stables_2", 2, "kingdomquest.addon.stables_2", 7, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed",
 							List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.HAY_BLOCK, 8), item(Items.SADDLE, 1)))));
 
+	/** Gate: its own track at the wall's gate opening. Levels 2-4 need stone walls. */
+	public static final String GATE = "gate";
+	public static final List<Step> GATE_STEPS = List.of(
+			new Step(GATE, "gate_1", 1, "kingdomquest.gate.gate_1", 7, null, null, List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.OAK_FENCE_GATE, 6))),
+			new Step(GATE, "gate_2", 2, "kingdomquest.gate.gate_2", 8, adv("story/form_obsidian"), "kingdomquest.req.obsidian",
+					List.of(item(Items.STONE_BRICKS, 192), item(Items.IRON_BARS, 3), item(Items.LADDER, 8))),
+			new Step(GATE, "gate_3", 3, "kingdomquest.gate.gate_3", 8, adv("story/enter_the_nether"), "kingdomquest.req.nether",
+					List.of(item(Items.WATER_BUCKET, 2), tag(ItemTags.PLANKS, "planks", 32), item(Items.IRON_SHOVEL, 1))),
+			new Step(GATE, "gate_4", 4, "kingdomquest.gate.gate_4", 8, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
+					List.of(item(Items.DISPENSER, 2), item(Items.LEVER, 2), item(Items.ARROW, 64))));
+	/** Walls level each gate level needs. */
+	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3};
+
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, GATE, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -149,6 +162,7 @@ public final class Progression {
 		}
 		return switch (track) {
 			case WALLS -> WALL_STEPS;
+			case GATE -> GATE_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.get(track);
@@ -166,7 +180,12 @@ public final class Progression {
 			return null;
 		}
 		Step step = steps.get(level);
-		return s.level(Settlement.MAIN) >= step.minMain() ? step : null;
+		return s.level(Settlement.MAIN) >= step.minMain() && wallsOk(s, step) ? step : null;
+	}
+
+	/** Gate levels need a certain walls level. */
+	public static boolean wallsOk(Settlement s, Step step) {
+		return !GATE.equals(step.track()) || s.level(WALLS) >= GATE_MIN_WALLS[step.level() - 1];
 	}
 
 	public static Step current(Settlement s, String track) {

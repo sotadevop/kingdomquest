@@ -38,7 +38,7 @@ public class KingdomScreen extends Screen {
 
 	private static final List<Tab> TABS = List.of(
 			new Tab("kingdomquest.tab.settlement", List.of("main")),
-			new Tab("kingdomquest.tab.defense", List.of("walls")),
+			new Tab("kingdomquest.tab.defense", List.of("walls", "gate")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps")),
 			new Tab("kingdomquest.tab.farming", List.of("farm", "stables")),
 			new Tab("kingdomquest.tab.crafts", List.of("smith", "wood")),
@@ -68,15 +68,25 @@ public class KingdomScreen extends Screen {
 		return this.minecraft != null && this.minecraft.player != null && this.minecraft.player.isCreative();
 	}
 
-	private List<KingdomInfoPayload.Option> cards() {
+	/** Only what exists or can be built now: tracks not unlocked yet stay hidden. */
+	private List<KingdomInfoPayload.Option> cards(Tab tab) {
 		List<KingdomInfoPayload.Option> list = new ArrayList<>();
-		for (String track : TABS.get(this.tab).tracks()) {
+		for (String track : tab.tracks()) {
 			KingdomInfoPayload.Option o = this.byTrack.get(track);
-			if (o != null) {
+			if (o != null && (o.level() > 0 || !o.locked())) {
 				list.add(o);
 			}
 		}
 		return list;
+	}
+
+	private List<Tab> visibleTabs() {
+		return TABS.stream().filter(t -> !cards(t).isEmpty()).toList();
+	}
+
+	private List<KingdomInfoPayload.Option> cards() {
+		List<Tab> tabs = visibleTabs();
+		return tabs.isEmpty() ? List.of() : cards(tabs.get(Math.min(this.tab, tabs.size() - 1)));
 	}
 
 	private int cardY(int i) {
@@ -89,10 +99,12 @@ public class KingdomScreen extends Screen {
 		this.top = (this.height - H) / 2;
 		this.tabButtons.clear();
 		this.buildButtons.clear();
+		List<Tab> tabs = visibleTabs();
+		this.tab = Math.min(this.tab, Math.max(0, tabs.size() - 1));
 		int tabW = (W - 16 - (TABS.size() - 1) * 2) / TABS.size();
-		for (int i = 0; i < TABS.size(); i++) {
+		for (int i = 0; i < tabs.size(); i++) {
 			int index = i;
-			Button b = Button.builder(Component.translatable(TABS.get(i).key()), btn -> {
+			Button b = Button.builder(Component.translatable(tabs.get(i).key()), btn -> {
 				this.tab = index;
 				lastTab = index;
 				this.rebuildWidgets();
@@ -112,6 +124,10 @@ public class KingdomScreen extends Screen {
 			build.visible = !o.maxed() && !o.locked();
 			this.buildButtons.add(this.addRenderableWidget(build));
 		}
+		Button color = Button.builder(Component.translatable("kingdomquest.menu.color"), b ->
+				this.minecraft.setScreenAndShow(new ColorScreen(this.info.heart(), this.info.color(), this))).bounds(this.left + 8, this.top + H - 24, 60, 18).build();
+		color.active = this.info.percent() < 0;
+		this.tabButtons.add(this.addRenderableWidget(color));
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 70, this.top + H - 24, 70, 18).build());
 	}

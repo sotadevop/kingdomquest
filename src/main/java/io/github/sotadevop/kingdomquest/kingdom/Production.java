@@ -39,6 +39,13 @@ public final class Production {
 		if (!level.isLoaded(s.heart())) {
 			return;
 		}
+		Progression.Step gate = Progression.current(s, Progression.GATE);
+		if (gate != null && gate.level() >= 4 && !Progression.GATE.equals(s.jobTrack())) {
+			Template t = Template.get(s.style() + "/" + gate.building());
+			if (t != null) {
+				armTraps(level, s, t.placements(Settlements.dye(s.color()), Rotation.values()[s.rotation()]));
+			}
+		}
 		boolean any = false;
 		for (String track : Progression.ORDER) {
 			Progression.Step step = Progression.current(s, track);
@@ -56,6 +63,23 @@ public final class Production {
 		ServerPlayer owner = level.getServer().getPlayerList().getPlayer(s.owner());
 		if (any && owner != null && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 64 * 64) {
 			owner.sendOverlayMessage(Component.translatable("kingdomquest.production", s.name()));
+		}
+	}
+
+	/** Fills every dispenser among the given placements with arrows (gate traps), up to a full stack each. */
+	static void armTraps(ServerLevel level, Settlement s, List<io.github.sotadevop.kingdomquest.building.Template.Placement> placements) {
+		for (var p : placements) {
+			if (p.state().getBlock() instanceof net.minecraft.world.level.block.DispenserBlock
+					&& level.getBlockEntity(s.heart().offset(p.offset())) instanceof Container c) {
+				int have = 0;
+				for (int i = 0; i < c.getContainerSize(); i++) {
+					have += c.getItem(i).is(Items.ARROW) ? c.getItem(i).getCount() : 0;
+				}
+				if (have < 64) {
+					insert(c, new ItemStack(Items.ARROW, 64 - have));
+					c.setChanged();
+				}
+			}
 		}
 	}
 
