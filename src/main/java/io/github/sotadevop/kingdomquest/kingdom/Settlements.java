@@ -582,13 +582,16 @@ public final class Settlements {
 			SiteWork.clear(level, heart, c, Set.of(), surface);
 		}
 		int left = 0;
+		Map<String, Integer> kinds = new HashMap<>();
 		int water = 0;
 		int bare = 0;
 		for (SiteWork.Column c : columns) {
 			BlockPos base = heart.offset(c.dx(), 0, c.dz());
 			for (int y = 0; y < 4; y++) {
-				if (!level.getBlockState(base.above(y)).isAir()) {
+				BlockState st = level.getBlockState(base.above(y));
+				if (!st.isAir()) {
 					left++;
+					kinds.merge(st.getBlock().getDescriptionId() + "@y" + y, 1, Integer::sum);
 				}
 			}
 			if (!level.getBlockState(base.below(1)).getFluidState().isEmpty() || !level.getBlockState(base.below(2)).getFluidState().isEmpty()) {
@@ -599,7 +602,7 @@ public final class Settlements {
 			}
 		}
 		if (left > 0) {
-			errors.add(left + " blocks left above the ground after levelling");
+			errors.add(left + " blocks left above the ground after levelling: " + kinds);
 		}
 		if (water > 0) {
 			errors.add(water + " columns still have water under the foundation");
