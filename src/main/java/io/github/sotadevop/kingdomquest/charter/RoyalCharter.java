@@ -53,7 +53,7 @@ public final class RoyalCharter {
 		if (name.length() > CharterData.MAX_NAME) {
 			name = name.substring(0, CharterData.MAX_NAME);
 		}
-		if (!BuiltInRegistries.ITEM.containsKey(d.logo()) || !(BuiltInRegistries.ITEM.getValue(d.logo()) instanceof BlockItem)) {
+		if (!BuiltInRegistries.ITEM.containsKey(d.logo()) || BuiltInRegistries.ITEM.getValue(d.logo()) == net.minecraft.world.item.Items.AIR) {
 			return;
 		}
 		int color = Math.clamp(d.color(), 0, DyeColor.values().length - 1);

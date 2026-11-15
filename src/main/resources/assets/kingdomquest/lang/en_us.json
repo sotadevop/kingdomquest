@@ -240,5 +240,6 @@
 	"kingdomquest.realm.no_people": "Nobody lives here yet.",
 	"kingdomquest.realm.no_animals": "No animals here yet.",
 	"kingdomquest.build.where": "%s is ready at %s %s %s (%s).",
-	"kingdomquest.link.too_far": "That place is more than 1200 blocks away."
+	"kingdomquest.link.too_far": "That place is more than 1200 blocks away.",
+	"kingdomquest.found.steep": "Careful: the land here differs by %s blocks. Buildings will step down the slope and the walls will follow the hills."
 }

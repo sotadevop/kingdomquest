@@ -1029,6 +1029,10 @@ def stone_walls(style, level):
     Walls 4: adds square stone towers at the corners and beside the gate, with banners."""
     s = STYLES[style]
     b = B()
+    # follows the land in 4-block sections: each section stands on the ground at its middle, so on a mountain
+    # the wall steps up and down with the hills instead of floating over valleys
+    FOLLOW.add(id(b.b))
+    ANCHORS_OF[id(b.b)] = b.anchors
     frozen = style == "frozen"
     main, alt, crack = ("cobblestone", "mossy_cobblestone", "stone_bricks") if frozen else ("stone_bricks", "mossy_stone_bricks", "cracked_stone_bricks")
     wall_top = "cobblestone_wall" if frozen else "stone_brick_wall"
@@ -1041,10 +1045,19 @@ def stone_walls(style, level):
         h = (x * 73856093 ^ y * 19349663 ^ z * 83492791) % 20
         return alt if h < 3 else crack if h < 5 else main
 
+    def section(x, z):
+        """Anchor column of the wall section that the ring cell (x, z) belongs to."""
+        if z in (z0, z1):
+            return (min(x1, x0 + (x - x0) // 4 * 4 + 2), z)
+        return (x, min(z1, z0 + (z - z0) // 4 * 4 + 2))
+
     ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
     ring += [(x0, z) for z in range(z0 + 1, z1)] + [(x1, z) for z in range(z0 + 1, z1)]
     for x, z in ring:
         gate = z == z1 and abs(x - gx) <= 1
+        b.anchor = section(x, z)
+        for y in range(-6, -1):
+            b.put(x, y, z, main)  # foundation: fills under a section where the ground dips
         for y in range(0, H):
             if gate and y < 4:
                 continue
@@ -1057,10 +1070,14 @@ def stone_walls(style, level):
     inner |= {(x0 + 1, z) for z in range(z0 + 1, z1)} | {(x1 - 1, z) for z in range(z0 + 1, z1)}
     for x, z in inner:
         if not (z == z1 - 1 and abs(x - gx) <= 1):
+            ox = x0 if x == x0 + 1 else x1 if x == x1 - 1 else x
+            oz = z0 if z == z0 + 1 else z1 if z == z1 - 1 else z
+            b.anchor = section(ox, oz)
             b.put(x, H - 1, z, slab, type="top", waterlogged="false")
     # stairs up to the walkway on both sides of the gate
     for i in range(H - 1):
         for x in (gx - 3 - i, gx + 3 + i):
+            b.anchor = section(x, z1)
             b.put(x, i, z1 - 2, main)
     if level >= 4:
         spots = [(x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - 4, z1), (gx + 4, z1), (x0, (z0 + z1) // 2), (x1, (z0 + z1) // 2)]
@@ -1069,6 +1086,11 @@ def stone_walls(style, level):
             tz0 = max(z0 - 1, min(z1 - 3, cz - 2))
             if cz == z1:
                 tz0 = z1 - 2
+            b.anchor = (tx0 + 2, tz0 + 2)
+            for x in range(tx0, tx0 + 5):
+                for z in range(tz0, tz0 + 5):
+                    for y in range(-6, 0):
+                        b.put(x, y, z, main)  # tower foundation
             for x in range(tx0, tx0 + 5):
                 for z in range(tz0, tz0 + 5):
                     edge = x in (tx0, tx0 + 4) or z in (tz0, tz0 + 4)
@@ -1090,6 +1112,7 @@ def stone_walls(style, level):
             b.put(lx, H - 1, lz, "ladder", facing="north", waterlogged="false")
             b.put(lx, 9, lz, "air")
             b.put(lx, 8, lz - 1, "lantern", hanging="true", waterlogged="false")
+    b.anchor = None
     return b.b
 
 

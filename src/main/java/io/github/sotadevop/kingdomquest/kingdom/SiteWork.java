@@ -270,14 +270,14 @@ public final class SiteWork {
 		int mz = Math.floorMod(z, 4);
 		boolean pier = mx == 0 && mz == 0;
 		if (pier) {
-			for (int y = top - 1; y > top - depth; y--) {
+			// down to solid ground, however far (water, plants and leaves don't count)
+			for (int y = top - 1; y > top - 64 && y > level.getMinY(); y--) {
 				pos.set(x, y, z);
+				BlockState st = level.getBlockState(pos);
+				if (!(st.isAir() || st.canBeReplaced() || st.getBlock() instanceof LiquidBlock || st.is(BlockTags.LEAVES))) {
+					break;
+				}
 				level.setBlock(pos, (Math.floorMod(y, 5) == 0 ? mossy(wall) : wall), FLAGS);
-			}
-			pos.set(x, top - depth, z);
-			BlockState foot = level.getBlockState(pos);
-			if (foot.isAir() || foot.canBeReplaced() || foot.getBlock() instanceof LiquidBlock) {
-				level.setBlock(pos, wall, FLAGS);
 			}
 			return;
 		}
@@ -520,6 +520,25 @@ public final class SiteWork {
 	 * Height of the ground at a column near {@code heartY}: the top full block that isn't part of a tree or a
 	 * plant (roads and farmland count). Used by terrain-following templates.
 	 */
+	/** Like {@link #groundTop}, but searches 30 blocks up and 48 down: mountains and valleys. */
+	public static int groundDeep(ServerLevel level, int x, int z, int heartY) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int y = heartY + 30; y >= heartY - 48; y--) {
+			pos.set(x, y, z);
+			BlockState st = level.getBlockState(pos);
+			if (st.isAir() || st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES) || st.canBeReplaced() || st.getBlock() instanceof LiquidBlock) {
+				if (st.getBlock() instanceof LiquidBlock) {
+					return y; // the water surface counts as ground for a wall
+				}
+				continue;
+			}
+			if (st.is(Blocks.DIRT_PATH) || st.is(Blocks.FARMLAND) || st.isCollisionShapeFullBlock(level, pos)) {
+				return y;
+			}
+		}
+		return heartY - 1;
+	}
+
 	public static int groundTop(ServerLevel level, int x, int z, int heartY) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int y = heartY + 12; y >= heartY - 12; y--) {

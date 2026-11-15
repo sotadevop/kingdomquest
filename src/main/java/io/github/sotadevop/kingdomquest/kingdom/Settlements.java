@@ -236,6 +236,10 @@ public final class Settlements {
 		if (p == null || !p.heart().equals(heart) || now - p.tick() > CONFIRM_TICKS) {
 			PENDING.put(player.getUUID(), new Pending(heart, now));
 			player.sendOverlayMessage(Component.translatable("kingdomquest.found.confirm", data.name()));
+			int relief = relief(level, heart);
+			if (relief > 20) {
+				player.sendSystemMessage(Component.translatable("kingdomquest.found.steep", relief).withStyle(net.minecraft.ChatFormatting.GOLD));
+			}
 			return false;
 		}
 		PENDING.remove(player.getUUID());
@@ -253,6 +257,20 @@ public final class Settlements {
 		level.getServer().getPlayerList().broadcastSystemMessage(Component.translatable("kingdomquest.found.done", player.getDisplayName(), data.name()), false);
 		KingdomQuest.LOG.info("Settlement {} founded at {} ({})", data.name(), heart, style);
 		return true;
+	}
+
+	/** Height difference of the land within the future wall ring (sampled every 8 blocks). */
+	static int relief(ServerLevel level, BlockPos heart) {
+		int lo = Integer.MAX_VALUE;
+		int hi = Integer.MIN_VALUE;
+		for (int dx = -60; dx <= 70; dx += 8) {
+			for (int dz = -55; dz <= 45; dz += 8) {
+				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, heart.getX() + dx, heart.getZ() + dz);
+				lo = Math.min(lo, y);
+				hi = Math.max(hi, y);
+			}
+		}
+		return hi - lo;
 	}
 
 	/** Clears the plot above the heart's layer and fills holes below it, so nothing is buried or floating. */
@@ -349,13 +367,16 @@ public final class Settlements {
 			}
 			int x = s.heart().getX() + BlockPos.getX(c);
 			int z = s.heart().getZ() + BlockPos.getZ(c);
-			hs.add(SiteWork.groundTop(level, x, z, s.heart().getY()) + 1 - s.heart().getY());
+			hs.add(SiteWork.groundDeep(level, x, z, s.heart().getY()) + 1 - s.heart().getY());
 		}
 		if (hs.isEmpty()) {
 			return 0;
 		}
 		java.util.Collections.sort(hs);
-		int dy = Math.max(-4, Math.min(4, hs.get(hs.size() / 2)));
+		// on the median height of its land, but never more than 10 blocks above the lowest ground under it:
+		// up to 3 blocks of drop get a retaining wall, 4-10 a deck on piers; more and the building steps down the slope
+		int dy = Math.min(hs.get(hs.size() / 2), hs.get(0) + 10);
+		dy = Math.max(-12, Math.min(12, dy));
 		return Math.abs(dy) < 2 ? 0 : dy;
 	}
 
@@ -553,8 +574,9 @@ public final class Settlements {
 			for (int i = 0; i < Math.min(before.size(), now.size()); i++) {
 				if (!before.get(i).state().equals(now.get(i).state())) {
 					BlockPos pos = s.heart().offset(now.get(i).offset());
-					if (level.getBlockState(pos).equals(before.get(i).state())) {
-						level.setBlock(pos, now.get(i).state(), NO_DROPS);
+					if (level.getBlockState(pos).getBlock() == before.get(i).state().getBlock()) {
+						// no shape updates: a bed half must not break while its other half still has the old color
+						level.setBlock(pos, now.get(i).state(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS);
 					}
 				}
 			}
@@ -787,6 +809,29 @@ public final class Settlements {
 	private static List<Template.Placement> placements(Settlement s, String job) {
 		List<Template.Placement> base = basePlacements(s, job);
 		Template t = Template.get(job);
+		if (t != null && !t.follow && server != null && trackOf(job).equals("gate") && s.level(Progression.GATE) >= 3) {
+			// the dry moat is only dug where the land is at the gate's height; on hills and over valleys the
+			// terrain-following wall stands without it (no hidden trenches inside a mountain)
+			String key = s.id() + "|" + job + "|moat|" + base.size() + "|" + s.color();
+			return FOLLOWED.computeIfAbsent(key, k -> {
+				ServerLevel level = server.overworld();
+				Map<Long, Integer> ground = new HashMap<>();
+				List<Template.Placement> out = new ArrayList<>(base.size());
+				for (Template.Placement p : base) {
+					boolean moat = p.offset().getY() < 0 && (p.state().isAir() || p.state().is(Blocks.COARSE_DIRT));
+					if (moat) {
+						BlockPos col = s.heart().offset(p.offset().getX(), 0, p.offset().getZ());
+						int g = ground.computeIfAbsent(col.asLong(), c -> SiteWork.groundDeep(level, col.getX(), col.getZ(), s.heart().getY()) + 1
+								- s.heart().getY());
+						if (Math.abs(g) > 2) {
+							continue;
+						}
+					}
+					out.add(p);
+				}
+				return List.copyOf(out);
+			});
+		}
 		if (t == null || !t.follow || server == null) {
 			return base;
 		}
@@ -798,7 +843,7 @@ public final class Settlements {
 			for (Template.Placement p : base) {
 				BlockPos col = s.heart().offset(p.anchor());
 				int off = ground.computeIfAbsent(col.asLong(), c ->
-						Math.max(-10, Math.min(10, SiteWork.groundTop(level, col.getX(), col.getZ(), s.heart().getY()) + 1 - s.heart().getY())));
+						Math.max(-40, Math.min(30, SiteWork.groundDeep(level, col.getX(), col.getZ(), s.heart().getY()) + 1 - s.heart().getY())));
 				out.add(new Template.Placement(p.offset().above(off), p.state(), p.segment(), p.anchor()));
 			}
 			return List.copyOf(out);

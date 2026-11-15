@@ -61,7 +61,7 @@ public class FoundingScreen extends Screen {
 
 	private static List<Item> allItems() {
 		if (allItems == null) {
-			allItems = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR && item instanceof BlockItem).toList();
+			allItems = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR).toList(); // every item can be a logo
 		}
 		return allItems;
 	}
