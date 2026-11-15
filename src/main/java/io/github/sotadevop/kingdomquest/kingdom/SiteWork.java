@@ -244,12 +244,74 @@ public final class SiteWork {
 			return; // a steep drop outside the pad stays natural: the pad ends in a retaining wall instead of a dirt cliff
 		}
 		BlockState wall = wallFor(surface);
+		if (margin && depth > 3) {
+			platform(level, x, z, fillTop, depth, c.edge(), wall);
+			return;
+		}
 		for (int y = fillTop; y > fillTop - depth; y--) {
 			pos.set(x, y, z);
 			BlockState fill = c.edge() && depth > 2 ? ((x * 31 + y * 7 + z * 13) % 5 == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : Blocks.DIRT.defaultBlockState();
 			level.setBlock(pos, fill, FLAGS);
 		}
+	}
+
+	/**
+	 * Ground that drops away more than 3 blocks (a building at the edge of a hill) isn't filled with a dirt
+	 * cliff: the pad becomes a stone deck on piers, like a real platform. Every 4th block in both directions a
+	 * pier goes down to the ground, the blocks next to a pier get an arch brace under the deck, the deck's
+	 * outer edge is a double beam with a low railing.
+	 */
+	private static void platform(ServerLevel level, int x, int z, int top, int depth, boolean edge, BlockState wall) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		pos.set(x, top, z);
+		level.setBlock(pos, wall, FLAGS); // the deck
+		int mx = Math.floorMod(x, 4);
+		int mz = Math.floorMod(z, 4);
+		boolean pier = mx == 0 && mz == 0;
+		if (pier) {
+			for (int y = top - 1; y > top - depth; y--) {
+				pos.set(x, y, z);
+				level.setBlock(pos, (Math.floorMod(y, 5) == 0 ? mossy(wall) : wall), FLAGS);
+			}
+			pos.set(x, top - depth, z);
+			BlockState foot = level.getBlockState(pos);
+			if (foot.isAir() || foot.canBeReplaced() || foot.getBlock() instanceof LiquidBlock) {
+				level.setBlock(pos, wall, FLAGS);
+			}
+			return;
+		}
+		if (edge) {
+			pos.set(x, top - 1, z);
+			level.setBlock(pos, wall, FLAGS); // edge beam
+			pos.set(x, top + 1, z);
+			if (level.getBlockState(pos).isAir()) {
+				level.setBlock(pos, railing(wall), FLAGS);
+			}
+		}
+		// arch braces: the blocks next to a pier, under the deck, lean on it
+		net.minecraft.core.Direction toPier = mz == 0 && mx == 1 ? net.minecraft.core.Direction.WEST
+				: mz == 0 && mx == 3 ? net.minecraft.core.Direction.EAST
+				: mx == 0 && mz == 1 ? net.minecraft.core.Direction.NORTH
+				: mx == 0 && mz == 3 ? net.minecraft.core.Direction.SOUTH : null;
+		if (toPier != null) {
+			pos.set(x, top - (edge ? 2 : 1), z);
+			if (level.getBlockState(pos).isAir() || level.getBlockState(pos).canBeReplaced()) {
+				level.setBlock(pos, stairs(wall).setValue(net.minecraft.world.level.block.StairBlock.FACING, toPier)
+						.setValue(net.minecraft.world.level.block.StairBlock.HALF, net.minecraft.world.level.block.state.properties.Half.TOP), FLAGS);
+			}
+		}
+	}
+
+	private static BlockState railing(BlockState wall) {
+		return Block.updateFromNeighbourShapes((wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SANDSTONE_WALL : wall.is(Blocks.COBBLESTONE)
+				? Blocks.COBBLESTONE_WALL : Blocks.STONE_BRICK_WALL).defaultBlockState(), net.minecraft.world.level.EmptyBlockGetter.INSTANCE,
+				BlockPos.ZERO);
+	}
+
+	private static BlockState stairs(BlockState wall) {
+		return (wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SMOOTH_SANDSTONE_STAIRS : wall.is(Blocks.COBBLESTONE) ? Blocks.COBBLESTONE_STAIRS
+				: Blocks.STONE_BRICK_STAIRS).defaultBlockState();
 	}
 
 	/** Stone for retaining walls, matching the ground: sandstone in deserts, cobblestone in the snow, stone bricks elsewhere. */
