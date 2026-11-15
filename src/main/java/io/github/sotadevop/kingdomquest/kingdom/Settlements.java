@@ -93,12 +93,17 @@ public final class Settlements {
 		});
 		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
 		People.register();
+		Guild.register();
+		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
 			if (player instanceof ServerPlayer sp && hand == InteractionHand.MAIN_HAND
-					&& level.getBlockState(hit.getBlockPos()).getBlock() instanceof net.minecraft.world.level.block.LeverBlock) {
-				Drawbridge.toggle(sp.level().getServer(), hit.getBlockPos());
+					&& (level.getBlockState(hit.getBlockPos()).getBlock() instanceof net.minecraft.world.level.block.LeverBlock
+					|| level.getBlockState(hit.getBlockPos()).getBlock() instanceof net.minecraft.world.level.block.ButtonBlock)) {
+				if (!Traps.use(sp.level().getServer(), hit.getBlockPos())) {
+					Drawbridge.toggle(sp.level().getServer(), hit.getBlockPos());
+				}
 				return InteractionResult.PASS; // the lever still flips
 			}
 			if (hand != InteractionHand.MAIN_HAND || !player.getMainHandItem().isEmpty() || !(player instanceof ServerPlayer sp)) {
@@ -340,7 +345,74 @@ public final class Settlements {
 			}
 			case "link_kingdom" -> RoadLink.connect(player, s, false);
 			case "link_village" -> RoadLink.connect(player, s, true);
+			case "repair" -> startRepair(player, s);
 			default -> {
+			}
+		}
+	}
+
+	private static final Map<UUID, List<Template.Placement>> REPAIRS = new HashMap<>();
+
+	/** Blocks of all built levels that are missing or wrong in the world (attacks, griefing). Doors etc. count by type. */
+	static List<Template.Placement> damaged(ServerLevel level, Settlement s) {
+		List<Template.Placement> out = new ArrayList<>();
+		for (String track : Progression.ORDER) {
+			Progression.Step step = Progression.current(s, track);
+			if (step == null) {
+				continue;
+			}
+			Template t = Template.get(s.style() + "/" + step.building());
+			if (t == null || t.follow) {
+				continue;
+			}
+			for (Template.Placement p : placements(s, s.style() + "/" + step.building())) {
+				if (p.state().isAir() || p.state().getBlock() instanceof CropBlock || p.offset().getY() < 0) {
+					continue;
+				}
+				BlockPos pos = s.heart().offset(p.offset());
+				if (level.getBlockState(pos).getBlock() != p.state().getBlock()) {
+					out.add(new Template.Placement(p.offset(), p.state(), p.segment(), p.anchor()));
+				}
+			}
+		}
+		return out;
+	}
+
+	private static void startRepair(ServerPlayer player, Settlement s) {
+		ServerLevel level = player.level().getServer().overworld();
+		List<Template.Placement> list = damaged(level, s);
+		if (list.isEmpty() || REPAIRS.containsKey(s.id())) {
+			return;
+		}
+		REPAIRS.put(s.id(), new ArrayList<>(list));
+		People.sendWorkers(level, s, list.size(), null);
+		People.say(player, "Architect", "My builders will repair " + list.size() + " blocks.");
+	}
+
+	private static void repairTick(MinecraftServer server, Settlement s) {
+		List<Template.Placement> list = REPAIRS.get(s.id());
+		if (list == null) {
+			return;
+		}
+		ServerLevel level = server.overworld();
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		int n = owner != null && owner.isCreative() ? 40 : 2;
+		for (int i = 0; i < n && !list.isEmpty(); i++) {
+			Template.Placement p = list.remove(list.size() - 1);
+			BlockPos pos = s.heart().offset(p.offset());
+			level.setBlock(pos, neighbourShaped(p.state(), level, pos), NO_DROPS);
+			if (i == 0) {
+				level.levelEvent(2001, pos, Block.getId(p.state()));
+				if (server.getTickCount() % 40 == 0) {
+					People.herdWorkers(level, s, pos);
+				}
+			}
+		}
+		if (list.isEmpty()) {
+			REPAIRS.remove(s.id());
+			People.removeWorkers(level, s);
+			if (owner != null) {
+				People.say(owner, "Architect", s.name() + " is as good as new.");
 			}
 		}
 	}
@@ -573,6 +645,7 @@ public final class Settlements {
 			if (people) {
 				People.ensureArchitect(server.overworld(), s);
 			}
+			repairTick(server, s);
 			if (server.getTickCount() % 1200 == 0) {
 				Defense.guards(server.overworld(), s);
 			}
@@ -753,8 +826,9 @@ public final class Settlements {
 		}
 		Progression.Step current = Progression.current(s, Settlement.MAIN);
 		int bridge = s.level(Progression.GATE) >= 3 ? s.level(Drawbridge.STATE) : -1;
+		int broken = s.job().isEmpty() && !REPAIRS.containsKey(s.id()) ? damaged((ServerLevel) player.level().getServer().overworld(), s).size() : 0;
 		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),
-				current == null ? "" : current.titleKey(), percent, options, bridge));
+				current == null ? "" : current.titleKey(), percent, options, bridge, broken));
 	}
 
 	/**

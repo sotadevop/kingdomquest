@@ -156,7 +156,19 @@ public final class Progression {
 			new Step(CELLAR, "cellar_1", 1, "kingdomquest.cellar.cellar_1", 5, adv("story/mine_stone"), "kingdomquest.req.mine_stone",
 					List.of(item(Items.COBBLESTONE, 128), item(Items.CHEST, 2), item(Items.LADDER, 6))),
 			new Step(CELLAR, "cellar_2", 2, "kingdomquest.cellar.cellar_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond",
-					List.of(item(Items.STONE_BRICKS, 64), item(Items.CHEST, 6), item(Items.GOLD_INGOT, 8))));
+					List.of(item(Items.STONE_BRICKS, 64), item(Items.CHEST, 6), item(Items.GOLD_INGOT, 8))),
+			new Step(CELLAR, "cellar_3", 3, "kingdomquest.cellar.cellar_3", 9, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+					List.of(item(Items.STONE_BRICKS, 96), item(Items.STICKY_PISTON, 4), item(Items.GOLD_BLOCK, 1))));
+
+	/** Guild of allies: swordfighter, archer, mage, called with a goat horn. */
+	public static final String GUILD = "guild";
+	public static final List<Step> GUILD_STEPS = List.of(
+			new Step(GUILD, "guild_1", 1, "kingdomquest.guild.guild_1", 8, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
+					List.of(item(Items.STONE_BRICKS, 96), item(Items.IRON_SWORD, 1), item(Items.GOAT_HORN, 1))),
+			new Step(GUILD, "guild_2", 2, "kingdomquest.guild.guild_2", 9, adv("adventure/shoot_arrow"), "kingdomquest.req.arrow",
+					List.of(item(Items.BOW, 1), item(Items.ARROW, 64), item(Items.TARGET, 3))),
+			new Step(GUILD, "guild_3", 3, "kingdomquest.guild.guild_3", 10, adv("nether/brew_potion"), "kingdomquest.req.brew",
+					List.of(item(Items.BREWING_STAND, 1), item(Items.BOOKSHELF, 2), item(Items.AMETHYST_SHARD, 8))));
 
 	/** Gate: its own track at the wall's gate opening. Levels 2-4 need stone walls. */
 	public static final String GATE = "gate";
@@ -167,12 +179,14 @@ public final class Progression {
 			new Step(GATE, "gate_3", 3, "kingdomquest.gate.gate_3", 8, adv("story/enter_the_nether"), "kingdomquest.req.nether",
 					List.of(item(Items.WATER_BUCKET, 2), tag(ItemTags.PLANKS, "planks", 32), item(Items.IRON_SHOVEL, 1))),
 			new Step(GATE, "gate_4", 4, "kingdomquest.gate.gate_4", 8, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
-					List.of(item(Items.DISPENSER, 2), item(Items.LEVER, 2), item(Items.ARROW, 64))));
+					List.of(item(Items.DISPENSER, 2), item(Items.LEVER, 2), item(Items.ARROW, 64))),
+			new Step(GATE, "gate_5", 5, "kingdomquest.gate.gate_5", 9, adv("nether/obtain_blaze_rod"), "kingdomquest.req.blaze",
+					List.of(item(Items.PISTON, 3), item(Items.LAVA_BUCKET, 3), item(Items.LEVER, 1))));
 	/** Walls level each gate level needs. */
-	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3};
+	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3, 3};
 
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -183,6 +197,7 @@ public final class Progression {
 			case WALLS -> WALL_STEPS;
 			case GATE -> GATE_STEPS;
 			case CELLAR -> CELLAR_STEPS;
+			case GUILD -> GUILD_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.get(track);

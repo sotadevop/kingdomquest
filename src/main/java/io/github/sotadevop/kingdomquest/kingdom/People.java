@@ -18,7 +18,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.npc.villager.Villager;
+import io.github.sotadevop.kingdomquest.npc.KingdomNpc;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -48,10 +48,14 @@ final class People {
 
 	static void register() {
 		// our people can't be hurt
-		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> role(entity).isEmpty());
+		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !role(entity).startsWith(ARCHITECT) && !role(entity).startsWith(WORKER));
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (!(player instanceof ServerPlayer sp) || !(entity instanceof Villager)) {
+			if (!(player instanceof ServerPlayer sp) || !(entity instanceof KingdomNpc npc) || !Guild.isAlly(npc) && role(entity).isEmpty()) {
 				return InteractionResult.PASS;
+			}
+			if (Guild.isAlly(npc)) {
+				Guild.talk(sp, npc);
+				return InteractionResult.SUCCESS;
 			}
 			Settlement s = settlementOf(sp, entity);
 			if (s == null) {
@@ -85,16 +89,17 @@ final class People {
 		player.sendSystemMessage(Component.literal("[" + who + "] ").withStyle(ChatFormatting.GOLD).append(Component.literal(line).withStyle(ChatFormatting.WHITE)));
 	}
 
-	private static List<Villager> find(ServerLevel level, Settlement s, String role) {
+	private static List<KingdomNpc> find(ServerLevel level, Settlement s, String role) {
 		String want = role + "|" + s.id();
-		return level.getEntitiesOfClass(Villager.class, new AABB(s.heart()).inflate(96, 48, 96), v -> v.isAlive() && want.equals(role(v)));
+		return level.getEntitiesOfClass(KingdomNpc.class, new AABB(s.heart()).inflate(96, 48, 96), v -> v.isAlive() && want.equals(role(v)));
 	}
 
-	private static Villager spawn(ServerLevel level, Settlement s, String role, String name, BlockPos at) {
-		EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace("villager"));
-		if (!(type.create(level, EntitySpawnReason.MOB_SUMMONED) instanceof Villager v)) {
+	private static KingdomNpc spawn(ServerLevel level, Settlement s, String role, String name, BlockPos at) {
+		KingdomNpc v = KingdomNpc.TYPE.create(level, EntitySpawnReason.MOB_SUMMONED);
+		if (v == null) {
 			return null;
 		}
+		v.setup(role, level.getRandom().nextInt(9), s.owner());
 		BlockPos pos = at;
 		for (int up = 0; up < 12 && !(level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir()); up++) {
 			pos = pos.above();
@@ -113,7 +118,7 @@ final class People {
 		if (s.level(Settlement.MAIN) < 4 || !level.isLoaded(s.heart()) || !find(level, s, ARCHITECT).isEmpty()) {
 			return;
 		}
-		Villager v = spawn(level, s, ARCHITECT, "Architect", s.heart().offset(Template_rotate(s, 0, -2)));
+		KingdomNpc v = spawn(level, s, ARCHITECT, "Architect", s.heart().offset(Template_rotate(s, 0, -2)));
 		if (v != null) {
 			v.setNoAi(true);
 		}
@@ -137,7 +142,7 @@ final class People {
 
 	/** Keeps the builders near the block being placed (they hop over when they wander off). */
 	static void herdWorkers(ServerLevel level, Settlement s, BlockPos target) {
-		for (Villager v : find(level, s, WORKER)) {
+		for (KingdomNpc v : find(level, s, WORKER)) {
 			if (v.distanceToSqr(Vec3.atCenterOf(target)) > 8 * 8) {
 				BlockPos spot = target.offset(level.getRandom().nextInt(5) - 2, 0, level.getRandom().nextInt(5) - 2);
 				for (int up = 0; up < 16 && !(level.getBlockState(spot).isAir() && level.getBlockState(spot.above()).isAir()); up++) {
@@ -146,13 +151,16 @@ final class People {
 				v.teleportTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5);
 			} else {
 				v.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.6);
+				if (v.distanceToSqr(Vec3.atCenterOf(target)) < 5 * 5) {
+					v.swingArm(); // hammering away
+				}
 			}
 			v.getLookControl().setLookAt(Vec3.atCenterOf(target));
 		}
 	}
 
 	static void removeWorkers(ServerLevel level, Settlement s) {
-		for (Villager v : find(level, s, WORKER)) {
+		for (KingdomNpc v : find(level, s, WORKER)) {
 			level.sendParticles(ParticleTypes.POOF, v.getX(), v.getY() + 1, v.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
 			v.discard();
 		}

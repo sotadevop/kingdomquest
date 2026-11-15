@@ -59,7 +59,7 @@ final class Drawbridge {
 			if (m == null) {
 				continue;
 			}
-			BlockState plank = Blocks.SPRUCE_PLANKS.defaultBlockState();
+			BlockState plank = Blocks.CRIMSON_PLANKS.defaultBlockState();
 			BlockState air = Blocks.AIR.defaultBlockState();
 			boolean raising = m[1] == 1;
 			// row k (k = 0 near the gate .. 2 far out) lies over the moat at z = GZ+3+k and stands up at height k

@@ -39,7 +39,7 @@ final class KingdomCommand {
 								ids.add(style + "/farm_1");
 								ids.add(style + "/farm_2");
 								ids.add(style + "/farm_3");
-								for (String n : List.of("hamlet_2", "hamlet_3", "village_1", "town_1", "castle_1", "castle_2", "cellar_1", "cellar_2", "gate_1", "gate_2", "gate_3", "gate_4", "wall_1", "wall_2", "wall_3", "wall_4", "smith_1", "smith_2", "wood_1", "wood_2", "road_1", "road_2", "road_3", "road_4", "lamp_1", "lamp_2", "lamp_3", "library_1", "library_2", "brewery_1", "brewery_2", "stables_1", "stables_2", "barracks_1", "barracks_2")) {
+								for (String n : List.of("hamlet_2", "hamlet_3", "village_1", "town_1", "castle_1", "castle_2", "cellar_1", "cellar_2", "gate_1", "gate_2", "gate_3", "gate_4", "wall_1", "wall_2", "wall_3", "wall_4", "smith_1", "smith_2", "wood_1", "wood_2", "road_1", "road_2", "road_3", "road_4", "lamp_1", "lamp_2", "lamp_3", "library_1", "library_2", "brewery_1", "brewery_2", "stables_1", "stables_2", "barracks_1", "barracks_2", "guild_1", "guild_2", "guild_3", "gate_5", "cellar_3")) {
 									ids.add(style + "/" + n);
 								}
 							}

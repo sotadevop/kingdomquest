@@ -868,6 +868,7 @@ SEGMENTS = [
     ("brewery", [("brewery", 1)]),
     ("stables", [("stables", 1)]),
     ("barracks", [("barracks", 1)]),
+    ("guild", [("guild", 1)]),
 ]
 SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
 
@@ -909,6 +910,8 @@ def road_cells():
     strip("stables", range(35, 48), range(18, 20), core_z=18)
     strip("stables", [47], range(20, 26), core_x=47)
     strip("barracks", range(9, 17), range(31, 33), core_z=31)
+    strip("guild", range(-17, -13), range(12, 14), core_z=12)
+    strip("guild", [-16], range(-7, 12), core_x=-16)
     for x in (1, 2, 3):
         for z in (12, 13, 14):
             cells.pop((x, z), None)                                      # the well
@@ -1323,14 +1326,14 @@ def gate(style, level):
         for x, z in ring:
             bridge = abs(x - gx) <= 1 and z > z1
             # water two blocks below the ground: too high to climb out without the bridge
-            b.put(x, -1, z, w + "_planks" if bridge else "air")
+            b.put(x, -1, z, "crimson_planks" if bridge else "air")  # crimson wood doesn't burn (lava trap)
             b.put(x, -2, z, "air")
             b.put(x, -3, z, "water", level="0")
             b.put(x, -4, z, "water", level="0")
             b.put(x, -5, z, "dirt")
         for x in range(gx - 1, gx + 2):
             for z in range(z1 + 2, z1 + 7):
-                b.put(x, -1, z, w + "_planks")
+                b.put(x, -1, z, "crimson_planks")
         # the lever inside the gatehouse raises and lowers the drawbridge (handled by the mod)
         b.put(gx + 2, 1, z1 - 2, "lever", face="wall", facing="north", powered="false")
         for x in (gx - 2, gx + 2):
@@ -1548,6 +1551,88 @@ def barracks(style, level):
     return b.b
 
 
+GUILD = (-21, -17, -11, -9)  # door south
+GUILD_STORE = (-19, 0, -16)
+
+
+def guild_hall(style, level):
+    """Guild hall of the three allies. 1 swordfighter: hall with a training yard of dummies;
+    2 archer: shooting range with targets; 3 mage: a small tower room with a brewing stand and enchanting books."""
+    m = mats(style)
+    b = B()
+    x0, z0, x1, z1 = GUILD
+    stone_hut(b, x0, z0, x1, z1, 4, m["stone"], m["corner"], "spruce_planks", "s", m["roof"], m["slab"])
+    cx = (x0 + x1) // 2
+    b.put(*GUILD_STORE, "barrel", facing="up", open="false")
+    b.put(cx, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    for x in (x0 + 2, x1 - 2):
+        b.put(x, 4, z1 + 1, "{color}_wall_banner", facing="south")
+    # training yard west of the hall: straw dummies (fence + hay + carved pumpkin)
+    for i, z in enumerate((z0 + 1, z0 + 4, z0 + 7)):
+        dx = x0 - 4
+        b.put(dx, 0, z, STYLES[style]["wood"] + "_fence")
+        b.put(dx, 1, z, "hay_block", axis="y")
+        b.put(dx, 2, z, "carved_pumpkin", facing="east")
+    if level >= 2:
+        # shooting range east: targets on posts
+        for z in (z0 + 1, z0 + 4, z0 + 7):
+            b.put(x1 + 6, 0, z, "hay_block", axis="y")
+            b.put(x1 + 6, 1, z, "target", power="0")
+        b.put(x1 - 1, 1, z0 + 1, "fletching_table")
+    if level >= 3:
+        # mage room: brewing stand, enchanting books, amethyst
+        b.put(x0 + 1, 1, z0 + 1, "brewing_stand", has_bottle_0="false", has_bottle_1="false", has_bottle_2="false")
+        b.put(x0 + 2, 1, z0 + 1, "bookshelf")
+        b.put(x0 + 3, 1, z0 + 1, "bookshelf")
+        b.put(x0 + 1, 1, z0 + 2, "amethyst_cluster", facing="up", waterlogged="false")
+        b.put(x0 + 1, 3, z0 + 3, "{color}_wall_banner", facing="east")
+    return b.b
+
+
+def lava_trap(style, level):
+    """Gate level 5: a murder hole above the gate. Three pistons over a stone channel on the gatehouse roof and a
+    lever beside them: pulled, the mod pours lava over the front of the gate for eight seconds."""
+    b = B()
+    for block in gate(style, 4).items():
+        b.b[block[0]] = block[1]
+    x0, x1, z0, z1 = WALL
+    gx = HEART[0]
+    for x in range(gx - 1, gx + 2):
+        b.put(x, 8, z1 + 1, "air")
+        b.put(x, 9, z1 + 1, "piston", facing="down", extended="false")
+        b.put(x, 10, z1 + 1, "stone_bricks" if style != "frozen" else "cobblestone")
+    b.put(gx, 8, z1 - 1, "lever", face="floor", facing="south", powered="false")
+    return b.b
+
+
+def secret_vault(style, level):
+    """Cellar level 3: a hidden vault behind the cellar's west wall. A button on the wall slides the 2x2 secret
+    door open for five seconds (the mod moves it, with piston sounds)."""
+    b = B()
+    for k, v in cellar(style, 2).items():
+        b.b[k] = v
+    stone = MAT[style]["stone"]
+    x0, z0, x1, z1 = CELLAR
+    top, bottom = -2, -6
+    vx0, vx1 = x0 - 7, x0 - 2
+    for x in range(vx0 - 1, vx1 + 1):
+        for z in range(z0 - 1, z1 + 2):
+            edge = x == vx0 - 1 or z in (z0 - 1, z1 + 1)
+            for y in range(bottom, top + 1):
+                b.put(x, y, z, stone if edge or y in (bottom, top) else "air")
+    for z in range(z0, z1 + 1, 2):
+        b.put(vx0, bottom + 1, z, "chest", facing="east", type="single", waterlogged="false")
+    b.put(vx0 + 2, bottom + 1, z1, "gold_block")
+    b.put(vx0 + 3, bottom + 1, z1, "{color}_carpet")
+    b.put((vx0 + vx1) // 2, top - 1, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    # the secret door: two blocks wide, two high, part of the cellar wall (x0 - 1); the button sits next to it
+    for z in (1, 2):
+        for y in (bottom + 1, bottom + 2):
+            b.put(x0 - 1, y, z, stone)
+    b.put(x0, bottom + 2, 3, "stone_button", face="wall", facing="east", powered="false")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -1619,6 +1704,10 @@ if __name__ == "__main__":
             jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None))
         for level in (1, 2, 3, 4):
             jobs.append((style, f"gate_{level}", gate(style, level), 120 + 60 * level, None, None, 6))
+        for level in (1, 2, 3):
+            jobs.append((style, f"guild_{level}", guild_hall(style, level), 200, GUILD_STORE, None))
+        jobs.append((style, "gate_5", lava_trap(style, 5), 240, None, None))
+        jobs.append((style, "cellar_3", secret_vault(style, 3), 200, CELLAR_STORE, None))
         for level in (1, 2):
             jobs.append((style, f"barracks_{level}", barracks(style, level), 200, BARRACKS_STORE, None))
             jobs.append((style, f"library_{level}", library(style, level), 180, LIB_STORE, None))

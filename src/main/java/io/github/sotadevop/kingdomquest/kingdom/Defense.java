@@ -12,8 +12,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
@@ -22,6 +20,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -29,8 +28,8 @@ import java.util.UUID;
  * <ul>
  * <li>Barracks: iron golem guards (2 at level 1, 4 at level 2) stay around the settlement and come back if they
  * die (one per minute).</li>
- * <li>Attacks: from the Castle on, every third day an army of pillagers and vindicators marches on the gate. The
- * Warchief warns 30 seconds before; when every attacker is beaten the kingdom gets a reward.</li>
+ * <li>Attacks: from the Castle on, every fifth day (only while the lord is home) an army of pillagers and vindicators marches on the gate. The
+ * Warchief warns 30 seconds before. Raiders break buildings; the Architect repairs them.</li>
  * </ul>
  */
 final class Defense {
@@ -87,21 +86,38 @@ final class Defense {
 		}
 	}
 
-	/** Every 5 seconds: warn, send the army, steer it to the gate, reward the defenders. */
+	/** Days between attacks. */
+	private static final int EVERY = 5;
+	/** How long the lord must be home before an overdue attack comes (1.5 minutes). */
+	private static final int HOME_TICKS = 1800;
+	private static final Map<UUID, Long> HOME_SINCE = new HashMap<>();
+
+	/**
+	 * Every 5 seconds. Attacks only happen while the lord is at home (within 100 blocks): one is due every 5 game
+	 * days; if he was away, it is overdue and comes after he has been back for a while. The army can wreck the
+	 * buildings (never the heart); the kingdom can't be lost, but it needs repairs afterwards.
+	 */
 	static void attacks(MinecraftServer server, Settlement s) {
 		ServerLevel level = server.overworld();
 		if (s.level(Settlement.MAIN) < 9 || s.level(OFF) == 1 || !level.isLoaded(s.heart())) {
 			return;
 		}
 		long time = level.getGameTime();
-		long day = time / 24000L; // game days since the world started (26.3 has no plain day time getter)
+		int day = (int) (time / 24000L);
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-		Long arrive = PENDING.get(s.id());
-		if (arrive == null && s.level(NEXT) == 0) {
-			Settlements.putState(server, s.withLevel(NEXT, (int) day + 3));
+		boolean home = owner != null && owner.level() == level && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 100 * 100;
+		if (home) {
+			HOME_SINCE.putIfAbsent(s.id(), time);
+		} else {
+			HOME_SINCE.remove(s.id());
+		}
+		if (s.level(NEXT) == 0) {
+			Settlements.putState(server, s.withLevel(NEXT, day + EVERY));
 			return;
 		}
-		if (arrive == null && day >= s.level(NEXT)) {
+		Long arrive = PENDING.get(s.id());
+		List<Mob> raiders = find(level, s, RAIDER, 160);
+		if (arrive == null && s.level("attack_running") == 0 && day >= s.level(NEXT) && home && time - HOME_SINCE.get(s.id()) >= HOME_TICKS) {
 			start(server, s, owner);
 			return;
 		}
@@ -110,30 +126,46 @@ final class Defense {
 			int castle = Math.max(1, s.level(Settlement.MAIN) - 8);
 			int size = 4 + 3 * castle;
 			for (int i = 0; i < size; i++) {
-				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 7 - 6 + i % 7 * 2, 40 + 40 + i / 7 * 2));
+				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, 84 + i / 7 * 2));
 			}
 			if (owner != null) {
 				People.say(owner, "Warchief", "They're here! " + size + " raiders at the gate. Man the walls!");
 			}
 			return;
 		}
-		List<Mob> raiders = find(level, s, RAIDER, 160);
 		if (arrive == null && raiders.isEmpty() && s.level("attack_running") == 1) {
-			Settlements.putState(server, s.withLevel("attack_running", 0).withLevel(NEXT, (int) day + 3));
+			Settlements.putState(server, s.withLevel("attack_running", 0).withLevel(NEXT, day + EVERY));
 			if (owner != null) {
-				People.say(owner, "Warchief", "Victory! The army is beaten. The people send you their thanks.");
-				ItemStack reward = new ItemStack(Items.EMERALD, 8 + 4 * Math.max(1, s.level(Settlement.MAIN) - 8));
-				if (!owner.getInventory().add(reward)) {
-					level.addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(level, owner.getX(), owner.getY(), owner.getZ(), reward));
-				}
+				People.say(owner, "Warchief", "Victory! The army is beaten. Have the Architect repair what they broke.");
 			}
 			return;
 		}
 		BlockPos gate = at(s, 7, 46);
+		Set<Long> built = new java.util.HashSet<>();
+		s.built().values().forEach(built::addAll);
 		for (Mob m : raiders) {
 			if (m.getTarget() == null) {
 				m.getNavigation().moveTo(gate.getX() + 0.5, s.heart().getY(), gate.getZ() + 0.5, 1.0);
 			}
+			wreck(level, s, m, built);
+		}
+	}
+
+	/** A raider breaks up to two of the settlement's blocks within 4 blocks of him (not the heart, not the ground). */
+	private static void wreck(ServerLevel level, Settlement s, Mob m, Set<Long> built) {
+		BlockPos c = m.blockPosition();
+		int broken = 0;
+		for (BlockPos p : BlockPos.randomInCube(level.getRandom(), 40, c.above(1), 4)) {
+			if (broken >= 2) {
+				return;
+			}
+			if (p.getY() < s.heart().getY() || p.equals(s.heart()) || !built.contains(p.asLong()) || level.getBlockState(p).isAir()) {
+				continue;
+			}
+			level.levelEvent(2001, p, net.minecraft.world.level.block.Block.getId(level.getBlockState(p)));
+			level.setBlock(p, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
+					net.minecraft.world.level.block.Block.UPDATE_ALL | net.minecraft.world.level.block.Block.UPDATE_SUPPRESS_DROPS);
+			broken++;
 		}
 	}
 
