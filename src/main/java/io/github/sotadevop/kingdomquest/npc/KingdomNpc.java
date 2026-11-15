@@ -190,8 +190,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 	/** Arm swing seen by everyone nearby (builders at work, attacks, spells). */
 	public void swingArm() {
-		this.swing(InteractionHand.MAIN_HAND, this.getMainHandItem().getOrDefault(net.minecraft.core.component.DataComponents.SWING_ANIMATION,
-				net.minecraft.world.item.component.SwingAnimation.DEFAULT));
+		this.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT);
 	}
 
 	@Override
