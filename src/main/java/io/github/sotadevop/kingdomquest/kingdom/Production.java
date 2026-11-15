@@ -38,7 +38,7 @@ public final class Production {
 			// pasture: eggs, wool and leather; meat comes raw, or cooked once the smokehouse stands
 			boolean smoked = farm >= 3;
 			harvest.add(new ItemStack(Items.EGG, 3));
-			harvest.add(new ItemStack(Items.WHITE_WOOL, 2));
+			harvest.add(new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.withDefaultNamespace("white_wool")), 2));
 			harvest.add(new ItemStack(Items.LEATHER, 1));
 			harvest.add(new ItemStack(smoked ? Items.COOKED_BEEF : Items.BEEF, 2));
 			harvest.add(new ItemStack(smoked ? Items.COOKED_MUTTON : Items.MUTTON, 2));

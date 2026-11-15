@@ -60,7 +60,7 @@ public final class Progression {
 					new Step(FARM, "farm_2", 2, "kingdomquest.addon.farm_2", 4, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed",
 							List.of(tag(ItemTags.LOGS, "logs", 24), item(Items.WHEAT, 16), item(Items.LEAD, 2))),
 					new Step(FARM, "farm_3", 3, "kingdomquest.addon.farm_3", 4, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame",
-							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.COBBLESTONE, 32), item(Items.SMOKER, 1), item(Items.CHAIN, 2)))));
+							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.COBBLESTONE, 32), item(Items.SMOKER, 1), item(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("iron_chain")), 2)))));
 
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, FARM);

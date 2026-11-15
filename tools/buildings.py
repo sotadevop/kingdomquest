@@ -405,7 +405,7 @@ def smokehouse(b, s):
     b.put(x0 + 1, 1, z1 - 1, "barrel", facing="up", open="false")
     b.put(x0 + 3, 1, z1 - 1, "barrel", facing="up", open="false")
     for x in (x0 + 1, x0 + 3):
-        b.put(x, 2, z0 + 1, "chain", axis="y", waterlogged="false")
+        b.put(x, 2, z0 + 1, "iron_chain", axis="y", waterlogged="false")
 
 
 def farm(style, level):
