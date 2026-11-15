@@ -195,7 +195,7 @@ public final class Settlements {
 	static void upgrade(ServerPlayer player, BlockPos heart) {
 		MinecraftServer server = player.level().getServer();
 		Settlement s = byHeart(server, heart);
-		if (s == null || !s.owner().equals(player.getUUID()) || !s.job().isEmpty() || player.distanceToSqr(heart.getCenter()) > 64 * 64) {
+		if (s == null || !s.owner().equals(player.getUUID()) || !s.job().isEmpty() || player.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(heart)) > 64 * 64) {
 			return;
 		}
 		Progression.Step step = Progression.next(s.level());
@@ -283,7 +283,7 @@ public final class Settlements {
 		}
 		put(server, s.withJob(s.job(), index, s.level()).withBuilt(List.copyOf(built)));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(s.heart().getCenter()) < 48 * 48) {
+		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(s.heart())) < 48 * 48) {
 			owner.sendOverlayMessage(Component.translatable("kingdomquest.build.progress", s.name(), index * 100 / list.size()));
 		}
 	}
