@@ -24,7 +24,6 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
-import net.minecraft.world.entity.ai.goal.RangedBowAttackGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Enemy;
@@ -135,7 +134,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		}
 		this.roleGoals = true;
 		if (role().equals("archer")) {
-			this.goalSelector.addGoal(2, new RangedBowAttackGoal<>(this, 1.0, 20, 16f));
+			this.goalSelector.addGoal(2, new ShootGoal(this));
 		} else if (role().equals("sword")) {
 			this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.2, true));
 		}
@@ -164,7 +163,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		if (p != null && p.getHealth() < p.getMaxHealth() && p.distanceToSqr(this) < 16 * 16) {
 			p.heal(4);
 			level.sendParticles(ParticleTypes.HEART, p.getX(), p.getY() + 2, p.getZ(), 3, 0.3, 0.3, 0.3, 0);
-			this.swing(InteractionHand.MAIN_HAND);
+			this.swingArm();
 		}
 		LivingEntity target = this.getTarget();
 		if (target != null && target.isAlive() && target.distanceToSqr(this) < 14 * 14) {
@@ -172,7 +171,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 				level.addFreshEntity(new net.minecraft.world.entity.projectile.EvokerFangs(level, target.getX() + (i - 1) * 0.8, target.getY(),
 						target.getZ(), this.getYRot(), i * 3, this));
 			}
-			this.swing(InteractionHand.MAIN_HAND);
+			this.swingArm();
 		}
 	}
 
@@ -186,7 +185,15 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		arrow.shoot(dx, dy + Math.sqrt(dx * dx + dz * dz) * 0.2, dz, 1.6f, 4f);
 		arrow.pickup = net.minecraft.world.entity.projectile.arrow.AbstractArrow.Pickup.DISALLOWED;
 		this.level().addFreshEntity(arrow);
-		this.swing(InteractionHand.MAIN_HAND);
+		this.swingArm();
+	}
+
+	/** Arm swing seen by everyone nearby (builders at work, attacks, spells). */
+	public void swingArm() {
+		if (this.level() instanceof ServerLevel level) {
+			level.getChunkSource().broadcastAndSend(this, new net.minecraft.network.protocol.game.ClientboundAnimatePacket(this,
+					net.minecraft.network.protocol.game.ClientboundAnimatePacket.SWING_MAIN_HAND));
+		}
 	}
 
 	@Override
@@ -211,6 +218,43 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		this.entityData.set(ROLE, in.getStringOr("Role", ""));
 		String lord = in.getStringOr("Lord", "");
 		this.lord = lord.isEmpty() ? null : UUID.fromString(lord);
+	}
+
+	/** The archer keeps his distance and shoots once a second at targets he can see within 16 blocks. */
+	static final class ShootGoal extends Goal {
+		private final KingdomNpc npc;
+		private int cooldown;
+
+		ShootGoal(KingdomNpc npc) {
+			this.npc = npc;
+			this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+		}
+
+		@Override
+		public boolean canUse() {
+			LivingEntity t = this.npc.getTarget();
+			return t != null && t.isAlive();
+		}
+
+		@Override
+		public void tick() {
+			LivingEntity t = this.npc.getTarget();
+			if (t == null) {
+				return;
+			}
+			this.npc.getLookControl().setLookAt(t, 30, 30);
+			double d = this.npc.distanceToSqr(t);
+			boolean sees = this.npc.getSensing().hasLineOfSight(t);
+			if (d > 14 * 14 || !sees) {
+				this.npc.getNavigation().moveTo(t, 1.0);
+			} else {
+				this.npc.getNavigation().stop();
+			}
+			if (--this.cooldown <= 0 && sees && d < 16 * 16) {
+				this.cooldown = 20;
+				this.npc.performRangedAttack(t, 1f);
+			}
+		}
 	}
 
 	/** Allies stay with their lord: walk to him when he is 6+ blocks away, appear next to him beyond 24. */
