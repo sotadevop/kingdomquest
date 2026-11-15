@@ -139,8 +139,9 @@ public final class SiteWork {
 	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface) {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
-		int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
 		int floor = heart.getY() + c.floor();
+		// the heightmap alone missed blocks (CI site test); scan at least 64 blocks above the floor as well
+		int top = Math.min(level.getMaxY(), Math.max(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), floor + 64));
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int y = top; y >= floor; y--) {
 			pos.set(x, y, z);
