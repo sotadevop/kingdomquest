@@ -26,6 +26,8 @@ final class Workers {
 	}
 
 	static final List<Spec> SPECS = List.of(
+			new Spec("main", 4, "Steward", "writable_book", 9, 8, ""),
+			new Spec("main", 9, "Warchief", "iron_sword", 12, 44, ""),
 			new Spec("farm", 1, "Farmer", "iron_hoe", 26, 11, "The fields are growing well. The harvest goes into the barrel by the gate."),
 			new Spec("farm", 2, "Shepherd", "shears", 39, 11, "The sheep are fat and happy. Wool, eggs and meat for the storehouse."),
 			new Spec("stables", 1, "Stable Hand", "lead", 47, 25, "The horses are brushed and fed, my lord."),
@@ -117,6 +119,18 @@ final class Workers {
 			return false;
 		}
 		String name = role.substring(role.lastIndexOf('|') + 1);
+		if (name.equals("Steward") || name.equals("Warchief")) {
+			Settlement s = Settlements.nearestOwned(player);
+			if (s == null) {
+				return true;
+			}
+			if (name.equals("Steward")) {
+				Settlements.stewardAdvice(player, s);
+			} else {
+				People.say(player, name, Defense.status(player.level().getServer(), s));
+			}
+			return true;
+		}
 		for (Spec spec : SPECS) {
 			if (spec.name().equals(name)) {
 				People.say(player, name, spec.line());

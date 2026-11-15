@@ -206,5 +206,18 @@
 	"kingdomquest.track.smith": "Blacksmith",
 	"kingdomquest.track.wood": "Woodcutter",
 	"kingdomquest.menu.locked": "Locked",
-	"kingdomquest.menu.missing": "Missing materials"
+	"kingdomquest.menu.missing": "Missing materials",
+	"kingdomquest.guild.guild_4": "Guild - Swordmaster (diamond gear)",
+	"kingdomquest.guild.guild_5": "Guild - Marksman (crossbow)",
+	"kingdomquest.guild.guild_6": "Guild - Archmage (faster, stronger healing)",
+	"kingdomquest.addon.barracks_3": "Barracks - Bunk Floor (6 guards, iron gear)",
+	"kingdomquest.trade.tavern_3": "Tavern - Upper Floor",
+	"kingdomquest.trade.market_3": "Market Hall - Warehouse Floor",
+	"kingdomquest.req.crossbow": "Shoot a crossbow (Ol' Betsy)",
+	"kingdomquest.req.potions": "Brew every potion (A Furious Cocktail)",
+	"kingdomquest.req.hero": "Become Hero of the Village",
+	"kingdomquest.req.bred_all": "Breed every animal (Two by Two)",
+	"kingdomquest.req.trade_high": "Trade at world height (Star Trader)",
+	"kingdomquest.name.title": "Name your new friend",
+	"kingdomquest.name.done": "Done"
 }

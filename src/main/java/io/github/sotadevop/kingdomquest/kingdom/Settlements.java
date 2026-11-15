@@ -94,6 +94,10 @@ public final class Settlements {
 		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
 		People.register();
 		Guild.register();
+		Companion.register();
+		PayloadTypeRegistry.clientboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(NamePayload.TYPE, (payload, context) -> rename(context.player(), payload));
 		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
@@ -237,7 +241,7 @@ public final class Settlements {
 		String style = Style.forBiome(level.getBiome(heart).getRegisteredName());
 		Rotation rotation = rotationFor(player.getDirection());
 		Settlement s = new Settlement(UUID.randomUUID(), player.getUUID(), data.name(), data.color(), data.logo(), style, heart,
-				rotation.ordinal(), Map.of(Settlement.MAIN, 1), style + "/tent_1", Settlement.MAIN, 0, Map.of());
+				rotation.ordinal(), Map.of(Settlement.MAIN, 1), style + "/tent_1", Settlement.MAIN, 0, Map.of(), Map.of());
 		Template t = Template.get(s.job());
 		if (t == null) {
 			player.sendOverlayMessage(Component.literal("Missing building " + s.job()));
@@ -422,6 +426,39 @@ public final class Settlements {
 				People.say(owner, "Architect", s.name() + " is as good as new.");
 			}
 		}
+	}
+
+	/** The Steward tells the lord which upgrades are open and what they still need. */
+	static void stewardAdvice(ServerPlayer player, Settlement s) {
+		List<String> lines = new ArrayList<>();
+		for (String track : Progression.ORDER) {
+			Progression.Step next = Progression.next(s, track);
+			if (next == null || lines.size() >= 3) {
+				continue;
+			}
+			String title = Component.translatable(next.titleKey()).getString();
+			if (!Progression.requirementMet(player, next)) {
+				lines.add(title + ": first " + Component.translatable(next.requirementKey()).getString().toLowerCase(java.util.Locale.ROOT) + ".");
+			} else if (!Progression.canPay(player, next)) {
+				lines.add(title + ": bring " + Progression.costText(next) + ".");
+			} else {
+				lines.add(title + ": ready to build!");
+			}
+		}
+		People.say(player, "Steward", lines.isEmpty() ? "Everything is built, my lord. The realm is complete." : "Here is what the realm needs next:");
+		lines.forEach(l -> player.sendSystemMessage(Component.literal(" - " + l)));
+	}
+
+	/** The lord chose a name (pets). */
+	static void rename(ServerPlayer player, NamePayload p) {
+		MinecraftServer srv = player.level().getServer();
+		Settlement s = byHeart(srv, p.heart());
+		String name = p.name().strip();
+		if (s == null || !s.owner().equals(player.getUUID()) || name.isEmpty() || name.length() > 24 || !p.key().startsWith("pet_")) {
+			return;
+		}
+		put(srv, s.withName(p.key(), name));
+		Collections.rename(srv, s, p.key().substring(4), name);
 	}
 
 	/** Swaps every kingdom-colored block (banners, beds, carpets, wool) of all built levels to a new color. */
@@ -725,6 +762,7 @@ public final class Settlements {
 				Collections.pets(server, s);
 				Collections.trophies(server, s);
 				Collections.lair(server, s);
+				Companion.tick(server);
 			}
 			if (server.getTickCount() % 100 == 0) {
 				Defense.attacks(server, s);
@@ -814,6 +852,13 @@ public final class Settlements {
 			nowBuilt.addAll(built);
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			Production.armTraps(level, done, list);
+			if (Progression.KENNEL.equals(s.jobTrack())) {
+				ServerPlayer o = server.getPlayerList().getPlayer(s.owner());
+				String kind = Collections.petKind(done.level(Progression.KENNEL));
+				if (o != null && kind != null) {
+					ServerPlayNetworking.send(o, new NamePayload(s.heart(), "pet_" + kind, Collections.defaultName(kind)));
+				}
+			}
 			if (Progression.DOCK.equals(s.jobTrack()) && done.level(Progression.DOCK) == 1) {
 				RoadLink.connectTo(server, done, dockPoint(done, 0, 0, -1), "the dock");
 			}

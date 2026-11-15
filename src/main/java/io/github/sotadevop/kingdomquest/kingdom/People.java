@@ -51,7 +51,18 @@ final class People {
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !role(entity).startsWith(ARCHITECT) && !role(entity).startsWith(WORKER)
 				&& !role(entity).startsWith("pet|"));
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (!(player instanceof ServerPlayer sp) || !(entity instanceof KingdomNpc npc) || !Guild.isAlly(npc) && role(entity).isEmpty()) {
+			if (!(player instanceof ServerPlayer sp) || !(entity instanceof KingdomNpc npc)) {
+				return InteractionResult.PASS;
+			}
+			if (npc.role().equals("companion")) {
+				say(sp, "Aldric", sp.getUUID().equals(npc.lord()) ? "Right behind you. I'll keep an eye out for anything useful." : "I travel with someone else.");
+				return InteractionResult.SUCCESS;
+			}
+			if (npc.role().equals("guard")) {
+				say(sp, "Guard", "All quiet on my watch, my lord.");
+				return InteractionResult.SUCCESS;
+			}
+			if (!Guild.isAlly(npc) && role(entity).isEmpty()) {
 				return InteractionResult.PASS;
 			}
 			if (Workers.talk(sp, npc)) {

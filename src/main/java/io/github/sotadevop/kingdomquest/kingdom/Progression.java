@@ -167,7 +167,9 @@ public final class Progression {
 					new Step(BARRACKS, "barracks_1", 1, "kingdomquest.addon.barracks_1", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
 							List.of(item(Items.STONE_BRICKS, 96), item(Items.IRON_BLOCK, 8), item(Items.CARVED_PUMPKIN, 2))),
 					new Step(BARRACKS, "barracks_2", 2, "kingdomquest.addon.barracks_2", 9, adv("adventure/voluntary_exile"), "kingdomquest.req.raid_captain",
-							List.of(item(Items.STONE_BRICKS, 64), item(Items.IRON_BLOCK, 8), item(Items.CARVED_PUMPKIN, 2)))),
+							List.of(item(Items.STONE_BRICKS, 64), item(Items.IRON_INGOT, 16), item(Items.SHIELD, 4))),
+					new Step(BARRACKS, "barracks_3", 3, "kingdomquest.addon.barracks_3", 10, adv("adventure/hero_of_the_village"), "kingdomquest.req.hero",
+							List.of(item(Items.STONE_BRICKS, 96), item(Items.IRON_BLOCK, 4), tag(ItemTags.LOGS, "logs", 32)))),
 			STABLES, List.of(
 					new Step(STABLES, "stables_1", 1, "kingdomquest.addon.stables_1", 5, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame",
 							List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.HAY_BLOCK, 6), item(Items.LEAD, 2))),
@@ -192,7 +194,13 @@ public final class Progression {
 			new Step(GUILD, "guild_2", 2, "kingdomquest.guild.guild_2", 9, adv("adventure/shoot_arrow"), "kingdomquest.req.arrow",
 					List.of(item(Items.BOW, 1), item(Items.ARROW, 64), item(Items.TARGET, 3))),
 			new Step(GUILD, "guild_3", 3, "kingdomquest.guild.guild_3", 10, adv("nether/brew_potion"), "kingdomquest.req.brew",
-					List.of(item(Items.BREWING_STAND, 1), item(Items.BOOKSHELF, 2), item(Items.AMETHYST_SHARD, 8))));
+					List.of(item(Items.BREWING_STAND, 1), item(Items.BOOKSHELF, 2), item(Items.AMETHYST_SHARD, 8))),
+			new Step(GUILD, "guild_4", 4, "kingdomquest.guild.guild_4", 9, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+					List.of(item(Items.DIAMOND, 8))),
+			new Step(GUILD, "guild_5", 5, "kingdomquest.guild.guild_5", 9, adv("adventure/ol_betsy"), "kingdomquest.req.crossbow",
+					List.of(item(Items.CROSSBOW, 1), item(Items.CHAINMAIL_HELMET, 1))),
+			new Step(GUILD, "guild_6", 6, "kingdomquest.guild.guild_6", 10, adv("nether/all_potions"), "kingdomquest.req.potions",
+					List.of(item(Items.AMETHYST_SHARD, 16), item(Items.GLOWSTONE_DUST, 16))));
 
 	/** Gate: its own track at the wall's gate opening. Levels 2-4 need stone walls. */
 	public static final String GATE = "gate";
@@ -214,10 +222,14 @@ public final class Progression {
 	public static final Map<String, List<Step>> TRADES = Map.ofEntries(
 				Map.entry("tavern", List.of(
 					new Step("tavern", "tavern_1", 1, "kingdomquest.trade.tavern_1", 5, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.BARREL, 4), item(Items.SMOKER, 1))),
-					new Step("tavern", "tavern_2", 2, "kingdomquest.trade.tavern_2", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(item(Items.LANTERN, 4), item(Items.CAKE, 1))))),
+					new Step("tavern", "tavern_2", 2, "kingdomquest.trade.tavern_2", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(item(Items.LANTERN, 4), item(Items.CAKE, 1))),
+					new Step("tavern", "tavern_3", 3, "kingdomquest.trade.tavern_3", 9, adv("husbandry/bred_all_animals"), "kingdomquest.req.bred_all",
+							List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.WHITE_BED, 3), item(Items.LADDER, 8))))),
 				Map.entry("market", List.of(
 					new Step("market", "market_1", 1, "kingdomquest.trade.market_1", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.EMERALD, 8), item(Items.LOOM, 1))),
-					new Step("market", "market_2", 2, "kingdomquest.trade.market_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.EMERALD, 16), item(Items.LANTERN, 4))))),
+					new Step("market", "market_2", 2, "kingdomquest.trade.market_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.EMERALD, 16), item(Items.LANTERN, 4))),
+					new Step("market", "market_3", 3, "kingdomquest.trade.market_3", 9, adv("adventure/trade_at_world_height"), "kingdomquest.req.trade_high",
+							List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.BARREL, 6), item(Items.EMERALD, 24))))),
 				Map.entry("cartographer", List.of(
 					new Step("cartographer", "cartographer_1", 1, "kingdomquest.trade.cartographer_1", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(item(Items.CARTOGRAPHY_TABLE, 1), item(Items.COMPASS, 1), item(Items.PAPER, 16))),
 					new Step("cartographer", "cartographer_2", 2, "kingdomquest.trade.cartographer_2", 8, adv("story/follow_ender_eye"), "kingdomquest.req.eye", List.of(item(Items.SPYGLASS, 1), item(Items.MAP, 2))))),

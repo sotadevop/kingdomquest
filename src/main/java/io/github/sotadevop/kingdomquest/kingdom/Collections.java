@@ -52,6 +52,23 @@ final class Collections {
 		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, by, bz - 10), Rotation.values()[s.rotation()]));
 	}
 
+	static String petKind(int kennelLevel) {
+		return kennelLevel >= 1 && kennelLevel <= PETS.size() ? PETS.get(kennelLevel - 1).type() : null;
+	}
+
+	static String defaultName(String kind) {
+		return PETS.stream().filter(p -> p.type().equals(kind)).map(Pet::name).findFirst().orElse("Buddy");
+	}
+
+	/** Gives a living pet its new name. */
+	static void rename(MinecraftServer server, Settlement s, String kind, String name) {
+		String tag = "pet|" + s.id() + "|" + kind;
+		EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace(kind));
+		for (ServerLevel level : server.getAllLevels()) {
+			level.getEntities(type, e -> tag.equals(e.getAttached(People.ROLE))).forEach(e -> e.setCustomName(Component.literal(name)));
+		}
+	}
+
 	/** Every minute: unlocked pets that are missing come home to the kennel, tamed to the lord. */
 	static void pets(MinecraftServer server, Settlement s) {
 		int unlocked = Math.min(PETS.size(), s.level(Progression.KENNEL));
@@ -79,7 +96,8 @@ final class Collections {
 						spot.getX(), spot.getZ()), spot.getZ());
 				animal.snapTo(Vec3.atBottomCenterOf(spot), 0, 0);
 				animal.tame(owner);
-				animal.setCustomName(Component.literal(pet.name()));
+				animal.setCustomName(Component.literal(s.names().getOrDefault("pet_" + pet.type(), pet.name())));
+				animal.setOrderedToSit(true); // waits at its own spot in the kennel until called
 				animal.setAttached(People.ROLE, tag);
 				animal.setPersistenceRequired();
 				home.addFreshEntity(animal);

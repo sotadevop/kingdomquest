@@ -1561,7 +1561,13 @@ def barracks(style, level):
     m = mats(style)
     b = B()
     x0, z0, x1, z1 = BARRACKS
-    stone_hut(b, x0, z0, x1, z1, 4, m["stone"], m["corner"], "spruce_planks", "n", m["roof"], m["slab"])
+    stone_hut(b, x0, z0, x1, z1, 8 if level >= 3 else 4, m["stone"], m["corner"], "spruce_planks", "n", m["roof"], m["slab"])
+    if level >= 3:  # bunk floor upstairs for the larger guard
+        upper_floor(b, x0, z0, x1, z1, 5, x0 + 1, (z0 + z1) // 2)
+        for x in range(x0 + 3, x1, 3):
+            b.put(x, 6, z1 - 1, "{color}_bed", facing="south", part="head", occupied="false")
+            b.put(x, 6, z1 - 2, "{color}_bed", facing="south", part="foot", occupied="false")
+        b.put((x0 + x1) // 2, 7, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     for x in range(x0 + 2, x1 - 1, 3):
         b.put(x, 1, z1 - 1, "white_bed", facing="south", part="head", occupied="false")
         b.put(x, 1, z1 - 2, "white_bed", facing="south", part="foot", occupied="false")
@@ -1571,7 +1577,8 @@ def barracks(style, level):
     b.put((x0 + x1) // 2, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     b.put(x1 - 1, 1, z0 + 2, "smithing_table")
     if level >= 2:
-        b.put(x0 + 1, 1, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
+        b.put(x1 - 2, 1, z0 + 2, "chest", facing="west", type="single", waterlogged="false")
+        b.put(x0 + 2, 1, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
         b.put(x0 + 1, 1, z0 + 3, "chest", facing="east", type="single", waterlogged="false")
         for x in (x0 + 3, x1 - 3):
             b.put(x, 4, z0 - 1, "{color}_wall_banner", facing="north")
@@ -1580,6 +1587,20 @@ def barracks(style, level):
 
 GUILD = (-21, -17, -11, -9)  # door south
 GUILD_STORE = (-19, 0, -16)
+
+
+def guild_level(style, level):
+    """Guild upgrades 4-6 (better gear for sword, archer, mage): the full hall plus a trophy of each upgrade by the door."""
+    b = B()
+    b.b = dict(guild_hall(style, 3))
+    x0, z0, x1, z1 = GUILD
+    cx = (x0 + x1) // 2
+    marks = [("anvil", dict(facing="east")), ("fletching_table", {}), ("enchanting_table", {})]
+    for i in range(level - 3):
+        block, props = marks[i]
+        b.put(x0 + 2 + i * 3, 1, z0 + 1, block, **props)
+    b.put(cx, 4, z0 - 1, "{color}_wall_banner", facing="north")
+    return b.b
 
 
 def guild_hall(style, level):
@@ -1777,12 +1798,27 @@ def shop_store(name):
     return (x0 + 1, 0, z0 + 1 if door == "s" else z1 - 1)
 
 
+def upper_floor(b, x0, z0, x1, z1, y, ladder_x, ladder_z):
+    """A plank floor at height y inside the walls, with a ladder hole; the ladder leans on the inner wall to the west."""
+    for x in range(x0 + 1, x1):
+        for z in range(z0 + 1, z1):
+            b.put(x, y, z, "spruce_planks")
+    for yy in range(1, y + 1):
+        b.put(ladder_x, yy, ladder_z, "ladder", facing="east", waterlogged="false")
+    for x in (x0, x1):
+        for z in range(z0 + 2, z1 - 1, 3):
+            b.put(x, y + 2, z, "glass_pane", east="false", west="false", north="true", south="true", waterlogged="false")
+
+
 def shop(style, name, level):
     """A small building in the village style with the furniture of its trade; level 2 adds more of it."""
     m = mats(style)
     b = B()
     (x0, z0, x1, z1), door = SHOPS[name]
     h = 5 if name in ("tavern", "market", "music") else 4
+    base_h = h
+    if level >= 3:
+        h += 4  # upper floor
     if name == "nether":
         stone_hut(b, x0, z0, x1, z1, h, "nether_bricks", "red_nether_bricks", "blackstone", door, "nether_brick_stairs", "nether_brick_slab")
     else:
@@ -1844,6 +1880,19 @@ def shop(style, name, level):
         b.put(x1 - 1, h - 1, front, "lantern", hanging="true", waterlogged="false")
         if name == "tavern":
             b.put(x0 + 1, 1, back, "{color}_bed", facing="north" if door == "s" else "south", part="head", occupied="false")
+    if level >= 3:
+        fy = base_h + 1
+        upper_floor(b, x0, z0, x1, z1, fy, x0 + 1, cz)
+        b.put(cx, base_h, cz, "lantern", hanging="true", waterlogged="false")
+        bf = "north" if door == "s" else "south"
+        for x in range(x0 + 3, x1, 3):
+            if name == "tavern":  # guest rooms
+                b.put(x, fy + 1, back, "{color}_bed", facing=bf, part="head", occupied="false")
+                b.put(x, fy + 1, back + (1 if door == "s" else -1), "{color}_bed", facing=bf, part="foot", occupied="false")
+            else:  # warehouse
+                b.put(x, fy + 1, back, "barrel", facing="up", open="false")
+                b.put(x, fy + 2, back, "barrel", facing="up", open="false")
+                b.put(x, fy + 1, front, "chest", facing=bf, type="single", waterlogged="false")
     return b.b
 
 
@@ -2031,7 +2080,7 @@ if __name__ == "__main__":
             jobs.append((style, f"guild_{level}", guild_hall(style, level), 200, GUILD_STORE, None))
         jobs.append((style, "gate_5", lava_trap(style, 5), 240, None, None))
         for name in SHOPS:
-            for level in (1, 2):
+            for level in ((1, 2, 3) if name in ("tavern", "market") else (1, 2)):
                 jobs.append((style, f"{name}_{level}", shop(style, name, level), 160 + 40 * level, shop_store(name), None))
         for level in (1, 2):
             DOCK_JOBS.append((style, level))
@@ -2042,6 +2091,9 @@ if __name__ == "__main__":
         for level in (1, 2, 3):
             jobs.append((style, f"kennel_{level}", kennel(style, level), 120, None, None))
         jobs.append((style, "cellar_3", secret_vault(style, 3), 200, CELLAR_STORE, None))
+        jobs.append((style, "barracks_3", barracks(style, 3), 260, BARRACKS_STORE, None))
+        for level in (4, 5, 6):
+            jobs.append((style, f"guild_{level}", guild_level(style, level), 220, GUILD_STORE, None))
         for level in (1, 2):
             jobs.append((style, f"barracks_{level}", barracks(style, level), 200, BARRACKS_STORE, None))
             jobs.append((style, f"library_{level}", library(style, level), 180, LIB_STORE, None))
@@ -2060,7 +2112,8 @@ if __name__ == "__main__":
             jobs.append((style, f"smith_{level}", smithy(style, level), secs, SMITH_STORE, None))
             jobs.append((style, f"wood_{level}", woodcutter(style, level), secs, WOOD_STORE, None))
     def apron(name):
-        return 0 if name.startswith(("road_", "lamp_", "wall_1", "wall_2")) else 4 if name.startswith("wall_") else 8
+            # 14: the 1:1 slope reaches 11 blocks up, so cliffs next to a building are cut back into a natural slope
+        return 0 if name.startswith(("road_", "lamp_", "wall_1", "wall_2")) else 4 if name.startswith("wall_") else 14
     jobs = [j if len(j) == 7 else j + (apron(j[1]),) for j in jobs]
     for style, name, blocks, seconds, storage, animals, apron in jobs:
         os.makedirs(os.path.join(OUT, style), exist_ok=True)

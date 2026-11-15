@@ -64,26 +64,56 @@ final class Defense {
 		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, 0, bz - 10), Rotation.values()[s.rotation()]));
 	}
 
-	/** Every minute: missing guards come back from the barracks; guards that wandered off walk home. */
+	/** Every minute: guards (2/4/6 by barracks level) in the kingdom's colors patrol the village; fallen ones are replaced. */
 	static void guards(ServerLevel level, Settlement s) {
-		int want = s.level(Progression.BARRACKS) >= 2 ? 4 : s.level(Progression.BARRACKS) >= 1 ? 2 : 0;
-		if (want == 0 || !level.isLoaded(s.heart())) {
+		int lvl = s.level(Progression.BARRACKS);
+		int want = lvl * 2;
+		if (!level.isLoaded(s.heart())) {
 			return;
 		}
+		// golem guards from older versions retire
+		level.getEntitiesOfClass(Mob.class, new AABB(s.heart()).inflate(120, 64, 120),
+				m -> !(m instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc) && (GUARD + "|" + s.id()).equals(m.getAttached(People.ROLE)))
+				.forEach(Mob::discard);
 		List<Mob> guards = find(level, s, GUARD, 120);
-		for (int i = guards.size(); i < want; i++) {
-			Mob g = spawn(level, s, "iron_golem", GUARD, at(s, 16, 31));
-			if (g != null) {
-				g.setCustomName(net.minecraft.network.chat.Component.literal("Guard"));
-				level.sendParticles(ParticleTypes.POOF, g.getX(), g.getY() + 1, g.getZ(), 10, 0.4, 0.6, 0.4, 0.02);
-			}
-		}
+		int rgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor();
 		for (Mob g : guards) {
-			if (g.distanceToSqr(Vec3.atCenterOf(s.heart())) > 70 * 70 && g.getTarget() == null) {
-				BlockPos home = at(s, 16, 31);
-				g.getNavigation().moveTo(home.getX() + 0.5, s.heart().getY(), home.getZ() + 0.5, 1.0);
+			if (g instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc npc && npc.tier() != lvl) {
+				npc.guardGear(lvl, rgb);
+				npc.setTier(lvl);
 			}
 		}
+		for (int i = guards.size(); i < want; i++) {
+			io.github.sotadevop.kingdomquest.npc.KingdomNpc g = io.github.sotadevop.kingdomquest.npc.KingdomNpc.TYPE.create(level, EntitySpawnReason.EVENT);
+			if (g == null) {
+				continue;
+			}
+			BlockPos post = at(s, 16, 31);
+			g.setup("guard", level.getRandom().nextInt(9), s.owner());
+			g.guardGear(lvl, rgb);
+			g.setTier(lvl);
+			g.setHome(s.heart());
+			g.setCustomName(net.minecraft.network.chat.Component.literal("Guard"));
+			g.setAttached(People.ROLE, GUARD + "|" + s.id());
+			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, post.getX(), post.getZ());
+			g.snapTo(post.getX() + 0.5, y, post.getZ() + 0.5, 0, 0);
+			level.addFreshEntity(g);
+			level.sendParticles(ParticleTypes.POOF, g.getX(), g.getY() + 1, g.getZ(), 10, 0.4, 0.6, 0.4, 0.02);
+		}
+	}
+
+	/** What the Warchief says about the next attack. */
+	static String status(MinecraftServer server, Settlement s) {
+		if (s.level(OFF) == 1) {
+			return "The borders are quiet. No army will come while the attacks are off.";
+		}
+		if (s.level("attack_running") == 1) {
+			return "We are under attack! To the walls!";
+		}
+		int day = (int) (server.overworld().getGameTime() / 24000L);
+		int left = s.level(NEXT) - day;
+		return left > 0 ? "Our scouts expect the next army in about " + left + (left == 1 ? " day." : " days.")
+				: "An army is overdue. They are gathering in the hills and will strike soon.";
 	}
 
 	/** Days between attacks. */

@@ -53,6 +53,9 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	public static final EntityDataAccessor<String> ROLE = SynchedEntityData.defineId(KingdomNpc.class, EntityDataSerializers.STRING);
 
 	private UUID lord;
+	/** Guards patrol around this point; 0 = none. */
+	private long home;
+	private int tier;
 	private int spellCooldown;
 
 	public KingdomNpc(EntityType<? extends KingdomNpc> type, Level level) {
@@ -89,6 +92,57 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	}
 
 	/** Sets the role and its gear; allies follow and defend {@code lord}. */
+	/** Better gear for upgraded allies and guards (0 = base). */
+	public void setTier(int tier) {
+		this.tier = tier;
+		String r = role();
+		if (r.equals("sword")) {
+			gear(tier >= 1 ? Items.DIAMOND_SWORD : Items.IRON_SWORD, tier >= 1 ? Items.DIAMOND_HELMET : Items.IRON_HELMET,
+					tier >= 1 ? Items.DIAMOND_CHESTPLATE : Items.IRON_CHESTPLATE);
+			this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(tier >= 1 ? 9 : 6);
+		} else if (r.equals("archer")) {
+			this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(tier >= 1 ? 6 : 3);
+			gear(tier >= 1 ? Items.CROSSBOW : Items.BOW, tier >= 1 ? Items.CHAINMAIL_HELMET : null, Items.LEATHER_CHESTPLATE);
+		} else if (r.equals("mage")) {
+			this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(tier >= 1 ? 60 : 40);
+		}
+	}
+
+	public int tier() {
+		return this.tier;
+	}
+
+	public void setHome(net.minecraft.core.BlockPos pos) {
+		this.home = pos.asLong();
+	}
+
+	/** Gear for a guard: barracks level 1 leather + iron sword, 2 chainmail + shield, 3 iron; the tunic in the kingdom color. */
+	public void guardGear(int barracks, int rgb) {
+		ItemStack tunic = new ItemStack(Items.LEATHER_CHESTPLATE);
+		tunic.set(net.minecraft.core.component.DataComponents.DYED_COLOR, new net.minecraft.world.item.component.DyedItemColor(rgb));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, tunic);
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(barracks >= 3 ? Items.IRON_HELMET : barracks >= 2 ? Items.CHAINMAIL_HELMET
+				: Items.LEATHER_HELMET));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, new ItemStack(barracks >= 3 ? Items.IRON_LEGGINGS : Items.CHAINMAIL_LEGGINGS));
+		if (barracks >= 2) {
+			this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+		}
+		for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
+			this.setDropChance(slot, 0);
+		}
+	}
+
+	private void gear(net.minecraft.world.item.Item hand, net.minecraft.world.item.Item head, net.minecraft.world.item.Item chest) {
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(hand));
+		if (head != null) {
+			this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(head));
+		}
+		if (chest != null) {
+			this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new ItemStack(chest));
+		}
+	}
+
 	public void setup(String role, int skin, UUID lord) {
 		this.entityData.set(ROLE, role);
 		this.entityData.set(SKIN, skin);
@@ -116,7 +170,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 	private boolean ally() {
 		String r = role();
-		return r.equals("sword") || r.equals("archer") || r.equals("mage");
+		return r.equals("sword") || r.equals("archer") || r.equals("mage") || r.equals("companion") || r.equals("guard");
 	}
 
 	@Override
@@ -135,10 +189,14 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		this.roleGoals = true;
 		if (role().equals("archer")) {
 			this.goalSelector.addGoal(2, new ShootGoal(this));
-		} else if (role().equals("sword")) {
+		} else if (!role().equals("mage")) {
 			this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.2, true));
 		}
-		this.goalSelector.addGoal(3, new FollowLordGoal(this));
+		if (role().equals("guard")) {
+			this.goalSelector.addGoal(3, new PatrolGoal(this));
+		} else {
+			this.goalSelector.addGoal(3, new FollowLordGoal(this));
+		}
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
 		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, net.minecraft.world.entity.Mob.class, 10, true, false,
 				(e, level) -> e instanceof Enemy));
@@ -150,7 +208,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		if (!this.level().isClientSide() && ally()) {
 			this.addRoleGoals();
 			if (role().equals("mage") && --this.spellCooldown <= 0) {
-				this.spellCooldown = 60;
+				this.spellCooldown = this.tier >= 1 ? 40 : 60;
 				castSpell();
 			}
 		}
@@ -161,7 +219,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		ServerLevel level = (ServerLevel) this.level();
 		Player p = this.lord == null ? null : level.getPlayerByUUID(this.lord);
 		if (p != null && p.getHealth() < p.getMaxHealth() && p.distanceToSqr(this) < 16 * 16) {
-			p.heal(4);
+			p.heal(this.tier >= 1 ? 8 : 4);
 			level.sendParticles(ParticleTypes.HEART, p.getX(), p.getY() + 2, p.getZ(), 3, 0.3, 0.3, 0.3, 0);
 			this.swingArm();
 		}
@@ -202,6 +260,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	protected void addAdditionalSaveData(ValueOutput out) {
 		super.addAdditionalSaveData(out);
 		out.putInt("Skin", skin());
+		out.putInt("Tier", this.tier);
+		out.putLong("Home", this.home);
 		out.putString("Role", role());
 		if (this.lord != null) {
 			out.putString("Lord", this.lord.toString());
@@ -212,6 +272,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	protected void readAdditionalSaveData(ValueInput in) {
 		super.readAdditionalSaveData(in);
 		this.entityData.set(SKIN, in.getIntOr("Skin", 0));
+		this.tier = in.getIntOr("Tier", 0);
+		this.home = in.getLongOr("Home", 0L);
 		this.entityData.set(ROLE, in.getStringOr("Role", ""));
 		String lord = in.getStringOr("Lord", "");
 		this.lord = lord.isEmpty() ? null : UUID.fromString(lord);
@@ -255,6 +317,27 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	}
 
 	/** Allies stay with their lord: walk to him when he is 6+ blocks away, appear next to him beyond 24. */
+	/** Guards walk between random points within 24 blocks of their post. */
+	static final class PatrolGoal extends Goal {
+		private final KingdomNpc npc;
+
+		PatrolGoal(KingdomNpc npc) {
+			this.npc = npc;
+			this.setFlags(EnumSet.of(Goal.Flag.MOVE));
+		}
+
+		@Override
+		public boolean canUse() {
+			return this.npc.home != 0 && this.npc.getTarget() == null && this.npc.getNavigation().isDone() && this.npc.getRandom().nextInt(60) == 0;
+		}
+
+		@Override
+		public void start() {
+			net.minecraft.core.BlockPos h = net.minecraft.core.BlockPos.of(this.npc.home);
+			this.npc.getNavigation().moveTo(h.getX() + this.npc.getRandom().nextInt(49) - 24, h.getY(), h.getZ() + this.npc.getRandom().nextInt(49) - 24, 0.7);
+		}
+	}
+
 	static final class FollowLordGoal extends Goal {
 		private final KingdomNpc npc;
 

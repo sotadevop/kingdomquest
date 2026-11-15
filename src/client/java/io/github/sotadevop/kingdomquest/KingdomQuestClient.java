@@ -18,6 +18,8 @@ public class KingdomQuestClient implements ClientModInitializer {
 		net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(io.github.sotadevop.kingdomquest.npc.KingdomNpc.TYPE,
 				io.github.sotadevop.kingdomquest.client.NpcRenderer::new);
 		ClientPlayNetworking.registerGlobalReceiver(KingdomInfoPayload.TYPE, (payload, context) -> KingdomScreen.open(payload));
+		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.NamePayload.TYPE,
+				(payload, context) -> context.client().setScreenAndShow(new io.github.sotadevop.kingdomquest.client.NameScreen(payload)));
 		ClientTickEvents.END_CLIENT_TICK.register(PlacementPreview::tick);
 	}
 }

@@ -20,7 +20,8 @@ import java.util.UUID;
  * @param built    per track, positions placed by the builders; they drop nothing when broken
  */
 public record Settlement(UUID id, UUID owner, String name, int color, Identifier logo, String style, BlockPos heart,
-		int rotation, Map<String, Integer> levels, String job, String jobTrack, int jobIndex, Map<String, List<Long>> built) {
+		int rotation, Map<String, Integer> levels, String job, String jobTrack, int jobIndex, Map<String, List<Long>> built,
+		Map<String, String> names) {
 	public static final String MAIN = "main";
 
 	public static final Codec<Settlement> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -36,31 +37,39 @@ public record Settlement(UUID id, UUID owner, String name, int color, Identifier
 			Codec.STRING.fieldOf("job").forGetter(Settlement::job),
 			Codec.STRING.fieldOf("job_track").forGetter(Settlement::jobTrack),
 			Codec.INT.fieldOf("job_index").forGetter(Settlement::jobIndex),
-			Codec.unboundedMap(Codec.STRING, Codec.LONG.listOf()).fieldOf("built").forGetter(Settlement::built)
+			Codec.unboundedMap(Codec.STRING, Codec.LONG.listOf()).fieldOf("built").forGetter(Settlement::built),
+			Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("names", Map.of()).forGetter(Settlement::names)
 	).apply(i, Settlement::new));
+
+	/** Names the lord chose (pets: "pet_wolf", ...). */
+	public Settlement withName(String key, String value) {
+		Map<String, String> m = new HashMap<>(this.names);
+		m.put(key, value);
+		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built, Map.copyOf(m));
+	}
 
 	public int level(String track) {
 		return this.levels.getOrDefault(track, 0);
 	}
 
 	public Settlement withColor(int newColor) {
-		return new Settlement(id, owner, name, newColor, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built);
+		return new Settlement(id, owner, name, newColor, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built, names);
 	}
 
 	public Settlement withJob(String job, String track, int index) {
-		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, track, index, built);
+		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, track, index, built, names);
 	}
 
 	public Settlement withLevel(String track, int level) {
 		Map<String, Integer> m = new HashMap<>(this.levels);
 		m.put(track, level);
-		return new Settlement(id, owner, name, color, logo, style, heart, rotation, Map.copyOf(m), job, jobTrack, jobIndex, built);
+		return new Settlement(id, owner, name, color, logo, style, heart, rotation, Map.copyOf(m), job, jobTrack, jobIndex, built, names);
 	}
 
 	public Settlement withBuilt(String track, List<Long> list) {
 		Map<String, List<Long>> m = new HashMap<>(this.built);
 		m.put(track, List.copyOf(list));
-		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, Map.copyOf(m));
+		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, Map.copyOf(m), names);
 	}
 
 	public boolean isBuilt(long pos) {

@@ -70,7 +70,7 @@ final class Guild {
 				}
 			}
 		}
-		for (int i = 0; i < Math.min(n, ROLES.length); i++) {
+		for (int i = 0; i < Math.min(n, ROLES.length); i++) { // levels 4-6 upgrade sword, archer, mage
 			String role = ROLES[i];
 			KingdomNpc ally = mine.stream().filter(m -> m.role().equals(role)).findFirst().orElse(null);
 			double ox = player.getX() + (i - 1) * 1.5;
@@ -81,11 +81,13 @@ final class Guild {
 					continue;
 				}
 				ally.setup(role, 3 + i * 2, player.getUUID());
+				ally.setTier(unlocked(player) >= 4 + i ? 1 : 0);
 				ally.setCustomName(Component.literal(NAMES[i]));
 				ally.snapTo(ox, player.getY(), oz, player.getYRot(), 0);
 				here.addFreshEntity(ally);
 			} else {
 				ally.teleportTo(ox, player.getY(), oz);
+				ally.setTier(unlocked(player) >= 4 + i ? 1 : 0);
 			}
 			here.sendParticles(ParticleTypes.CLOUD, ox, player.getY() + 1, oz, 12, 0.3, 0.6, 0.3, 0.02);
 		}

@@ -119,6 +119,13 @@ public final class Production {
 						g.add(new ItemStack(SMITH_GEAR.get(random.nextInt(SMITH_GEAR.size()))));
 					}
 				}
+				if (lvl >= 2 && random.nextInt(5) == 0) {
+					g.add(new ItemStack(Items.CROSSBOW));
+				}
+				if (lvl >= 3 && random.nextInt(4) == 0) {
+					g.add(new ItemStack(List.of(Items.DIAMOND_SWORD, Items.DIAMOND_PICKAXE, Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE,
+							Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS).get(random.nextInt(6))));
+				}
 				if (lvl >= 3) { // the citadel smith: elytra only after the dragon
 					if (random.nextInt(6) == 0) {
 						g.add(new ItemStack(Items.NETHERITE_SCRAP));
