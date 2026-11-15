@@ -597,7 +597,7 @@ public final class Settlements {
 			if (!level.getBlockState(base.below(1)).getFluidState().isEmpty() || !level.getBlockState(base.below(2)).getFluidState().isEmpty()) {
 				water++;
 			}
-			if (!level.getBlockState(base.below(1)).is(Blocks.GRASS_BLOCK)) {
+			if (!base.equals(heart) && !level.getBlockState(base.below(1)).is(Blocks.GRASS_BLOCK)) {
 				bare++;
 			}
 		}
