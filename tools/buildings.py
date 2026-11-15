@@ -612,7 +612,7 @@ def woodcutter(style, level):
     return b.b
 
 
-WALL = (-39, 52, -9, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
+WALL = (-39, 57, -9, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
 
 
 def walls(style, level):
