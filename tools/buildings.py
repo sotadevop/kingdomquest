@@ -374,7 +374,9 @@ def hamlet(style, level):
     b = B()
     w = s["wood"]
     hx, hy, hz = HEART
-    if level >= 6:
+    if level >= 7:
+        motte(b, style)
+    elif level >= 6:
         castle_keep(b, style)
     elif level >= 5:
         town_hall(b, style, 1, -4)
@@ -624,7 +626,7 @@ def woodcutter(style, level):
     return b.b
 
 
-WALL = (-39, 61, -20, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
+WALL = (-39, 61, -24, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
 
 
 def walls(style, level):
@@ -1186,14 +1188,55 @@ def gate(style, level):
     return b.b
 
 
-def castle_keep(b, style):
+def motte(b, style):
+    """Castle level 2: the keep stands on a raised stone-walled mound (motte), 4 blocks above the square,
+    reached by a grand staircase. The keep moves 3 blocks north to make room for the stairs."""
+    t = B()
+    castle_keep(t, style, z_shift=-3)
+    H = 4
+    for (x, y, z), v in t.b.items():
+        b.b[(x, y + H, z)] = v
+    stone = "cobblestone" if style == "frozen" else "stone_bricks"
+    wall_top = "cobblestone_wall" if style == "frozen" else "stone_brick_wall"
+    x0, z0, x1, z1 = -4, -18, 18, 3
+    cx = 7
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            stairs = z == z1 and abs(x - cx) <= 2
+            for y in range(0, H):
+                if (x, y + 0, z) in b.b:
+                    continue
+                b.put(x, y, z, (stone if not (x * 7 + y * 3 + z) % 9 == 0 else "mossy_" + stone) if edge else ("grass_block" if y == H - 1 else "dirt"),
+                      **({"snowy": "false"} if not edge and y == H - 1 else {}))
+            if edge and not stairs and (x + z) % 2 == 0 and (x, H, z) not in b.b:
+                b.put(x, H, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+    # grand staircase from the motte down to the square, lanterns on the newel posts
+    for i in range(H):
+        z = z1 + 1 + i
+        y = H - 1 - i
+        for x in range(cx - 2, cx + 3):
+            b.put(x, y, z, stone.replace("bricks", "brick") + "_stairs" if stone == "stone_bricks" else "cobblestone_stairs", facing="north", **ST)
+            for yy in range(0, y):
+                b.put(x, yy, z, stone)
+        for x in (cx - 3, cx + 3):
+            for yy in range(0, y + 1):
+                b.put(x, yy, z, stone)
+    for x in (cx - 3, cx + 3):
+        b.put(x, H, z1, stone)
+        b.put(x, H + 1, z1, "lantern", hanging="false", waterlogged="false")
+    for x in range(cx - 2, cx + 3):
+        b.put(x, H, z1, "air")
+
+
+def castle_keep(b, style, z_shift=0):
     """Castle tier: a square stone keep replaces the town hall. Great hall with a carpet to the throne,
     upper floor, walkable battlements and four corner towers rising above the roof."""
     frozen = style == "frozen"
     stone, alt = ("cobblestone", "mossy_cobblestone") if frozen else ("stone_bricks", "mossy_stone_bricks")
     wall_top = "cobblestone_wall" if frozen else "stone_brick_wall"
     wood = "spruce"
-    x0, z0, x1, z1 = -1, -12, 15, 4
+    x0, z0, x1, z1 = -1, -12 + z_shift, 15, 4 + z_shift
     cx = (x0 + x1) // 2
     H = 12
 
@@ -1386,6 +1429,7 @@ if __name__ == "__main__":
         jobs.append((style, "village_1", hamlet(style, 4), 300, TAX_STORE, None))
         jobs.append((style, "town_1", hamlet(style, 5), 420, TAX_STORE, None))
         jobs.append((style, "castle_1", hamlet(style, 6), 600, TAX_STORE, None))
+        jobs.append((style, "castle_2", hamlet(style, 7), 720, TAX_STORE, None))
         for level in (1, 2):
             jobs.append((style, f"cellar_{level}", cellar(style, level), 150, CELLAR_STORE, None))
         for level, secs in ((1, 300), (2, 300), (3, 420), (4, 480)):

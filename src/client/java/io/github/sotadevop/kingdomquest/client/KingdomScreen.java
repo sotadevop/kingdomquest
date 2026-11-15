@@ -25,7 +25,7 @@ import java.util.Map;
  * Light/dark colors and the modern (rounded) or vanilla style follow the mod settings, like StoryQuest.
  */
 public class KingdomScreen extends Screen {
-	private static final int W = 360;
+	private static final int W = 440;
 	private static final int HEADER = 34;
 	private static final int TAB_H = 18;
 	private static final int CARD_H = 50;
@@ -128,8 +128,27 @@ public class KingdomScreen extends Screen {
 				this.minecraft.setScreenAndShow(new ColorScreen(this.info.heart(), this.info.color(), this))).bounds(this.left + 8, this.top + H - 24, 60, 18).build();
 		color.active = this.info.percent() < 0;
 		this.tabButtons.add(this.addRenderableWidget(color));
+		// tab actions in the footer: drawbridge (Defense), roads to other places (Streets)
+		String tabKey = tabs.isEmpty() ? "" : tabs.get(this.tab).key();
+		int fx = this.left + 72;
+		if (tabKey.equals("kingdomquest.tab.defense") && this.info.bridge() >= 0) {
+			this.tabButtons.add(this.addRenderableWidget(action(this.info.bridge() == 1 ? "kingdomquest.bridge.lower" : "kingdomquest.bridge.raise",
+					"bridge", fx, 100)));
+		}
+		KingdomInfoPayload.Option roads = this.byTrack.get("roads");
+		if (tabKey.equals("kingdomquest.tab.streets") && roads != null && roads.level() > 0) {
+			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.link.kingdom", "link_kingdom", fx, 140)));
+			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.link.village", "link_village", fx + 144, 132)));
+		}
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 70, this.top + H - 24, 70, 18).build());
+	}
+
+	private Button action(String label, String action, int x, int w) {
+		return Button.builder(Component.translatable(label), b -> {
+			ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), action));
+			this.onClose();
+		}).bounds(x, this.top + H - 24, w, 18).build();
 	}
 
 	@Override

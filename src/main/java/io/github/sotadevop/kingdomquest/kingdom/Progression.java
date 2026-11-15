@@ -68,7 +68,9 @@ public final class Progression {
 									item(Items.BRICK, 64), item(Items.EMERALD, 16), item(Items.BELL, 1))),
 					new Step(Settlement.MAIN, "castle_1", 9, "kingdomquest.level.castle_1", 0, adv("nether/find_fortress"),
 							"kingdomquest.req.fortress", List.of(item(Items.STONE_BRICKS, 1024), item(Items.IRON_BARS, 32), tag(ItemTags.LOGS, "logs", 64),
-									item(Items.EMERALD, 32), item(Items.GOLD_BLOCK, 4)))),
+									item(Items.EMERALD, 32), item(Items.GOLD_BLOCK, 4))),
+					new Step(Settlement.MAIN, "castle_2", 10, "kingdomquest.level.castle_2", 0, adv("nether/obtain_blaze_rod"),
+							"kingdomquest.req.blaze", List.of(item(Items.STONE_BRICKS, 512), tag(ItemTags.DIRT, "dirt", 512), item(Items.LANTERN, 4)))),
 			FARM, List.of(
 					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
 							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2))),

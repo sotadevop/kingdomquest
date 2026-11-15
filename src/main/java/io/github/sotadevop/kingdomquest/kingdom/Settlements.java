@@ -74,6 +74,9 @@ public final class Settlements {
 		PayloadTypeRegistry.clientboundPlay().register(KingdomInfoPayload.TYPE, KingdomInfoPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(UpgradePayload.TYPE, UpgradePayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(RecolorPayload.TYPE, RecolorPayload.CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(ActionPayload.TYPE, ActionPayload.CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(ActionPayload.TYPE, (payload, context) -> action(context.player(), payload.heart(), payload.action()));
+		ServerTickEvents.END_SERVER_TICK.register(RoadLink::tick);
 		ServerPlayNetworking.registerGlobalReceiver(RecolorPayload.TYPE, (payload, context) -> recolor(context.player(), payload.heart(), payload.color()));
 		ServerPlayNetworking.registerGlobalReceiver(UpgradePayload.TYPE, (payload, context) -> upgrade(context.player(), payload.heart(), payload.track()));
 		ServerTickEvents.END_SERVER_TICK.register(Settlements::tick);
@@ -320,6 +323,26 @@ public final class Settlements {
 		sweepDrops(level, lo, hi);
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
 		People.sendWorkers(level, s, list.size(), server.getPlayerList().getPlayer(s.owner()));
+	}
+
+	/** Menu actions: drawbridge, roads to the next kingdom or village. */
+	static void action(ServerPlayer player, BlockPos heart, String action) {
+		MinecraftServer srv = player.level().getServer();
+		Settlement s = byHeart(srv, heart);
+		if (s == null || !s.owner().equals(player.getUUID())) {
+			return;
+		}
+		switch (action) {
+			case "bridge" -> {
+				if (Drawbridge.toggle(srv, Drawbridge.lever(s))) {
+					player.sendOverlayMessage(Component.translatable(s.level(Drawbridge.STATE) == 1 ? "kingdomquest.bridge.lowering" : "kingdomquest.bridge.raising"));
+				}
+			}
+			case "link_kingdom" -> RoadLink.connect(player, s, false);
+			case "link_village" -> RoadLink.connect(player, s, true);
+			default -> {
+			}
+		}
 	}
 
 	/** Swaps every kingdom-colored block (banners, beds, carpets, wool) of all built levels to a new color. */
@@ -705,8 +728,9 @@ public final class Settlements {
 					next != null && mine && Progression.canPay(player, next), lockedBy));
 		}
 		Progression.Step current = Progression.current(s, Settlement.MAIN);
+		int bridge = s.level(Progression.GATE) >= 3 ? s.level(Drawbridge.STATE) : -1;
 		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),
-				current == null ? "" : current.titleKey(), percent, options));
+				current == null ? "" : current.titleKey(), percent, options, bridge));
 	}
 
 	/**
