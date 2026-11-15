@@ -21,7 +21,7 @@ STYLES = {
     "frozen": dict(canvas="spruce_stairs", hem="cobblestone_stairs", ridge="spruce_slab",
                    gable="spruce_planks", pole="spruce_fence", wood="spruce", path=("coarse_dirt", "podzol"), snow=True),
     # Moorish / North African: sandstone, acacia, flat roofs, terracotta accents
-    "arid": dict(canvas="smooth_sandstone_stairs", hem="cut_sandstone_slab", ridge="smooth_sandstone_slab",
+    "arid": dict(canvas="smooth_sandstone_stairs", hem="sandstone_stairs", ridge="smooth_sandstone_slab",
                  gable="orange_terracotta", pole="acacia_fence", wood="acacia", path=("dirt_path", "coarse_dirt"), snow=False),
     # Scottish Highlands: grey stone, dark slate roofs, spruce
     "highland": dict(canvas="dark_oak_stairs", hem="cobblestone_stairs", ridge="dark_oak_slab",
