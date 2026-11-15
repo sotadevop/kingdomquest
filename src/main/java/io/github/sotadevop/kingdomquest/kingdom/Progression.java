@@ -224,7 +224,7 @@ public final class Progression {
 					new Step("tavern", "tavern_1", 1, "kingdomquest.trade.tavern_1", 5, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.BARREL, 4), item(Items.SMOKER, 1))),
 					new Step("tavern", "tavern_2", 2, "kingdomquest.trade.tavern_2", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(item(Items.LANTERN, 4), item(Items.CAKE, 1))),
 					new Step("tavern", "tavern_3", 3, "kingdomquest.trade.tavern_3", 9, adv("husbandry/bred_all_animals"), "kingdomquest.req.bred_all",
-							List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.WHITE_BED, 3), item(Items.LADDER, 8))))),
+							List.of(tag(ItemTags.LOGS, "logs", 48), tag(ItemTags.BEDS, "beds", 3), item(Items.LADDER, 8))))),
 				Map.entry("market", List.of(
 					new Step("market", "market_1", 1, "kingdomquest.trade.market_1", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.EMERALD, 8), item(Items.LOOM, 1))),
 					new Step("market", "market_2", 2, "kingdomquest.trade.market_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.EMERALD, 16), item(Items.LANTERN, 4))),
