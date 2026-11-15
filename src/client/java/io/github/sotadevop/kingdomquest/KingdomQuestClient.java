@@ -15,6 +15,8 @@ public class KingdomQuestClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		io.github.sotadevop.kingdomquest.client.ClientConfig.load();
 		RoyalCharterItem.openScreen = FoundingScreen::open;
+		net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry.register(io.github.sotadevop.kingdomquest.npc.KingdomNpc.TYPE,
+				io.github.sotadevop.kingdomquest.client.NpcRenderer::new);
 		ClientPlayNetworking.registerGlobalReceiver(KingdomInfoPayload.TYPE, (payload, context) -> KingdomScreen.open(payload));
 		ClientTickEvents.END_CLIENT_TICK.register(PlacementPreview::tick);
 	}
