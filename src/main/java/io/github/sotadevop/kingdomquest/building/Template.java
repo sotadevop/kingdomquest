@@ -27,7 +27,7 @@ import java.util.Map;
  */
 public final class Template {
 	/** @param segment road/lamp segment index, -1 = always placed */
-	public record Entry(int x, int y, int z, String name, Map<String, String> props, int segment) {
+	public record Entry(int x, int y, int z, String name, Map<String, String> props, int segment, int ax, int az) {
 	}
 
 	/** A road segment and the (track, level) rules of which any one makes it appear. */
@@ -35,7 +35,8 @@ public final class Template {
 	}
 
 	/** A block ready to place: position relative to the heart (already rotated) and its state. */
-	public record Placement(BlockPos offset, BlockState state, int segment) {
+	/** @param anchor column (relative to the heart, y = 0) whose ground height a terrain-following block uses */
+	public record Placement(BlockPos offset, BlockState state, int segment, BlockPos anchor) {
 	}
 
 	private static final Map<String, Template> CACHE = new HashMap<>();
@@ -47,6 +48,8 @@ public final class Template {
 	public final int sizeZ;
 	public final List<Entry> entries;
 	public final List<Segment> segments;
+	/** Blocks follow the terrain (roads, lamps, palisades) instead of the heart's height; no levelling. */
+	public final boolean follow;
 	/** Container the add-on fills with its production (relative to the plot), or null. */
 	public final BlockPos storage;
 	/** Land graded outside the template's area (walls), 0 for none. */
@@ -81,7 +84,8 @@ public final class Template {
 		for (JsonElement e : json.getAsJsonArray("blocks")) {
 			JsonArray a = e.getAsJsonArray();
 			int i = a.get(3).getAsInt();
-			list.add(new Entry(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt(), names.get(i), props.get(i), a.size() > 4 ? a.get(4).getAsInt() : -1));
+			list.add(new Entry(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt(), names.get(i), props.get(i), a.size() > 4 ? a.get(4).getAsInt() : -1,
+					a.size() > 6 ? a.get(5).getAsInt() : a.get(0).getAsInt(), a.size() > 6 ? a.get(6).getAsInt() : a.get(2).getAsInt()));
 		}
 		this.entries = List.copyOf(list);
 		List<Segment> segs = new ArrayList<>();
@@ -97,6 +101,7 @@ public final class Template {
 			}
 		}
 		this.segments = List.copyOf(segs);
+		this.follow = json.has("follow") && json.get("follow").getAsBoolean();
 		this.apron = json.has("apron") ? json.get("apron").getAsInt() : 0;
 		JsonArray st = json.getAsJsonArray("storage");
 		this.storage = st == null ? null : new BlockPos(st.get(0).getAsInt(), st.get(1).getAsInt(), st.get(2).getAsInt());
@@ -136,7 +141,8 @@ public final class Template {
 				continue;
 			}
 			BlockPos rel = rotate(new BlockPos(e.x - this.heart.getX(), e.y - this.heart.getY(), e.z - this.heart.getZ()), rotation);
-			out.add(new Placement(rel, state.rotate(rotation), e.segment()));
+			BlockPos anchor = rotate(new BlockPos(e.ax() - this.heart.getX(), 0, e.az() - this.heart.getZ()), rotation);
+			out.add(new Placement(rel, state.rotate(rotation), e.segment(), anchor));
 		}
 		return out;
 	}

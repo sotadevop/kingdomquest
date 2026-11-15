@@ -62,8 +62,11 @@ public final class SiteWork {
 	 */
 	public static List<Column> columns(String job, Template t, Rotation rotation) {
 		return CACHE.computeIfAbsent(job + "|" + rotation.ordinal(), k -> {
+			if (t.follow) {
+				return List.of(); // terrain-following blocks are placed on the ground as it is
+			}
 			int a = t.apron;
-			int flat = t.apron >= 12 ? FLAT : Math.max(1, a / 2);
+			int flat = Math.min(3, Math.max(1, a / 2));
 			Map<Long, Integer> dist = new HashMap<>();
 			java.util.ArrayDeque<long[]> queue = new java.util.ArrayDeque<>();
 			for (Template.Entry e : t.entries) {
@@ -95,11 +98,8 @@ public final class SiteWork {
 				int x = BlockPos.getX(e.getKey());
 				int z = BlockPos.getZ(e.getKey());
 				int d = e.getValue();
-				int noise = (int) Math.floorMod((long) x * 73856093L ^ (long) z * 19349663L, 3L) - 1; // -1, 0 or 1
-				if (d > 0 && d + noise > a) {
-					continue; // ragged edge
-				}
-				int floor = d <= flat ? 0 : Math.max(1, (d - flat) * 3 / 4 + noise);
+				// smooth 1:1 slope (like natural hill steps), no per-column noise: that made holes
+				int floor = d <= flat ? 0 : d - flat;
 				BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
 				list.add(new Column(rel.getX(), rel.getZ(), d == 0 ? 0 : floor));
 			}
@@ -109,12 +109,12 @@ public final class SiteWork {
 	}
 
 	/** Terrain only (no plants or trees): what the slope zone outside the flat margin may cut. */
-	static boolean terrain(BlockState state) {
+	public static boolean terrain(BlockState state) {
 		return !state.is(BlockTags.LOGS) && !state.is(BlockTags.LEAVES) && !state.is(BlockTags.REPLACEABLE) && !state.is(BlockTags.FLOWERS)
 				&& !state.is(BlockTags.SAPLINGS) && natural(state) && state.isSolid();
 	}
 
-	static boolean natural(BlockState state) {
+	public static boolean natural(BlockState state) {
 		if (state.isAir() || state.hasBlockEntity() && !state.is(Blocks.BEE_NEST)) {
 			return false;
 		}
@@ -204,6 +204,9 @@ public final class SiteWork {
 			BlockState st = level.getBlockState(pos);
 			// in the flat margin everything natural goes (trees too); further out only the land is shaped
 			if (margin ? natural(st) : terrain(st)) {
+				if (st.is(BlockTags.LOGS)) {
+					fellTree(level, pos.immutable(), built);
+				}
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
 			}
 		}
@@ -228,6 +231,48 @@ public final class SiteWork {
 			}
 			level.setBlock(pos, y == fillTop ? surface : Blocks.DIRT.defaultBlockState(), FLAGS);
 		}
+	}
+
+	/** Removes a whole tree (connected logs and leaves) so no leaves are left floating. */
+	static void fellTree(ServerLevel level, BlockPos start, Set<Long> built) {
+		java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+		Set<Long> seen = new java.util.HashSet<>();
+		queue.add(start);
+		int count = 0;
+		while (!queue.isEmpty() && count < 600) {
+			BlockPos p = queue.poll();
+			for (BlockPos n : BlockPos.betweenClosed(p.offset(-1, -1, -1), p.offset(1, 1, 1))) {
+				long key = n.asLong();
+				if (!seen.add(key) || built.contains(key)) {
+					continue;
+				}
+				BlockState st = level.getBlockState(n);
+				if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+					level.setBlock(n, Blocks.AIR.defaultBlockState(), FLAGS);
+					queue.add(n.immutable());
+					count++;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Height of the ground at a column near {@code heartY}: the top full block that isn't part of a tree or a
+	 * plant (roads and farmland count). Used by terrain-following templates.
+	 */
+	public static int groundTop(ServerLevel level, int x, int z, int heartY) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int y = heartY + 12; y >= heartY - 12; y--) {
+			pos.set(x, y, z);
+			BlockState st = level.getBlockState(pos);
+			if (st.isAir() || st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES) || st.canBeReplaced()) {
+				continue;
+			}
+			if (st.is(Blocks.DIRT_PATH) || st.is(Blocks.FARMLAND) || st.isCollisionShapeFullBlock(level, pos)) {
+				return y;
+			}
+		}
+		return heartY - 1;
 	}
 
 	private static final Block[] GRASSY = {Blocks.SHORT_GRASS, Blocks.SHORT_GRASS, Blocks.SHORT_GRASS, Blocks.FERN, Blocks.DANDELION,

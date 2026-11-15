@@ -60,6 +60,9 @@ public final class Settlements {
 	private static final int CREATIVE_TICKS = 60;
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final Map<String, List<Template.Placement>> PLACEMENTS = new HashMap<>();
+	/** Terrain-following placements, sampled from the world when a job starts (per settlement and job). */
+	private static final Map<String, List<Template.Placement>> FOLLOWED = new HashMap<>();
+	private static MinecraftServer server;
 
 	private record Pending(BlockPos heart, long tick) {
 	}
@@ -74,6 +77,17 @@ public final class Settlements {
 		ServerPlayNetworking.registerGlobalReceiver(RecolorPayload.TYPE, (payload, context) -> recolor(context.player(), payload.heart(), payload.color()));
 		ServerPlayNetworking.registerGlobalReceiver(UpgradePayload.TYPE, (payload, context) -> upgrade(context.player(), payload.heart(), payload.track()));
 		ServerTickEvents.END_SERVER_TICK.register(Settlements::tick);
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(srv -> server = srv);
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(srv -> {
+			server = null;
+			FOLLOWED.clear();
+		});
+		// no monsters spawn inside a settlement
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {
+			if (entity instanceof net.minecraft.world.entity.monster.Enemy && level.dimension() == Level.OVERWORLD && insideSettlement(level.getServer(), entity.blockPosition())) {
+				entity.discard();
+			}
+		});
 		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
 		People.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
@@ -100,6 +114,28 @@ public final class Settlements {
 
 	public static List<Settlement> all(MinecraftServer server) {
 		return server.overworld().getAttachedOrCreate(DATA);
+	}
+
+	/** Protected radius around a heart by tier: camp 20, hamlet 40, village and up the wall ring (~62). */
+	static boolean insideSettlement(MinecraftServer srv, BlockPos pos) {
+		for (Settlement s : all(srv)) {
+			int main = s.level(Settlement.MAIN);
+			int r = main >= 7 ? 62 : main >= 4 ? 40 : 20;
+			if (Math.abs(pos.getX() - s.heart().getX()) <= r && Math.abs(pos.getZ() - s.heart().getZ()) <= r
+					&& Math.abs(pos.getY() - s.heart().getY()) < 48) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Items that just popped out while builders replaced blocks (attached banners, beds...) are removed. */
+	private static void sweepDrops(ServerLevel level, BlockPos a, BlockPos b) {
+		net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(Vec3.atLowerCornerOf(a), Vec3.atLowerCornerOf(b)).inflate(2);
+		for (net.minecraft.world.entity.item.ItemEntity item : level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, box,
+				i -> i.tickCount <= 2)) {
+			item.discard();
+		}
 	}
 
 	static void putState(MinecraftServer server, Settlement s) {
@@ -261,6 +297,7 @@ public final class Settlements {
 		String job = s.style() + "/" + step.building();
 		String track0 = track;
 		ServerLevel level = server.overworld();
+		FOLLOWED.keySet().removeIf(k -> k.startsWith(s.id() + "|" + job + "|")); // sample the ground again
 		List<Template.Placement> list = placements(s, job);
 		Set<Long> next = new HashSet<>();
 		for (Template.Placement p : list) {
@@ -268,6 +305,8 @@ public final class Settlements {
 		}
 		// blocks of this track's old level that the new one doesn't use are taken down (they drop nothing)
 		List<Long> kept = new ArrayList<>();
+		BlockPos lo = s.heart().offset(-80, -20, -80);
+		BlockPos hi = s.heart().offset(80, 30, 80);
 		for (long pos : s.built().getOrDefault(track, List.of())) {
 			if (next.contains(pos)) {
 				kept.add(pos);
@@ -278,6 +317,7 @@ public final class Settlements {
 						NO_DROPS);
 			}
 		}
+		sweepDrops(level, lo, hi);
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
 		People.sendWorkers(level, s, list.size(), server.getPlayerList().getPlayer(s.owner()));
 	}
@@ -382,7 +422,7 @@ public final class Settlements {
 	 * The blocks of a job for this settlement. Road and lamp segments only appear once a building they lead to
 	 * exists (the template's segment rules against the settlement's levels).
 	 */
-	private static List<Template.Placement> placements(Settlement s, String job) {
+	private static List<Template.Placement> basePlacements(Settlement s, String job) {
 		Template t = Template.get(job);
 		if (t == null) {
 			return List.of();
@@ -405,6 +445,28 @@ public final class Settlements {
 				if (p.segment() < 0 || mask.charAt(p.segment()) == '1') {
 					out.add(p);
 				}
+			}
+			return List.copyOf(out);
+		});
+	}
+
+	/** The job's blocks for this settlement; terrain-following templates sit on the ground at each anchor column. */
+	private static List<Template.Placement> placements(Settlement s, String job) {
+		List<Template.Placement> base = basePlacements(s, job);
+		Template t = Template.get(job);
+		if (t == null || !t.follow || server == null) {
+			return base;
+		}
+		String key = s.id() + "|" + job + "|" + base.size() + "|" + s.color();
+		return FOLLOWED.computeIfAbsent(key, k -> {
+			ServerLevel level = server.overworld();
+			Map<Long, Integer> ground = new HashMap<>();
+			List<Template.Placement> out = new ArrayList<>(base.size());
+			for (Template.Placement p : base) {
+				BlockPos col = s.heart().offset(p.anchor());
+				int off = ground.computeIfAbsent(col.asLong(), c ->
+						Math.max(-10, Math.min(10, SiteWork.groundTop(level, col.getX(), col.getZ(), s.heart().getY()) + 1 - s.heart().getY())));
+				out.add(new Template.Placement(p.offset().above(off), p.state(), p.segment(), p.anchor()));
 			}
 			return List.copyOf(out);
 		});
@@ -514,11 +576,20 @@ public final class Settlements {
 				: Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 12.0)));
 		List<Long> built = new ArrayList<>(s.built().getOrDefault(s.jobTrack(), List.of()));
 		Set<Long> builtSet = new HashSet<>(built);
+		BlockPos first = null;
+		BlockPos last = null;
 		if (index >= cols) {
 			for (int n = 0; n < perTick && index < cols + list.size(); n++, index++) {
 				Template.Placement p = list.get(index - cols);
 				BlockPos pos = s.heart().offset(p.offset());
 				BlockState state = neighbourShaped(p.state(), level, pos);
+				if (t.follow && SiteWork.natural(level.getBlockState(pos.above())) && !SiteWork.terrain(level.getBlockState(pos.above()))) {
+					level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(), NO_DROPS); // grass, flowers, leaves
+				}
+				if (n == 0) {
+					first = pos;
+				}
+				last = pos;
 				if (!level.getBlockState(pos).equals(state)) {
 					level.setBlock(pos, state, NO_DROPS);
 					if (n == 0) {
@@ -533,6 +604,9 @@ public final class Settlements {
 					built.add(pos.asLong());
 				}
 			}
+		}
+		if (first != null) {
+			sweepDrops(level, first, last);
 		}
 		if (index >= cols + list.size()) {
 			Settlement done = s.withJob("", "", 0).withBuilt(s.jobTrack(), built);
