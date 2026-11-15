@@ -12,6 +12,8 @@ public class KingdomQuest implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		io.github.sotadevop.kingdomquest.charter.RoyalCharter.register();
+		io.github.sotadevop.kingdomquest.kingdom.Settlements.register();
+		KingdomCommand.register();
 		LOG.info("KingdomQuest loaded");
 	}
 }

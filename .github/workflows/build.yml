@@ -45,6 +45,9 @@ jobs:
                    assets/kingdomquest/lang/en_us.json \
                    io/github/sotadevop/kingdomquest/charter/RoyalCharter.class \
                    io/github/sotadevop/kingdomquest/client/FoundingScreen.class \
+                   io/github/sotadevop/kingdomquest/client/KingdomScreen.class \
+                   kingdomquest/buildings/temperate/tent_1.json \
+                   kingdomquest/buildings/frozen/tent_3.json \
                    assets/kingdomquest/textures/item/royal_charter.png \
                    data/kingdomquest/recipe/royal_charter.json \
                    data/kingdomquest/advancement/recipes/misc/royal_charter.json; do
@@ -61,12 +64,16 @@ jobs:
           touch server.log
           {
             for i in $(seq 1 300); do grep -q 'Done (' server.log && break; sleep 2; done
+            echo "kingdomquest selftest"
+            for i in $(seq 1 60); do grep -q 'Template self-test' server.log && break; sleep 2; done
             echo "stop"
           } | ./gradlew runServer --console=plain > server.log 2>&1 || true
           grep -E 'KingdomQuest|kingdomquest|ERROR|Exception' server.log | head -40
           if grep -iE "(couldn't|failed to|parsing error|error loading).*kingdomquest" server.log; then echo "::error title=Data::kingdomquest data failed to load"; exit 1; fi
           grep -q 'KingdomQuest loaded' server.log || { echo "::error title=Server smoke test::mod did not load"; exit 1; }
           grep -q 'Done (' server.log || { echo "::error title=Server smoke test::server did not start"; exit 1; }
+          grep 'Template error' server.log | head -20 | while read -r line; do echo "::error title=Template::${line:0:500}"; done
+          grep -q 'Template self-test passed' server.log || { echo "::error title=Template::self-test failed"; exit 1; }
 
       - uses: actions/upload-artifact@v7
         with:

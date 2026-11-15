@@ -33,6 +33,22 @@ public class RoyalCharterItem extends Item {
 		return InteractionResult.SUCCESS;
 	}
 
+	/** Sealed charter on the top of a block: preview is drawn by the client, two clicks found the settlement. */
+	@Override
+	public InteractionResult useOn(net.minecraft.world.item.context.UseOnContext context) {
+		ItemStack stack = context.getItemInHand();
+		CharterData data = stack.get(RoyalCharter.DATA);
+		Player player = context.getPlayer();
+		if (data == null || player == null || player.isShiftKeyDown() || context.getClickedFace() != net.minecraft.core.Direction.UP) {
+			return use(context.getLevel(), player, context.getHand());
+		}
+		if (player instanceof net.minecraft.server.level.ServerPlayer sp
+				&& io.github.sotadevop.kingdomquest.kingdom.Settlements.tryFound(sp, data, context.getClickedPos())) {
+			stack.shrink(1);
+		}
+		return InteractionResult.SUCCESS;
+	}
+
 	@Override
 	@SuppressWarnings("deprecation")
 	public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> lines, TooltipFlag flag) {
@@ -42,6 +58,7 @@ public class RoyalCharterItem extends Item {
 			return;
 		}
 		lines.accept(Component.literal(d.name()).withStyle(ChatFormatting.GOLD));
+		lines.accept(Component.translatable("item.kingdomquest.royal_charter.sealed").withStyle(ChatFormatting.GRAY));
 		lines.accept(Component.translatable("kingdomquest.founding.color").append(": ")
 				.append(Component.translatable("color.minecraft." + DyeColor.byId(d.color()).getName())).withStyle(ChatFormatting.GRAY));
 	}
