@@ -133,6 +133,94 @@ public final class Production {
 				g.add(new ItemStack(Items.HONEY_BOTTLE, 2));
 				g.add(new ItemStack(Items.HONEYCOMB, lvl >= 2 ? 4 : 2));
 			}
+			case "tavern" -> {
+				g.add(new ItemStack(Items.BREAD, 3));
+				g.add(new ItemStack(Items.COOKED_COD, 2));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.PUMPKIN_PIE, 2));
+				}
+			}
+			case "market" -> {
+				g.add(new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(
+						List.of("red_dye", "blue_dye", "yellow_dye", "green_dye", "white_dye", "black_dye").get(random.nextInt(6)))), 2));
+				g.add(new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(
+						List.of("oak_sapling", "birch_sapling", "cherry_sapling", "acacia_sapling", "spruce_sapling").get(random.nextInt(5))))));
+				if (lvl >= 2 && random.nextInt(4) == 0) {
+					g.add(new ItemStack(Items.NAME_TAG));
+				}
+			}
+			case "cartographer" -> {
+				g.add(new ItemStack(Items.PAPER, 4));
+				if (random.nextInt(3) == 0) {
+					g.add(new ItemStack(Items.COMPASS));
+				}
+				if (lvl >= 2) {
+					g.add(new ItemStack(item("map"), 2));
+				}
+			}
+			case "music" -> {
+				g.add(new ItemStack(Items.NOTE_BLOCK));
+				if (random.nextInt(lvl >= 2 ? 3 : 6) == 0) {
+					g.add(new ItemStack(item(List.of("music_disc_13", "music_disc_cat", "music_disc_blocks", "music_disc_chirp", "music_disc_far",
+							"music_disc_mall", "music_disc_mellohi", "music_disc_stal", "music_disc_strad", "music_disc_ward", "music_disc_wait")
+							.get(random.nextInt(11)))));
+				}
+			}
+			case "workshop" -> {
+				g.add(new ItemStack(Items.COPPER_INGOT, 4));
+				g.add(new ItemStack(Items.REDSTONE, 6));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.REPEATER, 2));
+					g.add(new ItemStack(Items.COMPARATOR));
+				}
+			}
+			case "armorer" -> {
+				g.add(new ItemStack(Items.IRON_INGOT, 2));
+				if (lvl >= 2 && random.nextInt(5) == 0) {
+					g.add(new ItemStack(item(List.of("coast_armor_trim_smithing_template", "dune_armor_trim_smithing_template",
+							"wild_armor_trim_smithing_template", "sentry_armor_trim_smithing_template", "vex_armor_trim_smithing_template",
+							"tide_armor_trim_smithing_template", "rib_armor_trim_smithing_template").get(random.nextInt(7)))));
+				}
+			}
+			case "tannery" -> {
+				g.add(new ItemStack(Items.LEATHER, 3));
+				g.add(new ItemStack(Items.RABBIT_HIDE, 2));
+				if (lvl >= 2 && random.nextInt(4) == 0) {
+					g.add(new ItemStack(item("bundle")));
+				}
+			}
+			case "archaeology" -> {
+				if (random.nextInt(3) == 0) {
+					g.add(new ItemStack(Items.BRUSH));
+				}
+				if (random.nextInt(lvl >= 2 ? 2 : 4) == 0) {
+					g.add(new ItemStack(item(List.of("archer_pottery_sherd", "arms_up_pottery_sherd", "prize_pottery_sherd", "skull_pottery_sherd",
+							"heart_pottery_sherd", "howl_pottery_sherd", "miner_pottery_sherd").get(random.nextInt(7)))));
+				}
+			}
+			case "mine" -> {
+				g.add(new ItemStack(Items.COAL, 6));
+				g.add(new ItemStack(Items.RAW_IRON, 3));
+				g.add(new ItemStack(Items.RAW_COPPER, 4));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.REDSTONE, 4));
+					g.add(new ItemStack(Items.LAPIS_LAZULI, 3));
+					g.add(new ItemStack(Items.RAW_GOLD, 1));
+					if (random.nextInt(10) == 0) {
+						g.add(new ItemStack(Items.DIAMOND));
+					}
+				}
+			}
+			case Progression.DOCK -> {
+				g.add(new ItemStack(Items.COD, 3));
+				g.add(new ItemStack(Items.SALMON, 2));
+				if (lvl >= 2) {
+					g.add(new ItemStack(Items.TROPICAL_FISH, 1));
+					if (random.nextInt(6) == 0) {
+						g.add(new ItemStack(Items.NAUTILUS_SHELL));
+					}
+				}
+			}
 			case Progression.CELLAR -> {
 				if (lvl >= 2) { // treasury
 					g.add(new ItemStack(Items.EMERALD, 2));
@@ -178,6 +266,10 @@ public final class Production {
 
 	private static Container storage(ServerLevel level, Settlement s, String job) {
 		Template t = Template.get(job);
+		if (t != null && t.anchored && t.storage != null) {
+			BlockPos p = s.heart().offset(Settlements.dockOffset(s)).offset(Template.rotate(t.storage.subtract(t.heart), Settlements.dockRotation(s)));
+			return level.getBlockEntity(p) instanceof Container c ? c : null;
+		}
 		BlockPos offset = t == null ? null : t.storageOffset(Rotation.values()[s.rotation()]);
 		return offset != null && level.getBlockEntity(s.heart().offset(offset)) instanceof Container c ? c : null;
 	}

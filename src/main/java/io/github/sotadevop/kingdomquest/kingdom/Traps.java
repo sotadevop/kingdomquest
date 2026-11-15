@@ -23,7 +23,7 @@ import java.util.Map;
  */
 final class Traps {
 	private static final int GX = 7;
-	private static final int GZ = 40;
+	private static final int GZ = 50;
 	private record Timer(long until, List<BlockPos> blocks, BlockState restore) {
 	}
 

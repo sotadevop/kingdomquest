@@ -50,6 +50,8 @@ public final class Template {
 	public final List<Segment> segments;
 	/** Blocks follow the terrain (roads, lamps, palisades) instead of the heart's height; no levelling. */
 	public final boolean follow;
+	/** Placed at an anchor the mod finds in the world (the dock at the nearest water), not around the heart. */
+	public final boolean anchored;
 	/** Container the add-on fills with its production (relative to the plot), or null. */
 	public final BlockPos storage;
 	/** Land graded outside the template's area (walls), 0 for none. */
@@ -102,6 +104,7 @@ public final class Template {
 		}
 		this.segments = List.copyOf(segs);
 		this.follow = json.has("follow") && json.get("follow").getAsBoolean();
+		this.anchored = json.has("anchored") && json.get("anchored").getAsBoolean();
 		this.apron = json.has("apron") ? json.get("apron").getAsInt() : 0;
 		JsonArray st = json.getAsJsonArray("storage");
 		this.storage = st == null ? null : new BlockPos(st.get(0).getAsInt(), st.get(1).getAsInt(), st.get(2).getAsInt());

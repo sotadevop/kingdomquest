@@ -62,7 +62,7 @@ public final class SiteWork {
 	 */
 	public static List<Column> columns(String job, Template t, Rotation rotation) {
 		return CACHE.computeIfAbsent(job + "|" + rotation.ordinal(), k -> {
-			if (t.follow) {
+			if (t.follow || t.anchored) {
 				return List.of(); // terrain-following blocks are placed on the ground as it is
 			}
 			int a = t.apron;

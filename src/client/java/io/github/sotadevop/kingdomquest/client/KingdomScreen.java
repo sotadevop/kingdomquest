@@ -31,7 +31,8 @@ public class KingdomScreen extends Screen {
 	private static final int CARD_H = 50;
 	private static final int CARD_GAP = 4;
 	private static final int MAX_CARDS = 3;
-	private static final int H = HEADER + TAB_H + 8 + MAX_CARDS * (CARD_H + CARD_GAP) + 26;
+	private static final int TABS_PER_ROW = 6;
+	private static final int H = HEADER + 2 * TAB_H + 10 + MAX_CARDS * (CARD_H + CARD_GAP) + 26;
 
 	private record Tab(String key, List<String> tracks) {
 	}
@@ -42,9 +43,12 @@ public class KingdomScreen extends Screen {
 			new Tab("kingdomquest.tab.guild", List.of("guild")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps")),
 			new Tab("kingdomquest.tab.farming", List.of("farm", "stables", "apiary")),
-			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy")),
-			new Tab("kingdomquest.tab.crafts", List.of("smith", "wood")),
-			new Tab("kingdomquest.tab.culture", List.of("library", "brewery")));
+			new Tab("kingdomquest.tab.resources", List.of("wood", "mine", "dock")),
+			new Tab("kingdomquest.tab.crafts", List.of("smith", "workshop", "armorer")),
+			new Tab("kingdomquest.tab.trade", List.of("tavern", "market", "tannery")),
+			new Tab("kingdomquest.tab.culture", List.of("library", "brewery", "music")),
+			new Tab("kingdomquest.tab.discovery", List.of("cartographer", "archaeology")),
+			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy")));
 	private static int lastTab;
 
 	private final KingdomInfoPayload info;
@@ -92,7 +96,7 @@ public class KingdomScreen extends Screen {
 	}
 
 	private int cardY(int i) {
-		return this.top + HEADER + TAB_H + 8 + i * (CARD_H + CARD_GAP);
+		return this.top + HEADER + 2 * TAB_H + 10 + i * (CARD_H + CARD_GAP);
 	}
 
 	@Override
@@ -103,14 +107,14 @@ public class KingdomScreen extends Screen {
 		this.buildButtons.clear();
 		List<Tab> tabs = visibleTabs();
 		this.tab = Math.min(this.tab, Math.max(0, tabs.size() - 1));
-		int tabW = (W - 16 - (TABS.size() - 1) * 2) / TABS.size();
+		int tabW = (W - 16 - (TABS_PER_ROW - 1) * 2) / TABS_PER_ROW;
 		for (int i = 0; i < tabs.size(); i++) {
 			int index = i;
 			Button b = Button.builder(Component.translatable(tabs.get(i).key()), btn -> {
 				this.tab = index;
 				lastTab = index;
 				this.rebuildWidgets();
-			}).bounds(this.left + 8 + i * (tabW + 2), this.top + HEADER, tabW, TAB_H).build();
+			}).bounds(this.left + 8 + (i % TABS_PER_ROW) * (tabW + 2), this.top + HEADER + (i / TABS_PER_ROW) * (TAB_H + 2), tabW, TAB_H).build();
 			b.active = i != this.tab; // the open tab is the highlighted one
 			this.tabButtons.add(this.addRenderableWidget(b));
 		}

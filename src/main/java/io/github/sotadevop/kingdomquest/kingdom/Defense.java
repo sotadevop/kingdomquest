@@ -126,7 +126,7 @@ final class Defense {
 			int castle = Math.max(1, s.level(Settlement.MAIN) - 8);
 			int size = 4 + 3 * castle;
 			for (int i = 0; i < size; i++) {
-				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, 84 + i / 7 * 2));
+				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, 94 + i / 7 * 2));
 			}
 			if (owner != null) {
 				People.say(owner, "Warchief", "They're here! " + size + " raiders at the gate. Man the walls!");
@@ -140,7 +140,7 @@ final class Defense {
 			}
 			return;
 		}
-		BlockPos gate = at(s, 7, 46);
+		BlockPos gate = at(s, 7, 56);
 		Set<Long> built = new java.util.HashSet<>();
 		s.built().values().forEach(built::addAll);
 		for (Mob m : raiders) {

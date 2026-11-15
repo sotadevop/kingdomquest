@@ -48,10 +48,14 @@ final class People {
 
 	static void register() {
 		// our people can't be hurt
-		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !role(entity).startsWith(ARCHITECT) && !role(entity).startsWith(WORKER));
+		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !role(entity).startsWith(ARCHITECT) && !role(entity).startsWith(WORKER)
+				&& !role(entity).startsWith("pet|"));
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			if (!(player instanceof ServerPlayer sp) || !(entity instanceof KingdomNpc npc) || !Guild.isAlly(npc) && role(entity).isEmpty()) {
 				return InteractionResult.PASS;
+			}
+			if (Workers.talk(sp, npc)) {
+				return InteractionResult.SUCCESS;
 			}
 			if (Guild.isAlly(npc)) {
 				Guild.talk(sp, npc);

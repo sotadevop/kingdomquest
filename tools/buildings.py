@@ -786,7 +786,7 @@ def woodcutter(style, level):
     return b.b
 
 
-WALL = (-39, 61, -24, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
+WALL = (-50, 72, -34, 50)  # x0, x1, z0, z1 of the palisade ring (village plot)
 
 
 def walls(style, level):
@@ -872,7 +872,7 @@ SEGMENTS = [
     ("apiary", [("apiary", 1), ("kennel", 1)]),
     ("kennel", [("kennel", 1)]),
     ("trophy", [("trophy", 1)]),
-]
+] + [(n, [(n, 1)]) for n in ("tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine")]
 SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
 
 
@@ -920,6 +920,15 @@ def road_cells():
     strip("apiary", range(45, 53), [11], core_z=11)
     strip("kennel", [52], range(12, 14), core_x=52)
     strip("trophy", range(-25, -14), range(12, 14), core_z=12)
+    # roads to the trade buildings: from the nearest street to each door
+    for name, ((x0, z0, x1, z1), door) in SHOPS.items():
+        cx = (x0 + x1) // 2
+        dz = z1 + 2 if door == "s" else z0 - 2
+        target = 12 if door == "s" and dz < 12 else 18 if door == "n" and dz > 18 else 12
+        lo, hi = sorted((dz, target))
+        strip(name, [cx], range(lo, hi + 1), core_x=cx)
+        a, c = sorted((cx, 7))
+        strip(name, range(a, c + 1), [target], core_z=target)
     for x in (1, 2, 3):
         for z in (12, 13, 14):
             cells.pop((x, z), None)                                      # the well
@@ -927,6 +936,7 @@ def road_cells():
 
 
 SEGS_OF = {}  # blocks dict id -> {pos: segment index}
+DOCK_JOBS = []
 FOLLOW = set()  # ids of block dicts whose blocks follow the terrain (roads, lamps, walls)
 ANCHORS_OF = {}  # blocks dict id -> {pos: (x, z) anchor column}
 
@@ -1737,6 +1747,128 @@ def trophy_hall(style, level):
     return b.b
 
 
+# ---------------- the other vanilla systems: one building each, with a worker (spawned by the mod) ----------------
+# rect = (x0, z0, x1, z1), door side 'n' or 's'; store = barrel position; worker stands at the centre
+SHOPS = {
+    "tavern": ((22, -24, 34, -14), "s"),
+    "market": ((38, -24, 52, -16), "s"),
+    "cartographer": ((56, -22, 64, -14), "s"),
+    "music": ((-42, -28, -32, -20), "s"),
+    "workshop": ((-46, 30, -38, 38), "n"),
+    "armorer": ((-24, 38, -16, 44), "n"),
+    "tannery": ((26, 38, 34, 44), "n"),
+    "archaeology": ((58, 24, 68, 32), "n"),
+    "mine": ((60, 2, 68, 10), "s"),
+}
+
+
+def shop_store(name):
+    (x0, z0, x1, z1), door = SHOPS[name]
+    return (x0 + 1, 0, z0 + 1 if door == "s" else z1 - 1)
+
+
+def shop(style, name, level):
+    """A small building in the village style with the furniture of its trade; level 2 adds more of it."""
+    m = mats(style)
+    b = B()
+    (x0, z0, x1, z1), door = SHOPS[name]
+    h = 5 if name in ("tavern", "market", "music") else 4
+    stone_hut(b, x0, z0, x1, z1, h, m["stone"] if name in ("mine", "armorer", "workshop") else m["wall"], m["corner"], "spruce_planks", door,
+              m["roof"], m["slab"])
+    back = z0 + 1 if door == "s" else z1 - 1
+    front = z1 - 1 if door == "s" else z0 + 1
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
+    b.put(*shop_store(name), "barrel", facing="up", open="false")
+    b.put(cx, h - 1, cz, "lantern", hanging="true", waterlogged="false")
+    fb = "north" if door == "s" else "south"
+    inside = {
+        "tavern": [("barrel", (x0 + 2, back), dict(facing="up", open="false")), ("barrel", (x0 + 3, back), dict(facing="up", open="false")),
+                   ("smoker", (x1 - 1, back), dict(facing=fb, lit="true")), ("campfire", (x1 - 2, back), dict(facing=fb, lit="true", signal_fire="false", waterlogged="false"))],
+        "market": [("composter", (x0 + 2, back), dict(level="0")), ("barrel", (x0 + 3, back), dict(facing="up", open="true")),
+                   ("smithing_table", (x1 - 2, back), {}), ("cartography_table", (x1 - 3, back), {}), ("loom", (x1 - 4, back), dict(facing=fb))],
+        "cartographer": [("cartography_table", (x0 + 2, back), {}), ("lectern", (x1 - 1, back), dict(facing=fb, has_book="false", powered="false"))],
+        "music": [("jukebox", (cx, back), dict(has_record="false")), ("note_block", (x0 + 2, back), dict(instrument="harp", note="0", powered="false")),
+                  ("note_block", (x1 - 2, back), dict(instrument="bell", note="12", powered="false"))],
+        "workshop": [("crafter", (x0 + 2, back), dict(orientation="north_up", crafting="false", triggered="false")),
+                     ("copper_block", (x1 - 2, back), {}), ("redstone_lamp", (x1 - 1, back), dict(lit="false"))],
+        "armorer": [("blast_furnace", (x0 + 2, back), dict(facing=fb, lit="true")), ("smithing_table", (x1 - 2, back), {}),
+                    ("anvil", (cx, back), dict(facing="east"))],
+        "tannery": [("cauldron", (x0 + 2, back), {}), ("water_cauldron", (x0 + 3, back), dict(level="3")), ("smoker", (x1 - 2, back), dict(facing=fb, lit="false"))],
+        "archaeology": [("decorated_pot", (x0 + 2, back), dict(facing=fb, cracked="false", waterlogged="false")),
+                        ("decorated_pot", (x0 + 4, back), dict(facing=fb, cracked="false", waterlogged="false")),
+                        ("suspicious_sand", (x1 - 2, back), dict(dusted="0")), ("chiseled_bookshelf", (x1 - 3, back), dict(facing=fb))],
+        "mine": [("rail", (cx, front), dict(shape="north_south", waterlogged="false")), ("chest", (x1 - 1, back), dict(facing=fb, type="single", waterlogged="false"))],
+    }[name]
+    for block, (x, z), props in inside:
+        b.put(x, 1, z, block, **props)
+    if name == "tavern":
+        for x in range(x0 + 2, x1 - 1, 3):
+            b.put(x, 1, cz, "spruce_fence")
+            b.put(x, 2, cz, "spruce_pressure_plate", powered="false")
+            b.put(x - 1, 1, cz, "spruce_stairs", facing="east", **ST)
+            b.put(x + 1, 1, cz, "spruce_stairs", facing="west", **ST)
+        b.put(cx, h - 1, cz - 2, "lantern", hanging="true", waterlogged="false")
+    if name == "mine":
+        # shaft with a ladder down to a lit gallery
+        sx, sz = x0 + 2, cz
+        for y in range(-1, -21, -1):
+            b.put(sx, y, sz, "ladder", facing="east", waterlogged="false")  # hangs on the rock to the west
+        b.put(sx, 0, sz, "spruce_trapdoor", facing="north", half="top", open="true", powered="false", waterlogged="false")
+        for x in range(sx, sx + 7):
+            for y in (-20, -19):
+                b.put(x, y, sz, "air")
+            if (x - sx) % 3 == 0:
+                for y in (-20, -19):
+                    b.put(x, y, sz + 1, "spruce_fence")
+                b.put(x, -18, sz, "spruce_planks")
+                b.put(x, -19, sz - 1, "wall_torch", facing="south")
+        b.put(sx + 6, -20, sz, "chest", facing="west", type="single", waterlogged="false")
+    if level >= 2:
+        b.put(x0 + 1, 1, front, "{color}_banner", rotation="0")
+        b.put(x1 - 1, h - 1, front, "lantern", hanging="true", waterlogged="false")
+        if name == "tavern":
+            b.put(x0 + 1, 1, back, "{color}_bed", facing="north" if door == "s" else "south", part="head", occupied="false")
+    return b.b
+
+
+def dock(style, level):
+    """Dock at the nearest water (placed by the mod on the shore): a pier into the water on log posts, a little
+    roof at the end with a barrel; level 2 is longer, with a side jetty and a fish drying rack.
+    Local frame: the shore is at z = 0, the water lies toward +z, y = 0 is the water surface."""
+    s = STYLES[style]
+    b = B()
+    w = s["wood"]
+    log = MAT[style]["log"]
+    L = 10 if level == 1 else 15
+    for z in range(0, L):
+        for x in (-1, 0, 1):
+            b.put(x, 0, z, w + "_planks")
+        if z % 4 == 0:
+            for x in (-2, 2):
+                for y in range(-3, 2):
+                    b.put(x, y, z, log, axis="y")
+                if z in (0, L - 4):
+                    b.put(x, 2, z, "lantern", hanging="false", waterlogged="false")
+    for z in range(L - 4, L):
+        for x in (-2, -1, 0, 1, 2):
+            b.put(x, 4, z, w + "_slab", type="bottom", waterlogged="false")
+    for x in (-2, 2):
+        for z in (L - 4, L - 1):
+            for y in range(1, 4):
+                b.put(x, y, z, w + "_fence")
+    b.put(-1, 1, L - 2, "barrel", facing="up", open="false")
+    b.put(1, 1, L - 1, "composter", level="0")
+    if level >= 2:
+        for x in range(2, 8):
+            b.put(x, 0, L // 2, w + "_planks")
+        for x in (4, 6):
+            b.put(x, 1, L // 2 - 1, w + "_fence")
+            b.put(x, 2, L // 2 - 1, w + "_fence")
+        for x in range(4, 7):
+            b.put(x, 3, L // 2 - 1, w + "_slab", type="bottom", waterlogged="false")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -1811,6 +1943,11 @@ if __name__ == "__main__":
         for level in (1, 2, 3):
             jobs.append((style, f"guild_{level}", guild_hall(style, level), 200, GUILD_STORE, None))
         jobs.append((style, "gate_5", lava_trap(style, 5), 240, None, None))
+        for name in SHOPS:
+            for level in (1, 2):
+                jobs.append((style, f"{name}_{level}", shop(style, name, level), 160 + 40 * level, shop_store(name), None))
+        for level in (1, 2):
+            DOCK_JOBS.append((style, level))
         for level in (1, 2):
             jobs.append((style, f"apiary_{level}", apiary(style, level), 150, APIARY_STORE,
                          [["bee", 52, 1, 5], ["bee", 50, 1, 7], ["bee", 54, 1, 6]] if level == 1 else [["bee", 51, 1, 6], ["bee", 53, 1, 7]]))
@@ -1856,4 +1993,25 @@ if __name__ == "__main__":
                     g[p] = v
             os.makedirs("build/previews", exist_ok=True)
             render(g, size, 0, 3, bg=(170, 200, 230, 255)).save(f"build/previews/{style}_{name}.png")
-    print(len(jobs), "templates")
+    for style, level in DOCK_JOBS:
+        blocks = dock(style, level)
+        nb, heart, size, _ = normalize(blocks)
+        # the dock's own origin (shore point 0,0,0) is its heart
+        xs = [p[0] for p in blocks]
+        zs = [p[2] for p in blocks]
+        heart = (-min(xs), 0, -min(zs))
+        names, palette, out = {}, [], []
+        for (x, y, z), (name, props) in sorted(nb.items(), key=lambda kv: (kv[0][1], kv[0][2], kv[0][0])):
+            key = (name, tuple(sorted(props.items())))
+            if key not in names:
+                names[key] = len(palette)
+                e = {"Name": name}
+                if props:
+                    e["Properties"] = props
+                palette.append(e)
+            out.append([x, y, z, names[key]])
+        j = {"size": list(size), "heart": list(heart), "seconds": 150, "palette": palette, "blocks": out, "anchored": True,
+             "storage": [-1 + heart[0], 1, (10 if level == 1 else 15) - 2 + heart[2]]}
+        with open(os.path.join(OUT, style, f"dock_{level}.json"), "w") as f:
+            json.dump(j, f, separators=(",", ":"))
+    print(len(jobs) + len(DOCK_JOBS), "templates")

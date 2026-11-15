@@ -52,7 +52,7 @@ public final class Settlements {
 			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "settlements"));
 
 	/** Minimum distance between two hearts. */
-	private static final int SPACING = 160;
+	private static final int SPACING = 200;
 	private static final int CONFIRM_TICKS = 200;
 	/** Replaced or removed builder blocks never drop items (banners, beds, torches popping off...). */
 	private static final int NO_DROPS = Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS;
@@ -128,7 +128,7 @@ public final class Settlements {
 	static boolean insideSettlement(MinecraftServer srv, BlockPos pos) {
 		for (Settlement s : all(srv)) {
 			int main = s.level(Settlement.MAIN);
-			int r = main >= 7 ? 62 : main >= 4 ? 40 : 20;
+			int r = main >= 7 ? 80 : main >= 4 ? 40 : 20;
 			if (Math.abs(pos.getX() - s.heart().getX()) <= r && Math.abs(pos.getZ() - s.heart().getZ()) <= r
 					&& Math.abs(pos.getY() - s.heart().getY()) < 48) {
 				return true;
@@ -294,6 +294,13 @@ public final class Settlements {
 		}
 		if (Template.get(s.style() + "/" + step.building()) == null) {
 			return;
+		}
+		if (Progression.DOCK.equals(track) && s.level("dock_set") == 0) {
+			if (!findDockSite(server, s)) {
+				player.sendOverlayMessage(Component.translatable("kingdomquest.dock.no_water"));
+				return;
+			}
+			s = byHeart(server, heart);
 		}
 		Progression.pay(player, step);
 		start(server, s, track, step);
@@ -535,10 +542,76 @@ public final class Settlements {
 	 * The blocks of a job for this settlement. Road and lamp segments only appear once a building they lead to
 	 * exists (the template's segment rules against the settlement's levels).
 	 */
+	/** The dock's origin (first water block at the shore) relative to the heart, and its facing (toward the water). */
+	static BlockPos dockOffset(Settlement s) {
+		return new BlockPos(s.level("dock_x"), s.level("dock_y"), s.level("dock_z"));
+	}
+
+	static Rotation dockRotation(Settlement s) {
+		return Rotation.values()[Math.floorMod(s.level("dock_r"), 4)];
+	}
+
+	/** A point in the dock's local frame (shore at z = 0, water toward +z) in world coordinates. */
+	static BlockPos dockPoint(Settlement s, int x, int y, int z) {
+		return s.heart().offset(dockOffset(s)).offset(Template.rotate(new BlockPos(x, y, z), dockRotation(s)));
+	}
+
+	/**
+	 * Looks for the nearest water at least 2 deep within 160 blocks and stores where the dock goes: the first water
+	 * block from the shore, facing out over the water. Returns false if there is none.
+	 */
+	static boolean findDockSite(MinecraftServer srv, Settlement s) {
+		ServerLevel level = srv.overworld();
+		BlockPos h = s.heart();
+		for (int r = 12; r <= 160; r += 4) {
+			for (int i = 0; i < r * 2; i++) {
+				double a = Math.PI * i / r;
+				int x = h.getX() + (int) Math.round(Math.cos(a) * r);
+				int z = h.getZ() + (int) Math.round(Math.sin(a) * r);
+				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
+				BlockPos p = new BlockPos(x, y, z);
+				if (!level.getFluidState(p).isSource() || !level.getFluidState(p.below()).isSource() || !level.getFluidState(p).is(net.minecraft.tags.FluidTags.WATER)) {
+					continue;
+				}
+				// walk back toward the heart to the shore
+				int dx = Integer.signum(h.getX() - x);
+				int dz = Integer.signum(h.getZ() - z);
+				boolean alongX = Math.abs(h.getX() - x) >= Math.abs(h.getZ() - z);
+				BlockPos water = p;
+				for (int step = 0; step < 40; step++) {
+					BlockPos next = alongX ? water.offset(dx, 0, 0) : water.offset(0, 0, dz);
+					if (!level.getFluidState(next).is(net.minecraft.tags.FluidTags.WATER)) {
+						break;
+					}
+					water = next;
+				}
+				// facing: from the shore out over the water (away from the heart)
+				Rotation rot = alongX ? (dx > 0 ? Rotation.CLOCKWISE_90 : Rotation.COUNTERCLOCKWISE_90) : (dz > 0 ? Rotation.CLOCKWISE_180 : Rotation.NONE);
+				BlockPos rel = water.subtract(h);
+				putState(srv, s.withLevel("dock_x", rel.getX()).withLevel("dock_y", rel.getY()).withLevel("dock_z", rel.getZ())
+						.withLevel("dock_r", rot.ordinal()).withLevel("dock_set", 1));
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static List<Template.Placement> basePlacements(Settlement s, String job) {
 		Template t = Template.get(job);
 		if (t == null) {
 			return List.of();
+		}
+		if (t.anchored) {
+			BlockPos off = dockOffset(s);
+			String key = job + "|" + s.color() + "|" + off.asLong() + "|" + s.level("dock_r");
+			return PLACEMENTS.computeIfAbsent(key, k -> {
+				List<Template.Placement> out = new ArrayList<>();
+				for (Template.Placement p : t.placements(dye(s.color()), dockRotation(s))) {
+					out.add(new Template.Placement(p.offset().offset(off), p.state(), p.segment(), p.anchor()));
+				}
+				out.sort(java.util.Comparator.comparingInt((Template.Placement p) -> attached(p.state()) ? 1 : 0));
+				return List.copyOf(out);
+			});
 		}
 		StringBuilder mask = new StringBuilder();
 		for (Template.Segment seg : t.segments) {
@@ -644,6 +717,7 @@ public final class Settlements {
 		for (Settlement s : all(server)) {
 			if (people) {
 				People.ensureArchitect(server.overworld(), s);
+				Workers.tick(server.overworld(), s);
 			}
 			repairTick(server, s);
 			if (server.getTickCount() % 1200 == 0) {
@@ -739,6 +813,9 @@ public final class Settlements {
 			nowBuilt.addAll(built);
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			Production.armTraps(level, done, list);
+			if (Progression.DOCK.equals(s.jobTrack()) && done.level(Progression.DOCK) == 1) {
+				RoadLink.connectTo(server, done, dockPoint(done, 0, 0, -1), "the dock");
+			}
 			if (!Progression.ROADS.equals(s.jobTrack()) && !Progression.LAMPS.equals(s.jobTrack())) {
 				extendInfrastructure(server, done.withLevel(s.jobTrack(), done.level(s.jobTrack())));
 			}

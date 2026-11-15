@@ -38,7 +38,7 @@ final class RoadLink {
 
 	/** The point just outside a settlement's gate (beyond the moat), in world coordinates. */
 	static BlockPos gateExit(Settlement s) {
-		return s.heart().offset(Template.rotate(new BlockPos(0, 0, 38), Rotation.values()[s.rotation()]));
+		return s.heart().offset(Template.rotate(new BlockPos(0, 0, 48), Rotation.values()[s.rotation()]));
 	}
 
 	static void connect(ServerPlayer player, Settlement from, boolean village) {
@@ -79,6 +79,26 @@ final class RoadLink {
 		}
 		JOBS.put(from.id(), new Job(player.getUUID(), line, new int[] {0}));
 		People.say(player, "Architect", "My workers will build a road to " + name + ". It's " + steps + " blocks long.");
+	}
+
+	/** A road from the gate to a point (the dock), built by the owner's workers. */
+	static void connectTo(MinecraftServer server, Settlement from, BlockPos end, String name) {
+		if (JOBS.containsKey(from.id())) {
+			return;
+		}
+		BlockPos start = gateExit(from);
+		List<BlockPos> line = new ArrayList<>();
+		int dx = end.getX() - start.getX();
+		int dz = end.getZ() - start.getZ();
+		int steps = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
+		for (int i = 0; i <= steps; i++) {
+			line.add(new BlockPos(start.getX() + Math.round((float) dx * i / steps), from.heart().getY(), start.getZ() + Math.round((float) dz * i / steps)));
+		}
+		JOBS.put(from.id(), new Job(from.owner(), line, new int[] {0}));
+		ServerPlayer p = server.getPlayerList().getPlayer(from.owner());
+		if (p != null) {
+			People.say(p, "Architect", "A road to " + name + " is on its way.");
+		}
 	}
 
 	static void tick(MinecraftServer server) {

@@ -205,8 +205,43 @@ public final class Progression {
 	/** Walls level each gate level needs. */
 	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3, 3};
 
+	/** One building per vanilla system, each with a worker: trades, crafts, resources (the dock sits at the nearest water). */
+	public static final String DOCK = "dock";
+	public static final Map<String, List<Step>> TRADES = Map.ofEntries(
+				Map.entry("tavern", List.of(
+					new Step("tavern", "tavern_1", 1, "kingdomquest.trade.tavern_1", 5, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.BARREL, 4), item(Items.SMOKER, 1))),
+					new Step("tavern", "tavern_2", 2, "kingdomquest.trade.tavern_2", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(item(Items.LANTERN, 4), item(Items.CAKE, 1))))),
+				Map.entry("market", List.of(
+					new Step("market", "market_1", 1, "kingdomquest.trade.market_1", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.EMERALD, 8), item(Items.LOOM, 1))),
+					new Step("market", "market_2", 2, "kingdomquest.trade.market_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.EMERALD, 16), item(Items.LANTERN, 4))))),
+				Map.entry("cartographer", List.of(
+					new Step("cartographer", "cartographer_1", 1, "kingdomquest.trade.cartographer_1", 7, adv("adventure/trade"), "kingdomquest.req.trade", List.of(item(Items.CARTOGRAPHY_TABLE, 1), item(Items.COMPASS, 1), item(Items.PAPER, 16))),
+					new Step("cartographer", "cartographer_2", 2, "kingdomquest.trade.cartographer_2", 8, adv("story/follow_ender_eye"), "kingdomquest.req.eye", List.of(item(Items.SPYGLASS, 1), item(Items.MAP, 2))))),
+				Map.entry("music", List.of(
+					new Step("music", "music_1", 1, "kingdomquest.trade.music_1", 7, adv("adventure/play_jukebox_in_meadows"), "kingdomquest.req.jukebox", List.of(item(Items.JUKEBOX, 1), item(Items.NOTE_BLOCK, 4), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("music", "music_2", 2, "kingdomquest.trade.music_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.NOTE_BLOCK, 8), item(Items.AMETHYST_SHARD, 8))))),
+				Map.entry("workshop", List.of(
+					new Step("workshop", "workshop_1", 1, "kingdomquest.trade.workshop_1", 5, adv("husbandry/wax_on"), "kingdomquest.req.wax", List.of(item(Items.COPPER_BLOCK, 4), item(Items.REDSTONE, 16), item(Items.COBBLESTONE, 64))),
+					new Step("workshop", "workshop_2", 2, "kingdomquest.trade.workshop_2", 8, adv("adventure/minecraft_trials_edition"), "kingdomquest.req.trials", List.of(item(Items.CRAFTER, 1), item(Items.REPEATER, 4))))),
+				Map.entry("armorer", List.of(
+					new Step("armorer", "armorer_1", 1, "kingdomquest.trade.armorer_1", 8, adv("adventure/trim_with_any_armor_pattern"), "kingdomquest.req.trim", List.of(item(Items.BLAST_FURNACE, 1), item(Items.ANVIL, 1), item(Items.STONE_BRICKS, 64))),
+					new Step("armorer", "armorer_2", 2, "kingdomquest.trade.armorer_2", 9, adv("nether/netherite_armor"), "kingdomquest.req.netherite", List.of(item(Items.SMITHING_TABLE, 1), item(Items.IRON_BLOCK, 4))))),
+				Map.entry("tannery", List.of(
+					new Step("tannery", "tannery_1", 1, "kingdomquest.trade.tannery_1", 5, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed", List.of(item(Items.CAULDRON, 2), item(Items.LEATHER, 8), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("tannery", "tannery_2", 2, "kingdomquest.trade.tannery_2", 7, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame", List.of(item(Items.SMOKER, 1), item(Items.LEATHER, 16))))),
+				Map.entry("archaeology", List.of(
+					new Step("archaeology", "archaeology_1", 1, "kingdomquest.trade.archaeology_1", 7, adv("adventure/salvage_sherd"), "kingdomquest.req.sherd", List.of(item(Items.BRUSH, 1), item(Items.DECORATED_POT, 2), item(Items.SANDSTONE, 32))),
+					new Step("archaeology", "archaeology_2", 2, "kingdomquest.trade.archaeology_2", 8, adv("adventure/craft_decorated_pot_using_only_sherds"), "kingdomquest.req.pot", List.of(item(Items.CHISELED_BOOKSHELF, 2), item(Items.BRUSH, 1))))),
+				Map.entry("mine", List.of(
+					new Step("mine", "mine_1", 1, "kingdomquest.trade.mine_1", 4, adv("story/iron_tools"), "kingdomquest.req.iron_tools", List.of(item(Items.IRON_PICKAXE, 1), item(Items.LADDER, 24), item(Items.TORCH, 16))),
+					new Step("mine", "mine_2", 2, "kingdomquest.trade.mine_2", 7, adv("story/mine_diamond"), "kingdomquest.req.diamond", List.of(item(Items.RAIL, 16), item(Items.DIAMOND_PICKAXE, 1))))),
+				Map.entry("dock", List.of(
+					new Step("dock", "dock_1", 1, "kingdomquest.trade.dock_1", 4, adv("husbandry/fishy_business"), "kingdomquest.req.fish", List.of(tag(ItemTags.LOGS, "logs", 32), tag(ItemTags.PLANKS, "planks", 64), item(Items.FISHING_ROD, 1))),
+					new Step("dock", "dock_2", 2, "kingdomquest.trade.dock_2", 6, adv("husbandry/tactical_fishing"), "kingdomquest.req.bucket_fish", List.of(tag(ItemTags.PLANKS, "planks", 48), item(Items.LANTERN, 2))))));
+
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
+			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -220,7 +255,7 @@ public final class Progression {
 			case GUILD -> GUILD_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
-			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.get(track);
+			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}
 
