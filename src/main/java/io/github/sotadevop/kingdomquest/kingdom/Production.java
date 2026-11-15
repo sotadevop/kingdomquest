@@ -129,6 +129,12 @@ public final class Production {
 					g.add(new ItemStack(Items.CHARCOAL, 4));
 				}
 			}
+			case Progression.CELLAR -> {
+				if (lvl >= 2) { // treasury
+					g.add(new ItemStack(Items.EMERALD, 2));
+					g.add(new ItemStack(Items.GOLD_INGOT, 2));
+				}
+			}
 			case Progression.LIBRARY -> {
 				g.add(new ItemStack(Items.PAPER, 6));
 				g.add(new ItemStack(Items.BOOK, 2));

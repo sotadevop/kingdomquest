@@ -370,7 +370,9 @@ def hamlet(style, level):
     b = B()
     w = s["wood"]
     hx, hy, hz = HEART
-    if level >= 5:
+    if level >= 6:
+        castle_keep(b, style)
+    elif level >= 5:
         town_hall(b, style, 1, -4)
     else:
         (house_norse if style == "frozen" else house_temperate)(b, 4, -3)
@@ -618,7 +620,7 @@ def woodcutter(style, level):
     return b.b
 
 
-WALL = (-39, 57, -13, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
+WALL = (-39, 57, -20, 40)  # x0, x1, z0, z1 of the palisade ring (village plot)
 
 
 def walls(style, level):
@@ -1147,12 +1149,13 @@ def gate(style, level):
         for x, z in ring:
             bridge = abs(x - gx) <= 1 and z > z1
             b.put(x, -1, z, w + "_planks" if bridge else "water", **({} if bridge else {"level": "0"}))
-            if not bridge:
-                b.put(x, -2, z, "water", level="0")
-                b.put(x, -3, z, "dirt")
+            b.put(x, -2, z, "water", level="0")
+            b.put(x, -3, z, "dirt")
         for x in range(gx - 1, gx + 2):
             for z in range(z1 + 2, z1 + 6):
                 b.put(x, -1, z, w + "_planks")
+        # the lever inside the gatehouse raises and lowers the drawbridge (handled by the mod)
+        b.put(gx + 2, 1, z1 - 2, "lever", face="wall", facing="north", powered="false")
         for x in (gx - 2, gx + 2):
             b.put(x, 0, z1 + 5, w + "_fence")
             for y in range(1, 5):
@@ -1162,6 +1165,135 @@ def gate(style, level):
         for x in (gx - 2, gx + 2):
             b.put(x, 6, z1 + 1, "dispenser", facing="south", triggered="false")
             b.put(x, 8, z1 + 1, "lever", face="floor", facing="north", powered="false")
+    return b.b
+
+
+def castle_keep(b, style):
+    """Castle tier: a square stone keep replaces the town hall. Great hall with a carpet to the throne,
+    upper floor, walkable battlements and four corner towers rising above the roof."""
+    frozen = style == "frozen"
+    stone, alt = ("cobblestone", "mossy_cobblestone") if frozen else ("stone_bricks", "mossy_stone_bricks")
+    wall_top = "cobblestone_wall" if frozen else "stone_brick_wall"
+    wood = "spruce"
+    x0, z0, x1, z1 = -1, -12, 15, 4
+    cx = (x0 + x1) // 2
+    H = 12
+
+    def mat(x, y, z):
+        return alt if (x * 7 + y * 13 + z * 5) % 11 == 0 else stone
+
+    def crenel(x, y, z):
+        b.put(x, y, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, mat(x, 0, z) if edge else "polished_andesite" if (x + z) % 2 else "stone_bricks")
+            for y in range(1, H):
+                if edge:
+                    window = y in (3, 8) and ((x - x0) % 4 == 2 and z in (z0, z1) or (z - z0) % 4 == 2 and x in (x0, x1))
+                    if window:
+                        pane = dict(north="false", south="false", east="true", west="true") if z in (z0, z1) else dict(north="true", south="true", east="false", west="false")
+                        b.put(x, y, z, "iron_bars", waterlogged="false", **pane)
+                    else:
+                        b.put(x, y, z, mat(x, y, z))
+                else:
+                    b.put(x, y, z, "air")
+            if not edge:
+                b.put(x, 6, z, wood + "_planks")
+                b.put(x, H, z, stone)
+            elif (x + z) % 2 == 0:
+                crenel(x, H, z)
+    # corner towers, 5x5, rising 6 above the battlements
+    for tx, tz in ((x0 - 1, z0 - 1), (x1 - 3, z0 - 1), (x0 - 1, z1 - 3), (x1 - 3, z1 - 3)):
+        for x in range(tx, tx + 5):
+            for z in range(tz, tz + 5):
+                edge = x in (tx, tx + 4) or z in (tz, tz + 4)
+                for y in range(0, H + 6):
+                    if edge:
+                        b.put(x, y, z, mat(x, y, z))
+                b.put(x, H + 6, z, stone)
+                if edge and (x + z) % 2 == 0:
+                    crenel(x, H + 7, z)
+    # entrance: double door, porch, banners
+    for x in (cx - 1, cx + 1):
+        b.put(x, 1, z1, wood + "_door", facing="south", half="lower", hinge="left" if x < cx else "right", open="false", powered="false")
+        b.put(x, 2, z1, wood + "_door", facing="south", half="upper", hinge="left" if x < cx else "right", open="false", powered="false")
+    for y in (1, 2):
+        b.put(cx, y, z1, stone)
+    for y in (1, 2, 3):
+        for x in (cx - 1, cx, cx + 1):
+            if y == 3:
+                b.put(x, y, z1, "chiseled_stone_bricks" if not frozen else stone)
+    porch(b, cx, z1 + 1, wood, width=5)
+    for x in (cx - 4, cx + 4):
+        b.put(x, 5, z1 + 1, "{color}_wall_banner", facing="south")
+    # great hall: carpet runner to the throne, tables, lanterns
+    for z in range(z0 + 3, z1):
+        b.put(cx, 1, z, "{color}_carpet")
+    b.put(cx, 1, z0 + 2, wood + "_stairs", facing="south", **ST)
+    b.put(cx - 1, 1, z0 + 2, stone)
+    b.put(cx + 1, 1, z0 + 2, stone)
+    b.put(cx, 3, z0 + 1, "{color}_wall_banner", facing="south")
+    for z in range(z0 + 4, z1 - 2, 2):
+        for x in (cx - 4, cx + 4):
+            b.put(x, 1, z, wood + "_fence")
+            b.put(x, 2, z, wood + "_pressure_plate", powered="false")
+    for x in (cx - 5, cx + 5):
+        for z in (z0 + 4, z1 - 4):
+            b.put(x, 5, z, "lantern", hanging="true", waterlogged="false")
+    # ladder to the upper floor and the battlements
+    for y in range(1, H):
+        b.put(x1 - 1, y, z0 + 6, "ladder", facing="west", waterlogged="false")
+    b.put(x1 - 1, 6, z0 + 6, "air")
+    b.put(x1 - 1, H, z0 + 6, "air")
+    # upper floor: beds, chests, map table
+    b.put(x0 + 2, 7, z0 + 2, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(x0 + 2, 7, z0 + 3, "{color}_bed", facing="north", part="foot", occupied="false")
+    b.put(x0 + 4, 7, z0 + 2, "chest", facing="south", type="single", waterlogged="false")
+    b.put(cx, 7, z0 + 6, "cartography_table")
+    b.put(cx, 10, z0 + 6, "lantern", hanging="true", waterlogged="false")
+
+
+CELLAR = (3, -2, 11, 4)    # x0, z0, x1, z1 under the square side of the main building
+CELLAR_STORE = (4, -5, -1)
+
+
+def cellar(style, level):
+    """Cellar track: a stone cellar under the ground beside the main building, reached by a hatch and a ladder.
+    1 storeroom (chests, barrels, the cellar store); 2 treasury and armory (more storage, lanterns, banners)."""
+    b = B()
+    stone = "cobblestone" if style == "frozen" else "stone_bricks"
+    x0, z0, x1, z1 = CELLAR
+    top, bottom = -2, -6
+    for x in range(x0 - 1, x1 + 2):
+        for z in range(z0 - 1, z1 + 2):
+            edge = x in (x0 - 1, x1 + 1) or z in (z0 - 1, z1 + 1)
+            for y in range(bottom, top + 1):
+                b.put(x, y, z, stone if edge or y in (bottom, top) else "air")
+    # hatch in the square, ladder down
+    hx, hz = x1, z1 + 2
+    b.put(hx, -1, hz, "spruce_trapdoor", facing="north", half="top", open="false", powered="false", waterlogged="false")
+    for y in range(bottom + 1, top + 1):
+        b.put(hx, y, hz, "ladder", facing="north", waterlogged="false")
+    for y in range(bottom + 1, -1):
+        b.put(hx, y, hz + 1, stone)
+        b.put(hx - 1, y, hz, stone)
+        b.put(hx + 1, y, hz, stone)
+    b.put(hx, top, hz - 1, "air")
+    b.put(hx, top, z1 + 1, "air")
+    for x in range(x0, x1):
+        b.put(x, bottom + 1, z0, "barrel", facing="up", open="false")
+    b.put(CELLAR_STORE[0], CELLAR_STORE[1], CELLAR_STORE[2], "chest", facing="south", type="single", waterlogged="false")
+    for x in (x0 + 2, x1 - 2):
+        b.put(x, top - 1, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    if level >= 2:
+        for z in range(z0 + 1, z1):
+            b.put(x0, bottom + 1, z, "chest", facing="east", type="single", waterlogged="false")
+        for x in range(x0 + 2, x1 - 1):
+            b.put(x, bottom + 1, z1, "barrel", facing="up", open="false")
+        b.put((x0 + x1) // 2, bottom + 1, (z0 + z1) // 2, "{color}_carpet")
+        b.put((x0 + x1) // 2, bottom + 3, z0 - 1 + 1, "{color}_wall_banner", facing="south")
     return b.b
 
 
@@ -1218,6 +1350,9 @@ if __name__ == "__main__":
             jobs.append((style, f"hamlet_{level}", hamlet(style, level), secs, TAX_STORE if level >= 2 else None, None))
         jobs.append((style, "village_1", hamlet(style, 4), 300, TAX_STORE, None))
         jobs.append((style, "town_1", hamlet(style, 5), 420, TAX_STORE, None))
+        jobs.append((style, "castle_1", hamlet(style, 6), 600, TAX_STORE, None))
+        for level in (1, 2):
+            jobs.append((style, f"cellar_{level}", cellar(style, level), 150, CELLAR_STORE, None))
         for level, secs in ((1, 300), (2, 300), (3, 420), (4, 480)):
             jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None, 24))
         for level in (1, 2, 3, 4):

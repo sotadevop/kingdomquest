@@ -74,9 +74,16 @@ public final class Settlements {
 		ServerPlayNetworking.registerGlobalReceiver(RecolorPayload.TYPE, (payload, context) -> recolor(context.player(), payload.heart(), payload.color()));
 		ServerPlayNetworking.registerGlobalReceiver(UpgradePayload.TYPE, (payload, context) -> upgrade(context.player(), payload.heart(), payload.track()));
 		ServerTickEvents.END_SERVER_TICK.register(Settlements::tick);
+		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
+		People.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+			if (player instanceof ServerPlayer sp && hand == InteractionHand.MAIN_HAND
+					&& level.getBlockState(hit.getBlockPos()).getBlock() instanceof net.minecraft.world.level.block.LeverBlock) {
+				Drawbridge.toggle(sp.level().getServer(), hit.getBlockPos());
+				return InteractionResult.PASS; // the lever still flips
+			}
 			if (hand != InteractionHand.MAIN_HAND || !player.getMainHandItem().isEmpty() || !(player instanceof ServerPlayer sp)) {
 				return InteractionResult.PASS;
 			}
@@ -93,6 +100,10 @@ public final class Settlements {
 
 	public static List<Settlement> all(MinecraftServer server) {
 		return server.overworld().getAttachedOrCreate(DATA);
+	}
+
+	static void putState(MinecraftServer server, Settlement s) {
+		put(server, s);
 	}
 
 	private static void put(MinecraftServer server, Settlement s) {
@@ -268,6 +279,7 @@ public final class Settlements {
 			}
 		}
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
+		People.sendWorkers(level, s, list.size(), server.getPlayerList().getPlayer(s.owner()));
 	}
 
 	/** Swaps every kingdom-colored block (banners, beds, carpets, wool) of all built levels to a new color. */
@@ -353,6 +365,7 @@ public final class Settlements {
 			return false;
 		}
 		ServerLevel level = server.overworld();
+		People.removeAll(level, s);
 		for (List<Long> list : s.built().values()) {
 			for (long pos : list) {
 				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), NO_DROPS);
@@ -452,7 +465,11 @@ public final class Settlements {
 
 	static void tick(MinecraftServer server) {
 		boolean produce = server.getTickCount() % Production.INTERVAL == 0;
+		boolean people = server.getTickCount() % 200 == 0;
 		for (Settlement s : all(server)) {
+			if (people) {
+				People.ensureArchitect(server.overworld(), s);
+			}
 			if (!s.job().isEmpty()) {
 				step(server, s, false);
 			}
@@ -521,6 +538,7 @@ public final class Settlements {
 			Settlement done = s.withJob("", "", 0).withBuilt(s.jobTrack(), built);
 			put(server, done);
 			spawnAnimals(level, s, t);
+			People.removeWorkers(level, s);
 			Set<Long> nowBuilt = new HashSet<>(allBuilt);
 			nowBuilt.addAll(built);
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
@@ -535,6 +553,11 @@ public final class Settlements {
 			return;
 		}
 		put(server, s.withJob(s.job(), s.jobTrack(), index).withBuilt(s.jobTrack(), built));
+		if (server.getTickCount() % 40 == 0) {
+			int at = Math.max(0, Math.min(list.size() - 1, index - cols));
+			People.herdWorkers(level, s, s.heart().offset(index < cols ? columns.get(index).dx() : list.get(at).offset().getX(), 0,
+					index < cols ? columns.get(index).dz() : list.get(at).offset().getZ()));
+		}
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 64 * 64) {
 			owner.sendOverlayMessage(Component.translatable(index < cols ? "kingdomquest.build.clearing" : "kingdomquest.build.progress", s.name(),

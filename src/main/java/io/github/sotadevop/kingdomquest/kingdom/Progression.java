@@ -65,7 +65,10 @@ public final class Progression {
 									item(Items.BRICK, 16), item(Items.EMERALD, 8))),
 					new Step(Settlement.MAIN, "town_1", 8, "kingdomquest.level.town_1", 0, adv("story/enter_the_nether"),
 							"kingdomquest.req.nether", List.of(item(Items.STONE_BRICKS, 256), tag(ItemTags.LOGS, "logs", 64), item(Items.GLASS_PANE, 32),
-									item(Items.BRICK, 64), item(Items.EMERALD, 16), item(Items.BELL, 1)))),
+									item(Items.BRICK, 64), item(Items.EMERALD, 16), item(Items.BELL, 1))),
+					new Step(Settlement.MAIN, "castle_1", 9, "kingdomquest.level.castle_1", 0, adv("nether/find_fortress"),
+							"kingdomquest.req.fortress", List.of(item(Items.STONE_BRICKS, 1024), item(Items.IRON_BARS, 32), tag(ItemTags.LOGS, "logs", 64),
+									item(Items.EMERALD, 32), item(Items.GOLD_BLOCK, 4)))),
 			FARM, List.of(
 					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
 							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2))),
@@ -139,6 +142,14 @@ public final class Progression {
 					new Step(STABLES, "stables_2", 2, "kingdomquest.addon.stables_2", 7, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed",
 							List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.HAY_BLOCK, 8), item(Items.SADDLE, 1)))));
 
+	/** Cellar under the main building: storeroom, then treasury. */
+	public static final String CELLAR = "cellar";
+	public static final List<Step> CELLAR_STEPS = List.of(
+			new Step(CELLAR, "cellar_1", 1, "kingdomquest.cellar.cellar_1", 5, adv("story/mine_stone"), "kingdomquest.req.mine_stone",
+					List.of(item(Items.COBBLESTONE, 128), item(Items.CHEST, 2), item(Items.LADDER, 6))),
+			new Step(CELLAR, "cellar_2", 2, "kingdomquest.cellar.cellar_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+					List.of(item(Items.STONE_BRICKS, 64), item(Items.CHEST, 6), item(Items.GOLD_INGOT, 8))));
+
 	/** Gate: its own track at the wall's gate opening. Levels 2-4 need stone walls. */
 	public static final String GATE = "gate";
 	public static final List<Step> GATE_STEPS = List.of(
@@ -153,7 +164,7 @@ public final class Progression {
 	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3};
 
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, WALLS, GATE, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -163,6 +174,7 @@ public final class Progression {
 		return switch (track) {
 			case WALLS -> WALL_STEPS;
 			case GATE -> GATE_STEPS;
+			case CELLAR -> CELLAR_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.get(track);
