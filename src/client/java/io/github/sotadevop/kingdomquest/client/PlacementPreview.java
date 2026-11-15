@@ -23,7 +23,7 @@ public final class PlacementPreview {
 	}
 
 	public static void tick(Minecraft mc) {
-		if (mc.player == null || mc.level == null || mc.isPaused() || ++ticks % 4 != 0) {
+		if (mc.player == null || mc.level == null || mc.isPaused() || ++ticks % 4 != 0 || !ClientConfig.placementPreview()) {
 			return;
 		}
 		ItemStack held = mc.player.getMainHandItem().is(RoyalCharter.ITEM) ? mc.player.getMainHandItem() : mc.player.getOffhandItem();

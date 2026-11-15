@@ -19,7 +19,17 @@ loom {
 	}
 }
 
+repositories {
+	// Mod Menu, for the settings screen.
+	maven {
+		name = "Terraformers"
+		url = "https://maven.terraformersmc.com/"
+	}
+}
+
 dependencies {
+	// compileOnly: KingdomQuest uses Mod Menu's API if it is installed, but doesn't require or bundle it.
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"

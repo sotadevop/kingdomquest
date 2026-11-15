@@ -27,7 +27,6 @@ import java.util.Locale;
 public class FoundingScreen extends Screen {
 	private static final int PAD = 7;
 	private static final int SLOT = 18;
-	private static final int LABEL = 0xFF404040;
 	private static List<Item> allItems;
 
 	private final CharterData editing;
@@ -134,15 +133,16 @@ public class FoundingScreen extends Screen {
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 		super.extractBackground(graphics, mouseX, mouseY, partialTick);
-		// plain vanilla-like panel: light gray window with a dark border, sunken grid
-		graphics.fill(this.left - 1, this.top - 1, this.left + this.w + 1, this.top + this.h + 1, 0xFF000000);
-		graphics.fill(this.left, this.top, this.left + this.w, this.top + this.h, 0xFFC6C6C6);
-		graphics.fill(this.gridX - 1, this.gridY - 1, this.gridX + this.columns * SLOT + 1, this.gridY + this.rows * SLOT + 1, 0xFF8B8B8B);
+		// themed panel (light/dark, modern/vanilla like the kingdom menu), sunken logo grid
+		Theme t = ClientConfig.colors();
+		Ui.panel(graphics, this.left, this.top, this.w, this.h, t);
+		Ui.sunken(graphics, this.gridX - 1, this.gridY - 1, this.columns * SLOT + 2, this.rows * SLOT + 2, t);
 	}
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 		super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+		int LABEL = ClientConfig.colors().heading();
 		graphics.text(this.font, this.title, this.left + PAD + 1, this.top + PAD - 1, LABEL, false);
 		graphics.text(this.font, Component.translatable("kingdomquest.founding.name"), this.left + PAD + 1, this.top + 22, LABEL, false);
 		graphics.text(this.font, Component.translatable("kingdomquest.founding.color"), this.left + PAD + 1, this.top + 44, LABEL, false);

@@ -4,18 +4,32 @@
 	"version": "${version}",
 	"name": "KingdomQuest",
 	"description": "Found a settlement with a Royal Charter and grow it from a tent to a citadel.",
-	"authors": ["sotadevop"],
-	"contact": {"sources": "https://github.com/sotadevop/kingdomquest"},
+	"authors": [
+		"sotadevop"
+	],
+	"contact": {
+		"sources": "https://github.com/sotadevop/kingdomquest"
+	},
 	"license": "All-Rights-Reserved",
 	"environment": "*",
 	"entrypoints": {
-		"main": ["io.github.sotadevop.kingdomquest.KingdomQuest"],
-		"client": ["io.github.sotadevop.kingdomquest.KingdomQuestClient"]
+		"main": [
+			"io.github.sotadevop.kingdomquest.KingdomQuest"
+		],
+		"client": [
+			"io.github.sotadevop.kingdomquest.KingdomQuestClient"
+		],
+		"modmenu": [
+			"io.github.sotadevop.kingdomquest.client.ModMenuIntegration"
+		]
 	},
 	"depends": {
 		"fabricloader": ">=0.19.5",
 		"minecraft": "~26.3",
 		"java": ">=25",
 		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
 	}
 }

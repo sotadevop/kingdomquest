@@ -466,12 +466,16 @@ public final class Settlements {
 		}
 		boolean mine = s.owner().equals(player.getUUID());
 		List<KingdomInfoPayload.Option> options = new ArrayList<>();
+		List<Progression.Step> mainSteps = Progression.steps(Settlement.MAIN);
 		for (String track : Progression.ORDER) {
-			Progression.Step next = Progression.next(s, track);
-			if (next != null) {
-				options.add(new KingdomInfoPayload.Option(track, next.titleKey(), next.requirementKey() == null ? "" : next.requirementKey(),
-						mine && Progression.requirementMet(player, next), Progression.costText(next), mine && Progression.canPay(player, next)));
-			}
+			List<Progression.Step> steps = Progression.steps(track);
+			int lvl = s.level(track);
+			Progression.Step next = lvl < steps.size() ? steps.get(lvl) : null;
+			String lockedBy = next != null && s.level(Settlement.MAIN) < next.minMain() ? mainSteps.get(next.minMain() - 1).titleKey() : "";
+			options.add(new KingdomInfoPayload.Option(track, lvl, steps.stream().map(Progression.Step::titleKey).toList(),
+					next == null || next.requirementKey() == null ? "" : next.requirementKey(),
+					next != null && mine && Progression.requirementMet(player, next), next == null ? "" : Progression.costText(next),
+					next != null && mine && Progression.canPay(player, next), lockedBy));
 		}
 		Progression.Step current = Progression.current(s, Settlement.MAIN);
 		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),

@@ -18,15 +18,37 @@ import java.util.List;
  */
 public record KingdomInfoPayload(BlockPos heart, String name, int color, Identifier logo, String levelTitle, int percent,
 		List<Option> options) implements CustomPacketPayload {
-	public record Option(String track, String title, String requirement, boolean requirementMet, String cost, boolean canPay) {
+	/**
+	 * One upgrade track as the menu shows it.
+	 *
+	 * @param steps    title keys of every level of the track, in order
+	 * @param lockedBy title key of the main level the next step needs, "" if not locked
+	 */
+	public record Option(String track, int level, List<String> steps, String requirement, boolean requirementMet, String cost,
+			boolean canPay, String lockedBy) {
 		static final Codec<Option> CODEC = RecordCodecBuilder.create(i -> i.group(
 				Codec.STRING.fieldOf("track").forGetter(Option::track),
-				Codec.STRING.fieldOf("title").forGetter(Option::title),
+				Codec.INT.fieldOf("level").forGetter(Option::level),
+				Codec.STRING.listOf().fieldOf("steps").forGetter(Option::steps),
 				Codec.STRING.fieldOf("req").forGetter(Option::requirement),
 				Codec.BOOL.fieldOf("req_met").forGetter(Option::requirementMet),
 				Codec.STRING.fieldOf("cost").forGetter(Option::cost),
-				Codec.BOOL.fieldOf("can_pay").forGetter(Option::canPay)
+				Codec.BOOL.fieldOf("can_pay").forGetter(Option::canPay),
+				Codec.STRING.fieldOf("locked_by").forGetter(Option::lockedBy)
 		).apply(i, Option::new));
+
+		public boolean maxed() {
+			return this.level >= this.steps.size();
+		}
+
+		public boolean locked() {
+			return !this.lockedBy.isEmpty();
+		}
+
+		/** Can be built right now (by this player, if nothing else is being built). */
+		public boolean ready() {
+			return !maxed() && !locked() && this.requirementMet && this.canPay;
+		}
 	}
 
 	public static final Type<KingdomInfoPayload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "kingdom_info"));

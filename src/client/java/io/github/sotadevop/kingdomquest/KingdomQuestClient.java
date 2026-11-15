@@ -13,6 +13,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 public class KingdomQuestClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		io.github.sotadevop.kingdomquest.client.ClientConfig.load();
 		RoyalCharterItem.openScreen = FoundingScreen::open;
 		ClientPlayNetworking.registerGlobalReceiver(KingdomInfoPayload.TYPE, (payload, context) -> KingdomScreen.open(payload));
 		ClientTickEvents.END_CLIENT_TICK.register(PlacementPreview::tick);
