@@ -93,9 +93,11 @@ final class Landmarks {
 			level.setBlock(signPos, sign, Block.UPDATE_ALL);
 			placed.add(signPos.asLong());
 			if (level.getBlockEntity(signPos) instanceof SignBlockEntity be) {
-				SignText text = new SignText().setMessage(1, title).setColor(DyeColor.BLACK);
-				be.setText(text, true);
-				be.setText(text, false);
+				List<Component> lines = List.of(Component.empty(), title, Component.empty(), Component.empty());
+				SignText text = new SignText(lines, lines, DyeColor.BLACK, false);
+				for (net.minecraft.world.level.block.entity.SignTextSlot slot : net.minecraft.world.level.block.entity.SignTextSlot.values()) {
+					be.setText(text, slot); // front and back
+				}
 				be.setWaxed(true);
 				be.setChanged();
 				level.sendBlockUpdated(signPos, sign, sign, Block.UPDATE_ALL);
