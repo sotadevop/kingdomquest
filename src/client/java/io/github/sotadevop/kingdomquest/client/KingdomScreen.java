@@ -41,7 +41,8 @@ public class KingdomScreen extends Screen {
 			new Tab("kingdomquest.tab.defense", List.of("walls", "gate", "barracks")),
 			new Tab("kingdomquest.tab.guild", List.of("guild")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps")),
-			new Tab("kingdomquest.tab.farming", List.of("farm", "stables")),
+			new Tab("kingdomquest.tab.farming", List.of("farm", "stables", "apiary")),
+			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy")),
 			new Tab("kingdomquest.tab.crafts", List.of("smith", "wood")),
 			new Tab("kingdomquest.tab.culture", List.of("library", "brewery")));
 	private static int lastTab;

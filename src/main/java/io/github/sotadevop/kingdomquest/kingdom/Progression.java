@@ -128,6 +128,9 @@ public final class Progression {
 	public static final String BREWERY = "brewery";
 	public static final String STABLES = "stables";
 	public static final String BARRACKS = "barracks";
+	public static final String APIARY = "apiary";
+	public static final String KENNEL = "kennel";
+	public static final String TROPHY = "trophy";
 	public static final Map<String, List<Step>> ADDONS_3 = Map.of(
 			LIBRARY, List.of(
 					new Step(LIBRARY, "library_1", 1, "kingdomquest.addon.library_1", 7, adv("story/enchant_item"), "kingdomquest.req.enchant",
@@ -139,6 +142,23 @@ public final class Progression {
 							List.of(item(Items.STONE_BRICKS, 64), item(Items.BREWING_STAND, 1), item(Items.CAULDRON, 2))),
 					new Step(BREWERY, "brewery_2", 2, "kingdomquest.addon.brewery_2", 7, adv("nether/brew_potion"), "kingdomquest.req.brew",
 							List.of(item(Items.BREWING_STAND, 1), item(Items.BARREL, 4), item(Items.GLASS_BOTTLE, 16)))),
+			APIARY, List.of(
+					new Step(APIARY, "apiary_1", 1, "kingdomquest.addon.apiary_1", 5, adv("husbandry/safely_harvest_honey"), "kingdomquest.req.honey",
+							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.HONEYCOMB, 3), tag(ItemTags.FLOWERS, "flowers", 8))),
+					new Step(APIARY, "apiary_2", 2, "kingdomquest.addon.apiary_2", 7, adv("husbandry/silk_touch_nest"), "kingdomquest.req.nest",
+							List.of(item(Items.BEEHIVE, 3), item(Items.CAMPFIRE, 1)))),
+			KENNEL, List.of(
+					new Step(KENNEL, "kennel_1", 1, "kingdomquest.addon.kennel_1", 4, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame",
+							List.of(tag(ItemTags.LOGS, "logs", 12), item(Items.BONE, 8))),
+					new Step(KENNEL, "kennel_2", 2, "kingdomquest.addon.kennel_2", 5, adv("adventure/trade"), "kingdomquest.req.trade",
+							List.of(item(Items.COD, 8), tag(ItemTags.WOOL, "wool", 3))),
+					new Step(KENNEL, "kennel_3", 3, "kingdomquest.addon.kennel_3", 7, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
+							List.of(item(Items.WHEAT_SEEDS, 16), tag(ItemTags.LOGS, "logs", 4)))),
+			TROPHY, List.of(
+					new Step(TROPHY, "trophy_1", 1, "kingdomquest.addon.trophy_1", 7, adv("story/enter_the_nether"), "kingdomquest.req.nether",
+							List.of(item(Items.STONE_BRICKS, 96), item(Items.POLISHED_DEEPSLATE, 20))),
+					new Step(TROPHY, "trophy_2", 2, "kingdomquest.addon.trophy_2", 9, adv("story/enter_the_end"), "kingdomquest.req.end",
+							List.of(item(Items.LANTERN, 4), item(Items.GOLD_INGOT, 8)))),
 			BARRACKS, List.of(
 					new Step(BARRACKS, "barracks_1", 1, "kingdomquest.addon.barracks_1", 7, adv("adventure/kill_a_mob"), "kingdomquest.req.kill",
 							List.of(item(Items.STONE_BRICKS, 96), item(Items.IRON_BLOCK, 8), item(Items.CARVED_PUMPKIN, 2))),
@@ -186,7 +206,7 @@ public final class Progression {
 	public static final int[] GATE_MIN_WALLS = {1, 3, 3, 3, 3};
 
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

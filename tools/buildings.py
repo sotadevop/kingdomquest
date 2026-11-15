@@ -869,6 +869,9 @@ SEGMENTS = [
     ("stables", [("stables", 1)]),
     ("barracks", [("barracks", 1)]),
     ("guild", [("guild", 1)]),
+    ("apiary", [("apiary", 1), ("kennel", 1)]),
+    ("kennel", [("kennel", 1)]),
+    ("trophy", [("trophy", 1)]),
 ]
 SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
 
@@ -912,6 +915,11 @@ def road_cells():
     strip("barracks", range(9, 17), range(31, 33), core_z=31)
     strip("guild", range(-17, -13), range(12, 14), core_z=12)
     strip("guild", [-16], range(-7, 12), core_x=-16)
+    strip("apiary", range(43, 46), range(12, 14), core_z=12)
+    strip("apiary", [45], range(10, 12), core_x=45)
+    strip("apiary", range(45, 53), [11], core_z=11)
+    strip("kennel", [52], range(12, 14), core_x=52)
+    strip("trophy", range(-25, -14), range(12, 14), core_z=12)
     for x in (1, 2, 3):
         for z in (12, 13, 14):
             cells.pop((x, z), None)                                      # the well
@@ -1633,6 +1641,102 @@ def secret_vault(style, level):
     return b.b
 
 
+APIARY = (47, 2, 57, 10)
+APIARY_STORE = (48, 0, 3)
+KENNEL = (48, 14, 56, 20)
+TROPHY = (-34, 8, -26, 16)  # door east
+# pedestal tops (base frame); the mod puts a trophy block on each once its advancement is done
+TROPHY_SPOTS = [(-33, 2, 9), (-31, 2, 9), (-29, 2, 9), (-27, 2, 9), (-33, 2, 15), (-31, 2, 15), (-29, 2, 15), (-27, 2, 15),
+                (-33, 2, 12), (-30, 2, 12)]
+
+
+def apiary(style, level):
+    """Apiary add-on: a flower meadow behind a low fence with bee nests on posts; level 2 adds beehives and a
+    campfire whose smoke keeps the bees calm when you harvest."""
+    s = STYLES[style]
+    b = B()
+    w = s["wood"]
+    x0, z0, x1, z1 = APIARY
+    flowers = ["poppy", "dandelion", "cornflower", "oxeye_daisy", "allium", "azure_bluet", "lily_of_the_valley"]
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            if edge:
+                if (x, z) == ((x0 + x1) // 2, z1):
+                    b.put(x, 0, z, w + "_fence_gate", facing="south", in_wall="false", open="false", powered="false")
+                else:
+                    b.put(x, 0, z, w + "_fence")
+            elif (x * 5 + z * 3) % 3 != 0:
+                b.put(x, 0, z, flowers[(x * 7 + z) % len(flowers)])
+    for x, z in ((x0 + 2, z0 + 2), (x1 - 2, z0 + 2)):
+        b.put(x, 0, z, w + "_fence")
+        b.put(x, 1, z, w + "_fence")
+        b.put(x, 2, z, "bee_nest", facing="south", honey_level="0")
+    b.put(*APIARY_STORE, "barrel", facing="up", open="false")
+    if level >= 2:
+        for x in (x0 + 3, x0 + 5, x0 + 7):
+            b.put(x, 0, z1 - 2, "beehive", facing="south", honey_level="0")
+            if x == x0 + 5:
+                b.put(x, -1, z1 - 3, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    return b.b
+
+
+def kennel(style, level):
+    """Kennel add-on: a small timber shelter for the kingdom's pets (dog, then cat, then parrot) with a bowl,
+    a bed and a perch. The pets themselves are spawned and tamed to the lord by the mod."""
+    m = mats(style)
+    s = STYLES[style]
+    b = B()
+    w = s["wood"]
+    x0, z0, x1, z1 = KENNEL
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            if (x + z) % 3 == 0:
+                b.put(x, -1, z, "podzol", snowy="false")
+            if x in (x0, x1) and z in (z0, z1):
+                for y in range(0, 3):
+                    b.put(x, y, z, m["corner"], axis="y")
+    for x in range(x0 - 1, x1 + 2):
+        for z in range(z0 - 1, z1 + 2):
+            b.put(x, 3, z, w + "_slab", type="bottom", waterlogged="false")
+    for x in range(x0 + 1, x1):
+        b.put(x, 0, z0, w + "_planks")
+        b.put(x, 1, z0, w + "_planks")
+    b.put(x0 + 2, 0, z0 + 2, "{color}_carpet")
+    b.put(x0 + 3, 0, z0 + 2, "cauldron")
+    b.put(x0 + 2, 2, z0 + 1, "lantern", hanging="true", waterlogged="false")
+    if level >= 2:
+        b.put(x1 - 2, 0, z0 + 2, "{color}_bed", facing="north", part="head", occupied="false")
+        b.put(x1 - 2, 0, z0 + 3, "{color}_bed", facing="north", part="foot", occupied="false")
+    if level >= 3:
+        b.put(x1 - 1, 0, z1 - 1, w + "_fence")
+        b.put(x1 - 1, 1, z1 - 1, w + "_fence")
+        b.put(x1 - 1, 2, z1 - 1, w + "_fence")
+    return b.b
+
+
+def trophy_hall(style, level):
+    """Trophy hall: a stone hall with pedestals along the walls. Each pedestal shows a trophy once the lord has
+    reached its milestone (dragon head, wither skull, beacon, netherite, ...). Level 2 adds banners and lanterns."""
+    m = mats(style)
+    b = B()
+    x0, z0, x1, z1 = TROPHY
+    stone_hut(b, x0, z0, x1, z1, 5, m["stone"], m["corner"], "polished_andesite", "s", m["roof"], m["slab"])
+    for x, y, z in TROPHY_SPOTS:
+        b.put(x, 0, z, "polished_deepslate")
+        b.put(x, 1, z, "polished_deepslate_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+        b.put(x, y, z, "air")
+    for x in range(x0 + 1, x1):
+        if x % 2 == 0:
+            b.put(x, 0, (z0 + z1) // 2 + 1, "{color}_carpet")
+    b.put((x0 + x1) // 2, 4, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    if level >= 2:
+        for x in (x0 + 2, x1 - 2):
+            b.put(x, 4, z0 + 1, "{color}_wall_banner", facing="south")
+            b.put(x, 3, z1 - 1, "lantern", hanging="true", waterlogged="false")
+    return b.b
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -1707,6 +1811,12 @@ if __name__ == "__main__":
         for level in (1, 2, 3):
             jobs.append((style, f"guild_{level}", guild_hall(style, level), 200, GUILD_STORE, None))
         jobs.append((style, "gate_5", lava_trap(style, 5), 240, None, None))
+        for level in (1, 2):
+            jobs.append((style, f"apiary_{level}", apiary(style, level), 150, APIARY_STORE,
+                         [["bee", 52, 1, 5], ["bee", 50, 1, 7], ["bee", 54, 1, 6]] if level == 1 else [["bee", 51, 1, 6], ["bee", 53, 1, 7]]))
+            jobs.append((style, f"trophy_{level}", trophy_hall(style, level), 200, None, None))
+        for level in (1, 2, 3):
+            jobs.append((style, f"kennel_{level}", kennel(style, level), 120, None, None))
         jobs.append((style, "cellar_3", secret_vault(style, 3), 200, CELLAR_STORE, None))
         for level in (1, 2):
             jobs.append((style, f"barracks_{level}", barracks(style, level), 200, BARRACKS_STORE, None))

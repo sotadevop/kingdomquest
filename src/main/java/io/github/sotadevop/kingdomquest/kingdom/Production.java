@@ -129,6 +129,10 @@ public final class Production {
 					g.add(new ItemStack(Items.CHARCOAL, 4));
 				}
 			}
+			case Progression.APIARY -> {
+				g.add(new ItemStack(Items.HONEY_BOTTLE, 2));
+				g.add(new ItemStack(Items.HONEYCOMB, lvl >= 2 ? 4 : 2));
+			}
 			case Progression.CELLAR -> {
 				if (lvl >= 2) { // treasury
 					g.add(new ItemStack(Items.EMERALD, 2));

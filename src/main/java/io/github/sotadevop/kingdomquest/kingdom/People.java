@@ -155,6 +155,12 @@ final class People {
 			} else {
 				v.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 0.6);
 				if (v.distanceToSqr(Vec3.atCenterOf(target)) < 5 * 5) {
+					// the right tool for the work: axe for wood, shovel for earth, pickaxe for stone
+					var st = level.getBlockState(target);
+					v.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new net.minecraft.world.item.ItemStack(
+							st.is(net.minecraft.tags.BlockTags.MINEABLE_WITH_AXE) ? net.minecraft.world.item.Items.IRON_AXE
+									: st.is(net.minecraft.tags.BlockTags.MINEABLE_WITH_SHOVEL) ? net.minecraft.world.item.Items.IRON_SHOVEL
+									: net.minecraft.world.item.Items.IRON_PICKAXE));
 					v.swingArm(); // hammering away
 				}
 			}

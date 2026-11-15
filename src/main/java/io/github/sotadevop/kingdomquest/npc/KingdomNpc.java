@@ -104,7 +104,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 				this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new ItemStack(Items.LEATHER_CHESTPLATE));
 			}
 			case "mage" -> this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(Items.BLAZE_ROD));
-			case "builder" -> this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SHOVEL));
+			case "builder" -> this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_PICKAXE));
 			default -> {
 			}
 		}

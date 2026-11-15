@@ -648,6 +648,8 @@ public final class Settlements {
 			repairTick(server, s);
 			if (server.getTickCount() % 1200 == 0) {
 				Defense.guards(server.overworld(), s);
+				Collections.pets(server, s);
+				Collections.trophies(server, s);
 			}
 			if (server.getTickCount() % 100 == 0) {
 				Defense.attacks(server, s);
