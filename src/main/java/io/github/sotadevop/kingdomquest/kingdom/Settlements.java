@@ -587,7 +587,7 @@ public final class Settlements {
 		int bare = 0;
 		for (SiteWork.Column c : columns) {
 			BlockPos base = heart.offset(c.dx(), 0, c.dz());
-			for (int y = 0; y < 4; y++) {
+			for (int y = base.equals(heart) ? 1 : 0; y < 4; y++) {
 				BlockState st = level.getBlockState(base.above(y));
 				if (!st.isAir()) {
 					left++;
