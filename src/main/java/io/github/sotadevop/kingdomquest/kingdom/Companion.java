@@ -28,9 +28,13 @@ final class Companion {
 	static final AttachmentType<Long> STATE = AttachmentRegistry.<Long>builder()
 			.persistent(Codec.LONG).copyOnDeath()
 			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "companion"));
-	private static final List<ItemStack> ERRANDS = List.of(new ItemStack(Items.BREAD, 4), new ItemStack(Items.TORCH, 12),
-			new ItemStack(Items.ARROW, 12), new ItemStack(Items.COAL, 6), new ItemStack(Items.IRON_INGOT, 2), new ItemStack(Items.COOKED_BEEF, 3),
-			new ItemStack(Items.OAK_LOG, 16), new ItemStack(Items.STRING, 4));
+	private record Errand(net.minecraft.world.item.Item item, int count) {
+	}
+
+	// items only: ItemStacks can't be made before the registries are bound
+	private static final List<Errand> ERRANDS = List.of(new Errand(Items.BREAD, 4), new Errand(Items.TORCH, 12), new Errand(Items.ARROW, 12),
+			new Errand(Items.COAL, 6), new Errand(Items.IRON_INGOT, 2), new Errand(Items.COOKED_BEEF, 3), new Errand(Items.OAK_LOG, 16),
+			new Errand(Items.STRING, 4));
 
 	private Companion() {
 	}
@@ -87,7 +91,8 @@ final class Companion {
 			} else if (state < 0 && time % 12000 < 1200) {
 				KingdomNpc c = find(p);
 				if (c != null && c.distanceToSqr(p) < 32 * 32) {
-					ItemStack gift = ERRANDS.get(p.getRandom().nextInt(ERRANDS.size())).copy();
+					Errand e = ERRANDS.get(p.getRandom().nextInt(ERRANDS.size()));
+					ItemStack gift = new ItemStack(e.item(), e.count());
 					People.say(p, "Aldric", "I went out and found this for you: " + gift.getCount() + " " + gift.getHoverName().getString() + ".");
 					if (!p.getInventory().add(gift)) {
 						p.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(p.level(), p.getX(), p.getY(), p.getZ(), gift));
