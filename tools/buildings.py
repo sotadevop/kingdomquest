@@ -189,6 +189,7 @@ def tent(style, level):
 
 # ---------------- Hamlet ----------------
 HAMLET_SIZE = (23, 12, 15)
+FARM_SIZE = (32, 12, 15)  # farm add-on reaches further east (pasture, smokehouse)
 
 
 def house_temperate(b, x0=4, z0=0):
@@ -348,6 +349,65 @@ def hamlet(style, level):
     return b.b
 
 
+def pasture(b, s):
+    """Farm level 2: fenced pasture east of the field with hay, a water trough and a lean-to shelter."""
+    w = s["wood"]
+    x0, x1, z0, z1 = 23, 31, 0, 9
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            if edge:
+                if (x, z) == (x0, 5):
+                    b.put(x, 0, z, w + "_fence_gate", facing="west", in_wall="false", open="false", powered="false")
+                else:
+                    b.put(x, 0, z, w + "_fence")
+            elif (x * 7 + z * 3) % 6 == 0:
+                b.put(x, -1, z, "coarse_dirt")
+    b.put(x1 - 1, 0, z0 + 1, "hay_block", axis="x")
+    b.put(x1 - 2, 0, z0 + 1, "hay_block", axis="x")
+    b.put(x1 - 1, 1, z0 + 1, "hay_block", axis="z")
+    b.put(x0 + 2, 0, z1 - 1, "water_cauldron", level="3")
+    b.put(x0 + 3, 0, z1 - 1, "water_cauldron", level="3")
+    # lean-to shelter in the north-west corner
+    for x in (x0 + 1, x0 + 3):
+        b.put(x, 0, z0 + 1, s["pole"])
+        b.put(x, 1, z0 + 1, s["pole"])
+    for x in range(x0, x0 + 5):
+        b.put(x, 2, z0 + 1, w + "_slab", type="bottom", waterlogged="false")
+        b.put(x, 2, z0, w + "_stairs", facing="south", **ST)
+
+
+def smokehouse(b, s):
+    """Farm level 3: small smokehouse south of the pasture where meat is cured over a smoker."""
+    w = s["wood"]
+    x0, x1, z0, z1 = 25, 29, 11, 14
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, "cobblestone" if edge else "packed_mud")
+            if edge:
+                corner = x in (x0, x1) and z in (z0, z1)
+                for y in (1, 2):
+                    b.put(x, y, z, s["pole"] if corner else (w + "_planks" if s["wood"] == "spruce" else "mud_bricks"))
+    door = (x0 + 2, z0)
+    b.put(door[0], 1, door[1], w + "_door", facing="north", half="lower", hinge="left", open="false", powered="false")
+    b.put(door[0], 2, door[1], w + "_door", facing="north", half="upper", hinge="left", open="false", powered="false")
+    for x in range(x0 - 1, x1 + 2):
+        for z in range(z0 - 1, z1 + 2):
+            b.put(x, 3, z, w + "_slab", type="bottom", waterlogged="false")
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            if x in (x0, x1) or z in (z0, z1):
+                b.put(x, 3, z, "cobblestone_slab", type="bottom", waterlogged="false")
+    b.put(x0 + 2, 3, z1 - 1, "cobblestone")
+    b.put(x0 + 2, 4, z1 - 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(x0 + 2, 1, z1 - 1, "smoker", facing="north", lit="true")
+    b.put(x0 + 1, 1, z1 - 1, "barrel", facing="up", open="false")
+    b.put(x0 + 3, 1, z1 - 1, "barrel", facing="up", open="false")
+    for x in (x0 + 1, x0 + 3):
+        b.put(x, 2, z0 + 1, "chain", axis="y", waterlogged="false")
+
+
 def farm(style, level):
     s = STYLES[style]
     b = B()
@@ -381,6 +441,10 @@ def farm(style, level):
     # storehouse barrel: the farmer puts the harvest in here
     b.put(x0 - 2, 0, zc - 1, "barrel", facing="up", open="false")
     b.put(x0 - 2, 0, zc + 1, "composter", level="0")
+    if level >= 2:
+        pasture(b, s)
+    if level >= 3:
+        smokehouse(b, s)
     return b.b
 
 
@@ -407,13 +471,19 @@ if __name__ == "__main__":
     jobs = []
     for style in STYLES:
         for level in (1, 2, 3):
-            jobs.append((style, f"tent_{level}", tent(style, level), SECONDS[level], PLOT, None))
-        jobs.append((style, "hamlet_1", hamlet(style, 1), 240, HAMLET_SIZE, None))
-        jobs.append((style, "farm_1", farm(style, 1), 120, HAMLET_SIZE, (FARM[0] - 2, 0, FARM[1] + FARM[3] // 2 - 1)))
-    for style, name, blocks, seconds, size, storage in jobs:
+            jobs.append((style, f"tent_{level}", tent(style, level), SECONDS[level], PLOT, None, None))
+        jobs.append((style, "hamlet_1", hamlet(style, 1), 240, HAMLET_SIZE, None, None))
+        for level, secs in ((1, 120), (2, 150), (3, 180)):
+            jobs.append((style, f"farm_{level}", farm(style, level), secs, FARM_SIZE, (FARM[0] - 2, 0, FARM[1] + FARM[3] // 2 - 1),
+                         [["cow", 27, 0, 4], ["cow", 28, 0, 6], ["sheep", 26, 0, 7], ["sheep", 29, 0, 3], ["chicken", 25, 0, 5],
+                          ["chicken", 26, 0, 3]] if level == 2 else None))
+    for style, name, blocks, seconds, size, storage, animals in jobs:
         os.makedirs(os.path.join(OUT, style), exist_ok=True)
         with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
-            json.dump(to_json(blocks, seconds, size, storage), f, separators=(",", ":"))
+            j = to_json(blocks, seconds, size, storage)
+            if animals:
+                j["animals"] = animals
+            json.dump(j, f, separators=(",", ":"))
         if "--render" in sys.argv and (len(sys.argv) < 3 or name in sys.argv[2:]):
             sys.path.insert(0, os.path.dirname(__file__))
             from render import render, add_ground

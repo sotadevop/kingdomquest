@@ -31,6 +31,10 @@
 	"kingdomquest.level.hamlet_1": "Hamlet - Cottage",
 	"kingdomquest.addon.farm_1": "Farm - Fields",
 	"kingdomquest.req.breed": "Breed two animals",
+	"kingdomquest.req.sleep": "Sleep in a bed",
+	"kingdomquest.req.tame": "Tame an animal",
+	"kingdomquest.addon.farm_2": "Farm - Pasture",
+	"kingdomquest.addon.farm_3": "Farm - Smokehouse",
 	"kingdomquest.req.plant_seed": "Plant a seed",
 	"kingdomquest.farm.harvest": "The fields of %s brought in a harvest."
 }

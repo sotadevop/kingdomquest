@@ -29,6 +29,10 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -197,8 +201,15 @@ public final class Settlements {
 	static void upgrade(ServerPlayer player, BlockPos heart, String track) {
 		MinecraftServer server = player.level().getServer();
 		Settlement s = byHeart(server, heart);
-		if (s == null || !s.owner().equals(player.getUUID()) || !s.job().isEmpty() || player.distanceToSqr(Vec3.atCenterOf(heart)) > 64 * 64) {
+		if (s == null || !s.owner().equals(player.getUUID()) || player.distanceToSqr(Vec3.atCenterOf(heart)) > 64 * 64) {
 			return;
+		}
+		if (!s.job().isEmpty()) {
+			if (!player.isCreative()) {
+				return;
+			}
+			step(server, s, true); // creative: finish the running build at once
+			s = byHeart(server, heart);
 		}
 		Progression.Step step = Progression.next(s, track);
 		if (step == null || !Progression.requirementMet(player, step) || !Progression.canPay(player, step)) {
@@ -270,7 +281,7 @@ public final class Settlements {
 		boolean produce = server.getTickCount() % Production.INTERVAL == 0;
 		for (Settlement s : all(server)) {
 			if (!s.job().isEmpty()) {
-				step(server, s);
+				step(server, s, false);
 			}
 			if (produce) {
 				Production.run(server.overworld(), s);
@@ -278,7 +289,7 @@ public final class Settlements {
 		}
 	}
 
-	private static void step(MinecraftServer server, Settlement s) {
+	private static void step(MinecraftServer server, Settlement s, boolean instant) {
 		ServerLevel level = server.overworld();
 		if (!level.isLoaded(s.heart())) {
 			return; // paused while nobody is near
@@ -289,7 +300,7 @@ public final class Settlements {
 			put(server, s.withJob("", "", 0));
 			return;
 		}
-		int perTick = Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 20.0)));
+		int perTick = instant ? list.size() : Math.max(1, (int) Math.ceil(list.size() / (t.seconds * 20.0)));
 		int index = s.jobIndex();
 		List<Long> built = new ArrayList<>(s.built().getOrDefault(s.jobTrack(), List.of()));
 		for (int n = 0; n < perTick && index < list.size(); n++, index++) {
@@ -310,6 +321,7 @@ public final class Settlements {
 		}
 		if (index >= list.size()) {
 			put(server, s.withJob("", "", 0).withBuilt(s.jobTrack(), built));
+			spawnAnimals(level, s, t);
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
@@ -320,6 +332,20 @@ public final class Settlements {
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 		if (owner != null && server.getTickCount() % 20 == 0 && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 48 * 48) {
 			owner.sendOverlayMessage(Component.translatable("kingdomquest.build.progress", s.name(), index * 100 / list.size()));
+		}
+	}
+
+	/** Spawns the template's animals once its building is finished. */
+	private static void spawnAnimals(ServerLevel level, Settlement s, Template t) {
+		for (Template.Animal a : t.animals) {
+			EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.getValue(a.type());
+			Entity e = type.create(level, EntitySpawnReason.MOB_SUMMONED);
+			if (e == null) {
+				continue;
+			}
+			BlockPos pos = s.heart().offset(t.offset(a.pos(), Rotation.values()[s.rotation()]));
+			e.snapTo(Vec3.atBottomCenterOf(pos), level.getRandom().nextFloat() * 360, 0);
+			level.addFreshEntity(e);
 		}
 	}
 
@@ -381,7 +407,7 @@ public final class Settlements {
 				if (t == null) {
 					continue;
 				}
-				BlockPos heart = start.offset(i * 30, 0, 0);
+				BlockPos heart = start.offset(i * 40, 0, 0);
 				prepareSite(level, heart, t, Rotation.NONE);
 				for (Template.Placement p : t.placements("blue", Rotation.NONE)) {
 					level.setBlock(heart.offset(p.offset()), p.state(), Block.UPDATE_ALL);

@@ -26,6 +26,8 @@ final class KingdomCommand {
 							if (i == 1) {
 								ids.add(style + "/hamlet_1");
 								ids.add(style + "/farm_1");
+								ids.add(style + "/farm_2");
+								ids.add(style + "/farm_3");
 							}
 						}
 					}

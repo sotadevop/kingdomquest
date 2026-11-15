@@ -49,7 +49,9 @@ public class KingdomScreen extends Screen {
 				ClientPlayNetworking.send(new UpgradePayload(this.info.heart(), o.track()));
 				this.onClose();
 			}).bounds(this.left + W - 58, y + 10, 50, 18).build();
-			build.active = this.info.percent() < 0 && o.requirementMet() && o.canPay();
+			// creative may start a new build while one runs; the server finishes the running one first
+			boolean creative = this.minecraft != null && this.minecraft.player != null && this.minecraft.player.isCreative();
+			build.active = (this.info.percent() < 0 || creative) && o.requirementMet() && o.canPay();
 			this.addRenderableWidget(build);
 			y += ROW;
 		}

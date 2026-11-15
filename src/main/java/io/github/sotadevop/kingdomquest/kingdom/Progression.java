@@ -51,12 +51,16 @@ public final class Progression {
 							List.of(tag(ItemTags.LOGS, "logs", 16), tag(ItemTags.WOOL, "wool", 8))),
 					new Step(Settlement.MAIN, "tent_3", 3, "kingdomquest.level.tent_3", 0, adv("story/iron_tools"), "kingdomquest.req.iron_tools",
 							List.of(tag(ItemTags.LOGS, "logs", 32), item(Items.COBBLESTONE, 16), item(Items.IRON_INGOT, 8))),
-					new Step(Settlement.MAIN, "hamlet_1", 4, "kingdomquest.level.hamlet_1", 0, adv("husbandry/breed_an_animal"),
-							"kingdomquest.req.breed", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.COBBLESTONE, 48), item(Items.GLASS, 8),
+					new Step(Settlement.MAIN, "hamlet_1", 4, "kingdomquest.level.hamlet_1", 0, adv("adventure/sleep_in_bed"),
+							"kingdomquest.req.sleep", List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.COBBLESTONE, 48), item(Items.GLASS, 8),
 									item(Items.BRICK, 16)))),
 			FARM, List.of(
 					new Step(FARM, "farm_1", 1, "kingdomquest.addon.farm_1", 4, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
-							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2)))));
+							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.WHEAT_SEEDS, 16), item(Items.IRON_INGOT, 2))),
+					new Step(FARM, "farm_2", 2, "kingdomquest.addon.farm_2", 4, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed",
+							List.of(tag(ItemTags.LOGS, "logs", 24), item(Items.WHEAT, 16), item(Items.LEAD, 2))),
+					new Step(FARM, "farm_3", 3, "kingdomquest.addon.farm_3", 4, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame",
+							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.COBBLESTONE, 32), item(Items.SMOKER, 1), item(Items.CHAIN, 2)))));
 
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, FARM);
@@ -82,7 +86,7 @@ public final class Progression {
 	}
 
 	public static boolean requirementMet(ServerPlayer player, Step step) {
-		if (step.advancement() == null) {
+		if (step.advancement() == null || player.isCreative()) {
 			return true;
 		}
 		var holder = player.level().getServer().getAdvancements().get(step.advancement());

@@ -32,7 +32,22 @@ public final class Production {
 		if (box == null) {
 			return;
 		}
-		List<ItemStack> harvest = List.of(new ItemStack(Items.WHEAT, 6), new ItemStack(Items.CARROT, 3), new ItemStack(Items.POTATO, 3));
+		List<ItemStack> harvest = new java.util.ArrayList<>(List.of(new ItemStack(Items.WHEAT, 6), new ItemStack(Items.CARROT, 3),
+				new ItemStack(Items.POTATO, 3)));
+		if (farm >= 2) {
+			// pasture: eggs, wool and leather; meat comes raw, or cooked once the smokehouse stands
+			boolean smoked = farm >= 3;
+			harvest.add(new ItemStack(Items.EGG, 3));
+			harvest.add(new ItemStack(Items.WHITE_WOOL, 2));
+			harvest.add(new ItemStack(Items.LEATHER, 1));
+			harvest.add(new ItemStack(smoked ? Items.COOKED_BEEF : Items.BEEF, 2));
+			harvest.add(new ItemStack(smoked ? Items.COOKED_MUTTON : Items.MUTTON, 2));
+			harvest.add(new ItemStack(smoked ? Items.COOKED_CHICKEN : Items.CHICKEN, 1));
+		}
+		if (farm >= 3) {
+			harvest.add(new ItemStack(Items.BREAD, 3));
+			harvest.add(new ItemStack(Items.BAKED_POTATO, 3));
+		}
 		harvest.forEach(stack -> insert(box, stack));
 		box.setChanged();
 		ServerPlayer owner = level.getServer().getPlayerList().getPlayer(s.owner());

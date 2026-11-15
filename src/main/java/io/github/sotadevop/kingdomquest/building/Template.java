@@ -43,6 +43,11 @@ public final class Template {
 	public final List<Entry> entries;
 	/** Container the add-on fills with its production (relative to the plot), or null. */
 	public final BlockPos storage;
+	/** Animals spawned once when the building is finished: entity id and position relative to the plot. */
+	public final List<Animal> animals;
+
+	public record Animal(Identifier type, BlockPos pos) {
+	}
 
 	private Template(String id, JsonObject json) {
 		this.id = id;
@@ -73,6 +78,16 @@ public final class Template {
 		this.entries = List.copyOf(list);
 		JsonArray st = json.getAsJsonArray("storage");
 		this.storage = st == null ? null : new BlockPos(st.get(0).getAsInt(), st.get(1).getAsInt(), st.get(2).getAsInt());
+		List<Animal> animals = new ArrayList<>();
+		JsonArray an = json.getAsJsonArray("animals");
+		if (an != null) {
+			for (JsonElement e : an) {
+				JsonArray a = e.getAsJsonArray();
+				animals.add(new Animal(Identifier.withDefaultNamespace(a.get(0).getAsString()),
+						new BlockPos(a.get(1).getAsInt(), a.get(2).getAsInt(), a.get(3).getAsInt())));
+			}
+		}
+		this.animals = List.copyOf(animals);
 	}
 
 	/** Loads "style/name" from the mod jar (kingdomquest/buildings/style/name.json); null if missing. */
@@ -102,6 +117,11 @@ public final class Template {
 			out.add(new Placement(rel, state.rotate(rotation)));
 		}
 		return out;
+	}
+
+	/** Offset of a plot position from the heart for this rotation. */
+	public BlockPos offset(BlockPos plotPos, Rotation rotation) {
+		return rotate(plotPos.subtract(this.heart), rotation);
 	}
 
 	/** The storage container's offset from the heart for this rotation, or null. */
