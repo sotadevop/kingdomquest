@@ -144,7 +144,7 @@ public final class Progression {
 							List.of(item(Items.BREWING_STAND, 1), item(Items.BARREL, 4), item(Items.GLASS_BOTTLE, 16)))),
 			APIARY, List.of(
 					new Step(APIARY, "apiary_1", 1, "kingdomquest.addon.apiary_1", 5, adv("husbandry/safely_harvest_honey"), "kingdomquest.req.honey",
-							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.HONEYCOMB, 3), tag(ItemTags.SMALL_FLOWERS, "flowers", 8))),
+							List.of(tag(ItemTags.LOGS, "logs", 16), item(Items.HONEYCOMB, 3), item(Items.POPPY, 8))),
 					new Step(APIARY, "apiary_2", 2, "kingdomquest.addon.apiary_2", 7, adv("husbandry/silk_touch_nest"), "kingdomquest.req.nest",
 							List.of(item(Items.BEEHIVE, 3), item(Items.CAMPFIRE, 1)))),
 			KENNEL, List.of(
