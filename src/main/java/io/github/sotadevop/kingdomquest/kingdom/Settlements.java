@@ -155,6 +155,10 @@ public final class Settlements {
 			return false;
 		}
 		BlockPos heart = clicked.above();
+		if (!SiteWork.isGround(level.getBlockState(clicked))) {
+			player.sendOverlayMessage(Component.translatable("kingdomquest.found.ground"));
+			return false;
+		}
 		for (Settlement s : all(server)) {
 			if (s.heart().closerThan(heart, SPACING)) {
 				player.sendOverlayMessage(Component.translatable("kingdomquest.found.too_close", s.name()));

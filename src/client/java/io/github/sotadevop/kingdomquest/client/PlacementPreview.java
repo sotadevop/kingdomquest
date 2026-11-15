@@ -1,6 +1,7 @@
 package io.github.sotadevop.kingdomquest.client;
 
 import io.github.sotadevop.kingdomquest.building.Template;
+import io.github.sotadevop.kingdomquest.kingdom.SiteWork;
 import io.github.sotadevop.kingdomquest.charter.RoyalCharter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -37,6 +38,11 @@ public final class PlacementPreview {
 			return;
 		}
 		BlockPos heart = hit.getBlockPos().above();
+		if (!SiteWork.isGround(mc.level.getBlockState(hit.getBlockPos()))) {
+			// not natural ground (tree, building, water): only a red warning at the spot
+			mc.level.addParticle(ParticleTypes.ANGRY_VILLAGER, heart.getX() + 0.5, heart.getY() + 0.5, heart.getZ() + 0.5, 0, 0, 0);
+			return;
+		}
 		Rotation rotation = switch (mc.player.getDirection()) {
 			case EAST -> Rotation.CLOCKWISE_90;
 			case SOUTH -> Rotation.CLOCKWISE_180;

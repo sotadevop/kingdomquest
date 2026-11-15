@@ -26,7 +26,7 @@ import java.util.Set;
  * Only natural blocks are removed (terrain, plants, trees, water); the player's own blocks and the settlement's
  * buildings stay.
  */
-final class SiteWork {
+public final class SiteWork {
 	/** Flat strip outside a wall before the slope starts. */
 	private static final int FLAT = 4;
 
@@ -79,6 +79,19 @@ final class SiteWork {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * True for natural ground a settlement can be founded on: soil, sand, stone, snow. Trees, leaves, water and
+	 * anything built are refused, so the heart always sits on the real surface.
+	 */
+	public static boolean isGround(BlockState state) {
+		if (state.is(BlockTags.LOGS) || state.is(BlockTags.LEAVES) || !state.getFluidState().isEmpty() || !state.isSolid()) {
+			return false;
+		}
+		return state.is(BlockTags.DIRT) || state.is(BlockTags.SAND) || state.is(BlockTags.BASE_STONE_OVERWORLD) || state.is(BlockTags.TERRACOTTA)
+				|| state.is(Blocks.GRAVEL) || state.is(Blocks.CLAY) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.MUD)
+				|| state.is(Blocks.SANDSTONE) || state.is(Blocks.RED_SANDSTONE) || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.PACKED_ICE);
 	}
 
 	/** Clears one column and, inside the area itself, fills holes under the ground layer. */

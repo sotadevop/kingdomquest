@@ -9,7 +9,7 @@
 	"kingdomquest.founding.confirm": "Seal the Charter",
 	"item.kingdomquest.royal_charter.sealed": "Aim at the ground: the outline shows the camp. Right-click twice to found it. Sneak + right-click: change.",
 	"kingdomquest.found.overworld": "A kingdom can only be founded in the Overworld.",
-	"kingdomquest.found.one": "You already rule a kingdom.",
+	"kingdomquest.found.ground": "A settlement needs natural ground: grass, dirt, sand, stone or snow. Not trees, water or buildings.",
 	"kingdomquest.found.too_close": "Too close to %s.",
 	"kingdomquest.found.confirm": "Right-click again to found %s here. The marked area will be cleared.",
 	"kingdomquest.found.done": "%s founded the kingdom of %s!",
