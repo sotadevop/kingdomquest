@@ -977,8 +977,8 @@ public final class Settlements {
 						continue;
 					}
 					Template.Placement low = out.get(i);
-					for (int k = 1; k <= 40; k++) {
-						BlockPos rel = low.offset().below(k);
+					for (int down = 1; down <= 40; down++) {
+						BlockPos rel = low.offset().below(down);
 						pos.set(s.heart().getX() + rel.getX(), heartY + rel.getY(), s.heart().getZ() + rel.getZ());
 						BlockState st = level.getBlockState(pos);
 						boolean open = st.isAir() || st.canBeReplaced() || st.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock
