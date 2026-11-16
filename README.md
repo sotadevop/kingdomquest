@@ -12,4 +12,3 @@ in the Minecraft project.
   simulation (can you reach every door, bed, store and room without jumping?). CI runs it on every push.
 - `tools/preview.py` renders any part of an assembled settlement (`KQ_FETCH=1` downloads the vanilla assets it needs
   from misode/mcmeta `26.3-assets` into `ref/`), `tools/render.py` is the renderer behind it.
-  misode/mcmeta `26.3-assets`), plus the build checklist.
