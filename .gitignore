@@ -41,3 +41,6 @@ replay_*.log
 
 # vanilla assets for tools/render.py (misode/mcmeta 26.3-assets)
 ref
+
+# python
+__pycache__/

@@ -1187,8 +1187,8 @@ public final class Settlements {
 		int water = 0;
 		int bare = 0;
 		for (SiteWork.Column c : columns) {
-			if (c.floor() > 0) {
-				continue; // slope zone: only shaped, not flattened
+			if (!c.pad()) {
+				continue; // graded land around the pad: only shaped, not flattened
 			}
 			BlockPos base = heart.offset(c.dx(), 0, c.dz());
 			for (int y = base.equals(heart) ? 1 : 0; y < 4; y++) {

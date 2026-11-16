@@ -21,8 +21,10 @@ import java.util.Set;
 
 /**
  * Levels the ground before a building goes up: every column of the template's area is cleared down to the heart's
- * height and holes are filled. Templates with an "apron" (walls) also grade the land outside: flat for 4 blocks,
- * then rising one block per block, so the wall stands free instead of running into a hillside.
+ * height and holes are filled. Around it (the template's "apron") the land is graded the way a hillside looks:
+ * a rounded flat pad with an uneven edge, higher ground cut back at a gentle slope that steepens further out,
+ * lower ground banked up with earth. Only where the land falls away too far for a bank does the pad end in a
+ * stone wall or stand on a deck with piers.
  * Only natural blocks are removed (terrain, plants, trees, water); the player's own blocks and the settlement's
  * buildings stay.
  */
@@ -32,12 +34,24 @@ public final class SiteWork {
 	/** Flat strip outside a wall before the slope starts. */
 	private static final int FLAT = 4;
 
-	/** {@code edge}: the outermost ring of the flat pad, where a terrace gets its retaining wall. */
-	public record Column(int dx, int dz, int floor, boolean edge) {
+	/**
+	 * @param floor how far above the pad the land may stay in this column (0 on the pad itself)
+	 * @param edge  the outermost ring of the flat pad, where a terrace gets its retaining wall
+	 * @param drop  how far below the pad a bank of earth ends in this column (0 on the pad itself)
+	 */
+	public record Column(int dx, int dz, int floor, boolean edge, int drop) {
 		public Column(int dx, int dz, int floor) {
-			this(dx, dz, floor, false);
+			this(dx, dz, floor, false, floor);
+		}
+
+		/** On the flat pad itself (not the graded land around it). */
+		public boolean pad() {
+			return this.drop == 0;
 		}
 	}
+
+	/** Deepest drop that is banked up with earth; beyond it a pad gets a wall or a deck on piers. */
+	private static final int BANK = 4;
 
 	private static final Map<String, List<Column>> CACHE = new HashMap<>();
 
@@ -71,8 +85,9 @@ public final class SiteWork {
 			}
 			int a = t.apron;
 			int flat = Math.min(3, Math.max(1, a / 2));
+			// distance from the footprint in tenths of a block, diagonal steps cost 1.4: pads get round corners
 			Map<Long, Integer> dist = new HashMap<>();
-			java.util.ArrayDeque<long[]> queue = new java.util.ArrayDeque<>();
+			java.util.PriorityQueue<long[]> queue = new java.util.PriorityQueue<long[]>(java.util.Comparator.<long[]>comparingLong(c -> c[2]));
 			for (Template.Entry e : t.entries) {
 				if (e.y() < -1 || e.name().endsWith(":snow") || e.name().endsWith(":air")) {
 					continue;
@@ -84,32 +99,58 @@ public final class SiteWork {
 			}
 			while (!queue.isEmpty()) {
 				long[] c = queue.poll();
-				if (c[2] >= a) {
+				if (c[2] > dist.get(BlockPos.asLong((int) c[0], 0, (int) c[1]))) {
 					continue;
 				}
 				for (int dx = -1; dx <= 1; dx++) {
 					for (int dz = -1; dz <= 1; dz++) {
+						if (dx == 0 && dz == 0) {
+							continue;
+						}
+						int d = (int) c[2] + (dx != 0 && dz != 0 ? 14 : 10);
 						long key = BlockPos.asLong((int) c[0] + dx, 0, (int) c[1] + dz);
-						if (!dist.containsKey(key)) {
-							dist.put(key, (int) c[2] + 1);
-							queue.add(new long[] {c[0] + dx, c[1] + dz, c[2] + 1});
+						if (d <= a * 10 && d < dist.getOrDefault(key, Integer.MAX_VALUE)) {
+							dist.put(key, d);
+							queue.add(new long[] {c[0] + dx, c[1] + dz, d});
 						}
 					}
 				}
 			}
-			List<Column> list = new ArrayList<>();
+			Map<Long, int[]> shape = new HashMap<>(); // column -> {floor, drop}
 			for (Map.Entry<Long, Integer> e : dist.entrySet()) {
 				int x = BlockPos.getX(e.getKey());
 				int z = BlockPos.getZ(e.getKey());
-				int d = e.getValue();
-				// smooth 1:1 slope (like natural hill steps), no per-column noise: that made holes
-				int floor = d <= flat ? 0 : d - flat;
+				double d = e.getValue() / 10.0;
+				// the pad is a block wider in places (the same for a few blocks at a time), so its edge is no ruler line
+				double out = d - flat - (a >= 6 ? wobble(x, z) : 0);
+				// cut: one block up for every two out over the first four blocks, then one for one, like a hill's foot
+				int floor = out <= 0 ? 0 : (int) Math.floor(out <= 4 ? out * 0.5 + 0.5 : out - 1.5);
+				int drop = out <= 0 ? 0 : (int) Math.ceil(out);
+				shape.put(e.getKey(), new int[] {e.getValue() == 0 ? 0 : floor, e.getValue() == 0 ? 0 : drop});
+			}
+			List<Column> list = new ArrayList<>();
+			for (Map.Entry<Long, int[]> e : shape.entrySet()) {
+				int x = BlockPos.getX(e.getKey());
+				int z = BlockPos.getZ(e.getKey());
+				boolean edge = false;
+				if (e.getValue()[1] == 0) {
+					for (int[] n : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+						int[] other = shape.get(BlockPos.asLong(x + n[0], 0, z + n[1]));
+						edge |= other == null || other[1] > 0;
+					}
+				}
 				BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
-				list.add(new Column(rel.getX(), rel.getZ(), d == 0 ? 0 : floor, d == flat));
+				list.add(new Column(rel.getX(), rel.getZ(), e.getValue()[0], edge, e.getValue()[1]));
 			}
 			list.sort(java.util.Comparator.comparingInt(Column::dx).thenComparingInt(Column::dz));
 			return List.copyOf(list);
 		});
+	}
+
+	/** 0 or 1, constant over patches of four by four blocks. */
+	private static int wobble(int x, int z) {
+		long h = (long) Math.floorDiv(x, 4) * 73856093L ^ (long) Math.floorDiv(z + 2, 4) * 19349663L;
+		return (int) Math.floorMod(h * 2654435761L >> 7, 3L) == 0 ? 1 : 0;
 	}
 
 	/** Terrain only (no plants or trees): what the slope zone outside the flat margin may cut. */
@@ -196,7 +237,7 @@ public final class SiteWork {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
 		int floor = heart.getY() + c.floor();
-		boolean margin = c.floor() == 0;
+		boolean margin = c.pad();
 		// the heightmap alone missed blocks (CI site test); scan at least 64 blocks above the floor as well
 		int top = Math.min(level.getMaxY(), Math.max(level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z), floor + 64));
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -229,7 +270,7 @@ public final class SiteWork {
 			level.setBlock(pos, surface, FLAGS);
 		}
 		// foundation: fill holes, water and leaves below the ground layer
-		int fillTop = heart.getY() - 1 - c.floor();
+		int fillTop = heart.getY() - 1 - c.drop();
 		int depth = 0;
 		for (int y = fillTop; y >= fillTop - FOUNDATION; y--) {
 			pos.set(x, y, z);
@@ -240,17 +281,18 @@ public final class SiteWork {
 			}
 			depth++;
 		}
-		if (depth == 0 || !margin && depth > 2) {
-			return; // a steep drop outside the pad stays natural: the pad ends in a retaining wall instead of a dirt cliff
+		if (depth == 0 || !margin && depth > BANK) {
+			return; // a steep drop outside the pad stays natural: the pad ends in a wall or a deck there, not a dirt cliff
 		}
 		BlockState wall = wallFor(surface);
-		if (margin && depth > 3) {
+		if (margin && depth > BANK + 1) {
 			platform(level, x, z, fillTop, depth, c.edge(), wall);
 			return;
 		}
+		// drops up to BANK are banked with earth from outside, so the pad's rim only needs stone where it is deeper
 		for (int y = fillTop; y > fillTop - depth; y--) {
 			pos.set(x, y, z);
-			BlockState fill = c.edge() && depth > 2 ? ((x * 31 + y * 7 + z * 13) % 5 == 0 ? mossy(wall) : wall)
+			BlockState fill = c.edge() && depth > BANK ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : Blocks.DIRT.defaultBlockState();
 			level.setBlock(pos, fill, FLAGS);
 		}

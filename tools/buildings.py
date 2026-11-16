@@ -259,8 +259,10 @@ def house_temperate(b, x0=4, z0=0):
     # windows (front, sides, back) with flower boxes under the front ones
     for x in (x0 + 1, x1 - 1):
         b.put(x, 2, z1, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
-        b.put(x, 1, z1 + 1, "spruce_trapdoor", facing="south", half="top", open="false", powered="false", waterlogged="false")
-        b.put(x, 2, z1 + 1, "azalea")
+        b.put(x, 0, z1 + 1, "flowering_azalea_leaves", distance="7", persistent="true", waterlogged="false")
+        for sx in (x - 1, x + 1):
+            if sx not in (x0 + 2, x0 + 4):
+                b.put(sx, 2, z1 + 1, "spruce_trapdoor", facing="south", half="bottom", open="true", powered="false", waterlogged="false")
     for z in (z0 + 2, z0 + 6):
         for x in (x0, x1):
             b.put(x, 2, z, "glass_pane", north="true", south="true", east="false", west="false", waterlogged="false")
@@ -464,9 +466,11 @@ def house_wild(b, x0=4, z0=0):
     b.put(cx, F + 2, z1 - 2, "jungle_door", facing="south", half="upper", hinge="left", open="false", powered="false")
     for x in (x0 + 1, x1 - 1):
         b.put(x, F + 2, z1 - 2, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
-    # steps up to the veranda
-    for i in range(F):
-        b.put(cx, i, z1 + F - i, "jungle_stairs", facing="north", **ST)
+    # steps up to the veranda: one for every block the floor is raised, the floor itself is the last
+    for i in range(F + 1):
+        b.put(cx, i, z1 + F + 1 - i, "jungle_stairs", facing="north", **ST)
+        for y in range(i):
+            b.put(cx, y, z1 + F + 1 - i, "jungle_planks")
     # steep roof with wide eaves
     for z in range(z0 - 1, z1 + 2):
         for i in range(5):
@@ -553,12 +557,19 @@ def hamlet(style, level):
         town_hall(b, style, 1, -4)
     else:
         house_fn(style)(b, 4, -3)
+    # the forecourt: trodden ground from the door's steps to where the high street begins
+    if level <= 5 and style != "wild":
+        ground(b, s, {(x, 7) for x in ((6, 7, 8) if level < 5 else (5, 6, 7, 8, 9))})
+    elif level == 6:
+        for x in range(5, 10):
+            for z in (6, 7):
+                b.put(x, -1, z, "cobblestone" if (x * 7 + z * 3) % 4 else "gravel")
     b.put(hx, hy, hz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
     b.put(hx - 2, 0, hz, f"{w}_stairs", facing="west", **ST)
     b.put(hx - 2, 0, hz + 1, f"{w}_stairs", facing="west", **ST)
     b.put(hx + 2, 0, hz, f"{w}_stairs", facing="east", **ST)
     b.put(hx + 2, 0, hz + 1, f"{w}_stairs", facing="east", **ST)
-    banner_pole(b, s, 2, 9, 3)
+    banner_pole(b, s, 0, 10, 3)
     # well
     for x in (1, 3):
         for z in (12, 14):
@@ -594,8 +605,6 @@ def hamlet(style, level):
             b.put(x, 0, z, "sweet_berry_bush" if style == "frozen" else "rose_bush", **({"age": "3"} if style == "frozen" else {"half": "lower"}))
             if style != "frozen":
                 b.put(x, 1, z, "rose_bush", half="upper")
-    road = road_cells()
-    del road
     return b.b
 
 
@@ -628,9 +637,9 @@ def pasture(b, s):
 
 
 def smokehouse(b, s):
-    """Farm level 3: small smokehouse south of the pasture where meat is cured over a smoker."""
+    """Farm level 3: small smokehouse between the farm road and the street, where meat is cured over a smoker."""
     w = s["wood"]
-    x0, x1, z0, z1 = 36, 40, 15, 18
+    x0, x1, z0, z1 = 36, 40, 13, 16
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             edge = x in (x0, x1) or z in (z0, z1)
@@ -639,9 +648,10 @@ def smokehouse(b, s):
                 corner = x in (x0, x1) and z in (z0, z1)
                 for y in (1, 2):
                     b.put(x, y, z, s["pole"] if corner else (w + "_planks" if s["wood"] == "spruce" else "mud_bricks"))
-    door = (x0 + 2, z0)
-    b.put(door[0], 1, door[1], w + "_door", facing="north", half="lower", hinge="left", open="false", powered="false")
-    b.put(door[0], 2, door[1], w + "_door", facing="north", half="upper", hinge="left", open="false", powered="false")
+    door = (x0 + 2, z1)
+    porch(b, door[0], z1 + 1, w, width=1)
+    b.put(door[0], 1, door[1], w + "_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(door[0], 2, door[1], w + "_door", facing="south", half="upper", hinge="left", open="false", powered="false")
     for x in range(x0 - 1, x1 + 2):
         for z in range(z0 - 1, z1 + 2):
             b.put(x, 3, z, w + "_slab", type="bottom", waterlogged="false")
@@ -649,13 +659,13 @@ def smokehouse(b, s):
         for z in range(z0, z1 + 1):
             if x in (x0, x1) or z in (z0, z1):
                 b.put(x, 3, z, "cobblestone_slab", type="bottom", waterlogged="false")
-    b.put(x0 + 2, 3, z1 - 1, "cobblestone")
-    b.put(x0 + 2, 4, z1 - 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
-    b.put(x0 + 2, 1, z1 - 1, "smoker", facing="north", lit="true")
-    b.put(x0 + 1, 1, z1 - 1, "barrel", facing="up", open="false")
-    b.put(x0 + 3, 1, z1 - 1, "barrel", facing="up", open="false")
+    b.put(x0 + 2, 3, z0 + 1, "cobblestone")
+    b.put(x0 + 2, 4, z0 + 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(x0 + 2, 1, z0 + 1, "smoker", facing="south", lit="true")
+    b.put(x0 + 1, 1, z0 + 1, "barrel", facing="up", open="false")
+    b.put(x0 + 3, 1, z0 + 1, "barrel", facing="up", open="false")
     for x in (x0 + 1, x0 + 3):
-        b.put(x, 2, z0 + 1, "iron_chain", axis="y", waterlogged="false")
+        b.put(x, 2, z1 - 1, "iron_chain", axis="y", waterlogged="false")
 
 
 def farm(style, level):
@@ -806,6 +816,26 @@ def woodcutter(style, level):
 WALL = (-56, 76, -46, 50)  # x0, x1, z0, z1 of the palisade ring (village plot); room for the lair in the north
 
 
+def inward(cx, cz):
+    """Direction from a wall tower at (cx, cz) on the ring into the settlement: (dx, dz), both set for a corner."""
+    x0, x1, z0, z1 = WALL
+    return (1 if cx == x0 else -1 if cx == x1 else 0, 1 if cz == z0 else -1 if cz == z1 else 0)
+
+
+GATE_TOWER = 6  # the towers flanking the gate stand this far from its middle, clear of the gatehouse
+
+
+def tower_spots(level):
+    """Where the wall towers stand (ring coordinates): corners and gate from the first towers on, the stone wall's
+    last level adds towers along the long sides."""
+    x0, x1, z0, z1 = WALL
+    gx = HEART[0]
+    spots = [(x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - GATE_TOWER, z1), (gx + GATE_TOWER, z1)]
+    if level >= 4:
+        spots += [(x0, (z0 + z1) // 2), (x1, (z0 + z1) // 2), ((x0 + x1) // 2, z0), (x0 + 33, z0), (x1 - 33, z0), (x0 + 33, z1), (x1 - 33, z1)]
+    return spots
+
+
 def walls(style, level):
     """Walls track. 1: log palisade with sharpened tops and a gate on the main road.
     2: inner walkway, corner watchtowers and gate towers with lanterns."""
@@ -821,14 +851,16 @@ def walls(style, level):
     gx = HEART[0]
     ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
     ring += [(x0, z) for z in range(z0 + 1, z1)] + [(x1, z) for z in range(z0 + 1, z1)]
+    ring_set = set(ring)
     for x, z in ring:
-        if z == z1 and abs(x - gx) <= 1:
-            continue
+        if z == z1 and abs(x - gx) <= 2:
+            continue  # the gate and its posts
         h = 3 + ((x * 7 + z * 13) % 3 == 0)
         for y in range(0, h):
             b.put(x, y, z, log, axis="y")
         b.put(x, h, z, w + "_fence")
-        b.put(x, -1, z, "coarse_dirt")
+        if not (z == z1 and abs(x - gx) <= 2):
+            b.put(x, -1, z, "coarse_dirt")
     # the gate opening stays free: gates are their own track
     if level >= 2:
         # walkway on the inside at y=2, reached from the towers
@@ -836,126 +868,300 @@ def walls(style, level):
         inner |= {(x0 + 1, z) for z in range(z0 + 1, z1)} | {(x1 - 1, z) for z in range(z0 + 1, z1)}
         for x, z in inner:
             b.put(x, 2, z, w + "_slab", type="top", waterlogged="false")
-        for cx, cz in ((x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - 4, z1), (gx + 4, z1)):
-            # 5x5 watchtower straddling the wall: platform at 6 you can stand on, rails, roof, ladder inside
+        for cx, cz in tower_spots(level):
+            # 5x5 watchtower straddling the wall, which runs on through it: corner posts, a platform at 6 with
+            # rails and a roof, and a ladder on the inside of the wall
             tx = max(x0 - 2, min(x1 - 2, cx - 2))
             tz = max(z0 - 2, min(z1 - 2, cz - 2))
-            b.anchor = (tx + 2, tz + 2)
+            ccx, ccz = tx + 2, tz + 2
+            b.anchor = (ccx, ccz)
             for x in range(tx, tx + 5):
                 for z in range(tz, tz + 5):
                     corner = x in (tx, tx + 4) and z in (tz, tz + 4)
                     edge = x in (tx, tx + 4) or z in (tz, tz + 4)
                     for y in range(0, 10):
-                        if corner:
+                        if corner or (x, z) in ring_set and y < 6:
                             b.put(x, y, z, log, axis="y")
-                        elif y < 6 and (x, z) not in ((tx + 2, tz + 2), (tx + 2, tz + 3)):
+                        elif y < 6:
                             b.put(x, y, z, "air")
+                        else:
+                            b.b.pop((x, y, z), None)
                     b.put(x, 6, z, w + "_planks")
                     if edge and not corner:
                         b.put(x, 7, z, w + "_fence")
                     b.put(x, 10, z, w + "_slab", type="bottom", waterlogged="false")
+            dx, dz = inward(cx, cz)
+            lx, lz = ccx + dx, ccz + dz
+            fx, fz = (dx, 0) if dx else (0, dz)  # the ladder leans on the wall behind it
             for y in range(0, 7):
-                b.put(tx + 2, y, tz + 3, log, axis="y")  # the ladder hangs on this
-                b.put(tx + 2, y, tz + 2, "ladder", facing="north", waterlogged="false")
-            b.put(tx + 2, 6, tz + 2, "ladder", facing="north", waterlogged="false")
-            b.put(tx + 2, 9, tz + 2, "lantern", hanging="true", waterlogged="false")
+                b.put(lx, y, lz, "ladder", facing={(1, 0): "east", (-1, 0): "west", (0, 1): "south", (0, -1): "north"}[(fx, fz)], waterlogged="false")
+            b.put(ccx, 9, ccz, "lantern", hanging="true", waterlogged="false")
             b.anchor = None
     return b.b
 
 
-# Road segments and when they appear: a segment is built once any of its (track, level) rules holds,
-# so roads only lead to buildings that exist. The mod adds new segments when a building is finished.
-SEGMENTS = [
-    ("gate", [("main", 1)]),                       # the road out of the village and to the heart
-    ("well", [("main", 4)]),
-    ("square", [("main", 7)]),
-    ("smith", [("smith", 1)]),
-    ("street_w1", [("main", 5), ("wood", 1), ("brewery", 1)]),
-    ("street_w2", [("wood", 1), ("brewery", 1)]),
-    ("house2", [("main", 5)]),
-    ("street_e1", [("main", 6), ("stables", 1)]),
-    ("house3", [("main", 6)]),
-    ("street_e2", [("main", 7), ("stables", 1)]),
-    ("house4", [("main", 7)]),
-    ("wood", [("wood", 1)]),
-    ("farm", [("farm", 1)]),
-    ("pasture", [("farm", 2)]),
-    ("smokehouse", [("farm", 3)]),
-    ("library", [("library", 1)]),
-    ("brewery", [("brewery", 1)]),
-    ("stables", [("stables", 1)]),
-    ("barracks", [("barracks", 1)]),
-    ("guild", [("guild", 1)]),
-    ("apiary", [("apiary", 1), ("kennel", 1)]),
-    ("kennel", [("kennel", 1)]),
-    ("trophy", [("trophy", 1)]),
-] + [(n, [(n, 1)]) for n in ("tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether")]
-SEG = {name: i for i, (name, _) in enumerate(SEGMENTS)}
-
-
-def road_cells():
-    """The full road network. Returns {(x, z): (kind, segment)}; kind 'core' (centre line) or 'side'."""
-    cells = {}
-
-    def strip(seg, xs, zs, core_x=None, core_z=None):
-        for x in xs:
-            for z in zs:
-                core = (core_x is not None and x == core_x) or (core_z is not None and z == core_z)
-                old = cells.get((x, z))
-                if old is None or (core and old[0] != "core"):
-                    cells[(x, z)] = ("core" if core else "side", old[1] if old else seg)
-
-    strip("gate", range(6, 9), range(9, WALL[3] + 1), core_x=7)          # heart to the gate
-    strip("well", range(4, 6), range(12, 15), core_z=13)                 # heart to the well
-    strip("square", range(0, 15), range(9, 17), core_x=7)
-    strip("smith", range(-14, 6), range(12, 14), core_z=12)              # west road
-    strip("smith", range(-13, -10), range(9, 12), core_x=-12)
-    strip("street_w1", range(-5, 6), range(18, 20), core_z=18)          # street of houses, west part
-    strip("street_w2", range(-29, -5), range(18, 20), core_z=18)
-    strip("house2", [-5], [20, 21], core_x=-5)
-    strip("street_e1", range(9, 20), range(18, 20), core_z=18)
-    strip("house3", [19], [20, 21], core_x=19)
-    strip("street_e2", range(20, 35), range(18, 20), core_z=18)
-    strip("house4", [31], [20, 21], core_x=31)
-    strip("wood", [-29], [20, 21], core_x=-29)
-    strip("farm", range(9, 27), range(12, 14), core_z=12)                # east road to the field gate
-    strip("farm", [26], [11], core_x=26)
-    strip("farm", [20], range(5, 12), core_x=20)                         # to the farm barrel
-    strip("pasture", range(27, 43), range(12, 14), core_z=12)
-    strip("pasture", [39], [10, 11], core_x=39)
-    strip("smokehouse", [38], [14], core_x=38)
-    strip("library", range(-28, -14), range(12, 14), core_z=12)
-    strip("library", [-28], range(5, 12), core_x=-28)
-    strip("brewery", [-16], range(20, 26), core_x=-16)
-    strip("stables", range(35, 48), range(18, 20), core_z=18)
-    strip("stables", [47], range(20, 26), core_x=47)
-    strip("barracks", range(9, 17), range(31, 35), core_z=33)
-    strip("guild", range(-19, -13), range(12, 14), core_z=12)
-    strip("guild", [-18], range(-10, 12), core_x=-18)
-    strip("apiary", range(43, 46), range(12, 14), core_z=12)
-    strip("apiary", [45], range(10, 12), core_x=45)
-    strip("apiary", range(45, 53), [11], core_z=11)
-    strip("kennel", [52], range(12, 14), core_x=52)
-    strip("trophy", range(-25, -14), range(12, 14), core_z=12)
-    # roads to the trade buildings: from the nearest street to each door
-    for name, ((x0, z0, x1, z1), door) in SHOPS.items():
-        cx = (x0 + x1) // 2
-        dz = z1 + 2 if door == "s" else z0 - 2
-        target = 12 if door == "s" and dz < 12 else 18 if door == "n" and dz > 18 else 12
-        lo, hi = sorted((dz, target))
-        strip(name, [cx], range(lo, hi + 1), core_x=cx)
-        a, c = sorted((cx, 7))
-        strip(name, range(a, c + 1), [target], core_z=target)
-    for x in (1, 2, 3):
-        for z in (12, 13, 14):
-            cells.pop((x, z), None)                                      # the well
-    return cells
-
-
-SEGS_OF = {}  # blocks dict id -> {pos: segment index}
+# ---------------- roads ----------------
+# The streets are laid out by hand (ROAD_TRUNKS); the lane to every door, gate and work yard is then routed around
+# everything that is ever built, so no road runs through a building and no door is left without one. A street or
+# lane is built once something it leads to exists: each piece carries the (track, level) rules of what lies on it
+# or beyond it. tools/check.py verifies the result at every tier.
+#   name, (x from, to), (z from, to), centre line ('x' or 'z', value), the piece it branches off, its own rules
+ROAD_TRUNKS = [
+    ("gate", (6, 8), (8, 50), ("x", 7), None, [("main", 1)]),                 # the high street: heart to the gate
+    ("plaza", (0, 14), (8, 16), ("x", 7), "gate", [("main", 7)]),
+    ("cross_w1", (-8, 5), (18, 19), ("z", 18), "gate", [("main", 5)]),        # the street of houses
+    ("cross_w2", (-21, -9), (18, 19), ("z", 18), "cross_w1", []),
+    ("cross_w3", (-44, -22), (18, 19), ("z", 18), "cross_w2", []),
+    ("cross_e1", (9, 22), (18, 19), ("z", 18), "gate", [("main", 6)]),
+    ("cross_e2", (23, 34), (18, 19), ("z", 18), "cross_e1", [("main", 7)]),
+    ("cross_e3", (35, 45), (18, 19), ("z", 18), "cross_e2", []),
+    ("farm_1", (9, 27), (11, 12), ("z", 11), "gate", []),                     # the farm road, east of the square
+    ("farm_2", (28, 40), (11, 12), ("z", 11), "farm_1", []),
+    ("farm_3", (41, 53), (11, 12), ("z", 11), "farm_2", []),
+    ("farm_4", (54, 66), (11, 12), ("z", 11), "farm_3", []),
+    ("castle_w", (-6, -5), (-8, 17), ("x", -5), "cross_w1", []),              # lanes past the castle to the north side
+    ("north_w", (-37, -5), (-10, -9), ("z", -9), "castle_w", []),
+    ("castle_e", (19, 19), (-8, 10), ("x", 19), "farm_1", []),
+    ("north_e1", (19, 43), (-10, -9), ("z", -9), "castle_e", []),
+    ("north_link", (44, 45), (-10, 10), ("x", 44), "farm_3", []),
+    ("north_e2", (46, 63), (-10, -9), ("z", -9), "north_link", []),
+]
+# places without a door that still need a way to them: track -> [(level, (x, z))], after the spacing moves
+ROAD_GOALS = {
+    "smith": [(1, (-12, 10))], "wood": [(1, (-31, 20))], "farm": [(1, (26, 11)), (1, (20, 5)), (2, (39, 10))],
+    "stables": [(1, (47, 25))], "apiary": [(1, (52, 11))], "kennel": [(1, (52, 22))], "lair": [(1, (9, -23))],
+    "cellar": [(1, (3, 11))],
+}
+ROAD_PLAN = {}   # style -> the plan of that style's roads
+SEGS_OF = {}     # blocks dict id -> {pos: [segment index, ...]}
+SEGDEF_OF = {}   # blocks dict id -> [(segment name, rules)]
 DOCK_JOBS = []
 FOLLOW = set()  # ids of block dicts whose blocks follow the terrain (roads, lamps, walls)
 ANCHORS_OF = {}  # blocks dict id -> {pos: (x, z) anchor column}
+
+
+def track_of(name):
+    t = name.rsplit("_", 1)[0]
+    return {"tent": "main", "hamlet": "main", "village": "main", "town": "main", "castle": "main", "citadel": "main",
+            "wall": "walls", "road": "roads", "lamp": "lamps"}.get(t, t)
+
+
+def plan_roads(style, jobs):
+    """Lays out the style's road network around its buildings. jobs: the finished (moved) templates of the style.
+    Returns dict(cells={(x, z): (kind, [segment names])}, segments=[(name, rules)], lamps=[(x, z, dx, dz, segment)])."""
+    import heapq
+    x0, x1, z0, z1 = WALL
+    gx = HEART[0]
+    hard = set()      # cells a road may never use
+    eaves = set()     # cells under a roof's edge: fine for a road, not for a lamp post
+    doors = []        # (track, level, door cell, (dx, dz))
+    for j in jobs:
+        name, blocks = j[1], j[2]
+        track, level = track_of(name), int(name.rsplit("_", 1)[1])
+        if name.startswith(("tent_", "road_", "lamp_", "dock_")):
+            continue
+        if track == "main":
+            level += {"hamlet": 3, "village": 6, "town": 7, "castle": 8, "citadel": 10}[name.rsplit("_", 1)[0]]
+        for (x, y, z), (bn, props) in blocks.items():
+            if bn == "minecraft:snow" or bn == "minecraft:air" and y != -1:
+                continue  # (air at ground level is a stairwell or a moat: no road there either)
+            if -1 <= y <= 2:
+                hard.add((x, z))
+            elif 3 <= y <= 5:
+                eaves.add((x, z))
+            if bn.endswith("_door") and props.get("half") == "lower" and y <= 3:
+                d = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}[props["facing"]]
+                doors.append((track, level, (x, z), d))
+    for x in range(gx - 1, gx + 2):
+        for z in range(z1 - 3, z1 + 1):
+            hard.discard((x, z))  # the gate's passage
+    hard.discard((HEART[0], HEART[2]))
+    hard.add((HEART[0], HEART[2]))
+    lo_x, hi_x, lo_z, hi_z = x0 + 3, x1 - 3, z0 + 3, z1 - 3
+    near = {(x + dx, z + dz) for (x, z) in hard for dx in (-1, 0, 1) for dz in (-1, 0, 1)} - hard
+
+    cells = {}   # (x, z) -> [kind, [segments]]
+    rules = {}
+    parent = {}
+    for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS:
+        rules[name] = list(own)
+        parent[name] = par
+        for x in range(xa, xb + 1):
+            for z in range(za, zb + 1):
+                if (x, z) in hard:
+                    continue
+                core = (x if axis == "x" else z) == line
+                if (x, z) in cells:
+                    if core:
+                        cells[(x, z)][0] = "core"
+                    cells[(x, z)][1].append(name)  # shared by two streets: there as soon as either is
+                    continue
+                cells[(x, z)] = ["core" if core else "side", [name]]
+    # a lane ends at a street; the square is only paved at the village tier, so lanes cross it to the street beyond
+    trunk = {c for c, v in cells.items() if v[1] != ["plaza"]}
+
+    goals = []
+    seen = set()
+    for track, level, (x, z), (dx, dz) in sorted(doors):
+        if track == "main" and (x, z) == (HEART[0], z) and abs(z - HEART[2]) < 12 and abs(x - HEART[0]) <= 1:
+            continue  # the main building's own door: its forecourt reaches the high street
+        for i in range(1, 7):
+            c = (x + dx * i, z + dz * i)
+            if c not in hard:
+                if (track, c) not in seen:
+                    seen.add((track, c))
+                    goals.append((track, level, c))
+                break
+    for track, extra in ROAD_GOALS.items():
+        for level, c in extra:
+            goals.append((track, level, c))
+
+    def add_rule(piece, rule):
+        while piece is not None:
+            if rule not in rules[piece]:
+                rules[piece].append(rule)
+            piece = parent.get(piece)
+
+    lanes = set()
+    for track, level, goal in goals:
+        seg = f"{track}_{level}_{goal[0]}_{goal[1]}".replace("-", "m")
+        if goal in hard:
+            raise SystemExit(f"{style}: the road goal of {track} at {goal} is inside a building")
+        # Dijkstra from the goal to the nearest street, straight lines preferred, away from walls where possible
+        start = (goal[0], goal[1], 0, 0)
+        dist = {start: 0.0}
+        prev = {}
+        heap = [(0.0, start)]
+        end = None
+        while heap:
+            d, cur = heapq.heappop(heap)
+            if d > dist.get(cur, 1e9):
+                continue
+            x, z, px, pz = cur
+            if (x, z) in trunk:
+                end = cur
+                break
+            for ddx, ddz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                n = (x + ddx, z + ddz)
+                if n in hard or not (lo_x <= n[0] <= hi_x and lo_z <= n[1] <= hi_z):
+                    continue
+                step = 0.55 if n in lanes or n in trunk else 1.0
+                step += 1.5 if n in near else 0.0
+                step += 1.2 if (px, pz) != (0, 0) and (px, pz) != (ddx, ddz) else 0.0
+                nxt = (n[0], n[1], ddx, ddz)
+                if d + step < dist.get(nxt, 1e9):
+                    dist[nxt] = d + step
+                    prev[nxt] = cur
+                    heapq.heappush(heap, (d + step, nxt))
+        if end is None:
+            raise SystemExit(f"{style}: no way for a road from {track} at {goal} to the streets")
+        rule = (track, level)
+        add_rule([n for n in cells[(end[0], end[1])][1] if n != "plaza"][0], rule)
+        if goal in cells:
+            cells[goal][0] = "core"  # the first road level only treads centre lines: a doorstep is always one
+        cur = end
+        while cur in prev:
+            cur = prev[cur]
+            c = (cur[0], cur[1])
+            if c in cells:
+                if seg not in cells[c][1] and c not in trunk:
+                    cells[c][1].append(seg)
+                    if cells[c][1][0] != "plaza":
+                        cells[c][0] = "core"
+            else:
+                cells[c] = ["core", [seg]]
+            lanes.add(c)
+        rules[seg] = [rule]
+        parent[seg] = None
+
+    # the centre lines must hang together (the first road level only treads those): link them through the streets
+    core = {c for c, v in cells.items() if v[0] == "core"}
+    start = (gx, HEART[2] + 2)
+    comp = {start}
+    queue = [start]
+    while queue:
+        x, z = queue.pop()
+        for n in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
+            if n in core and n not in comp:
+                comp.add(n)
+                queue.append(n)
+    changed = True
+    while changed:
+        changed = False
+        rest = core - comp
+        if not rest:
+            break
+        # breadth-first from the connected part through any road cell to the nearest loose centre cell
+        back = {c: None for c in comp}
+        queue = sorted(comp)
+        found = None
+        i = 0
+        while i < len(queue) and found is None:
+            x, z = queue[i]
+            i += 1
+            for n in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
+                if n in cells and n not in back and cells[n][1] != ["plaza"]:
+                    back[n] = (x, z)
+                    if n in rest:
+                        found = n
+                        break
+                    queue.append(n)
+        if found is None:
+            break
+        c = found
+        while c is not None and c not in comp:
+            cells[c][0] = "core"
+            core.add(c)
+            c = back[c]
+        queue = [found]
+        comp.add(found)
+        while queue:
+            x, z = queue.pop()
+            for n in ((x + 1, z), (x - 1, z), (x, z + 1), (x, z - 1)):
+                if n in core and n not in comp:
+                    comp.add(n)
+                    queue.append(n)
+        changed = True
+
+    # lamp posts along the streets: every ninth block of a centre line, on alternating sides, never on a road,
+    # in a doorway or against a wall
+    lamps = []
+    goal_cells = {g for _, _, g in goals}
+    taken = set()
+    for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS:
+        if name == "plaza" or (xb - xa + 1) * (zb - za + 1) < 16:
+            continue
+        along = range(za, zb + 1) if axis == "x" else range(xa, xb + 1)
+        side = 1
+        for n, v in enumerate(along):
+            if n % 9 != 4:
+                continue
+            for sgn in (side, -side):
+                for off in (1, 2, 3):
+                    c = (line + sgn * off, v) if axis == "x" else (v, line + sgn * off)
+                    if c not in cells:
+                        break
+                else:
+                    continue
+                d = (-sgn, 0) if axis == "x" else (0, -sgn)
+                ok = c not in hard and c not in eaves and c not in goal_cells and (c[0] + d[0], c[1] + d[1]) in cells and \
+                    all((c[0] + ex, c[1] + ez) not in taken and (c[0] + ex, c[1] + ez) not in goal_cells for ex in (-1, 0, 1) for ez in (-1, 0, 1)) and \
+                    lo_x <= c[0] <= hi_x and lo_z <= c[1] <= hi_z and \
+                    not any((c[0] + ex, c[1] + ez) in hard for ex, ez in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                if ok:
+                    lamps.append((c[0], c[1], d[0], d[1], name))
+                    taken.add(c)
+                    side = -sgn
+                    break
+    for c, d in (((-1, 8), (1, 0)), ((15, 8), (-1, 0)), ((-1, 16), (1, 0)), ((15, 16), (-1, 0))):
+        if c not in hard and c not in cells and not any((c[0] + ex, c[1] + ez) in hard for ex, ez in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+            lamps.append((c[0], c[1], d[0], d[1], "plaza"))
+    names = [t[0] for t in ROAD_TRUNKS] + sorted(k for k in rules if k not in {t[0] for t in ROAD_TRUNKS})
+    segments = [(n, sorted(rules[n])) for n in names]
+    plan = dict(cells={c: (v[0], v[1]) for c, v in cells.items()}, segments=segments, lamps=lamps, goals=goals, hard=hard)
+    ROAD_PLAN[style] = plan
+    return plan
+
 
 ROAD_MATS = {
     1: ("dirt_path", "coarse_dirt"),
@@ -966,36 +1172,37 @@ ROAD_MATS = {
 
 
 def roads(style, level):
-    """Roads track: 1 trodden path (centre line, gaps), 2 full dirt roads, 3 cobblestone and gravel,
+    """Roads track: 1 trodden path (centre line only), 2 full dirt roads, 3 cobblestone and gravel,
     4 stone brick with polished andesite borders."""
     b = B()
-    cells = road_cells()
+    plan = ROAD_PLAN[style]
+    cells = plan["cells"]
+    seg = {name: i for i, (name, _) in enumerate(plan["segments"])}
     m = ROAD_MATS[level]
-    for (x, z), (kind, seg) in cells.items():
-        b.seg = SEG[seg]
+    segs = {}
+    for (x, z), (kind, names) in cells.items():
         h = (x * 73856093 ^ z * 19349663) % 20
         if level == 1:
             if kind != "core":
                 continue
-            b.put(x, -1, z, m[0])
+            block = m[0]
         elif level == 2:
-            b.put(x, -1, z, m[0])
+            block = m[0] if h >= 2 else m[1]
         elif level == 3:
-            b.put(x, -1, z, m[1] if h < 5 else m[2] if h < 8 else m[0])
+            block = m[1] if h < 5 else m[2] if h < 8 else m[0]
         else:
             border = any((x + dx, z + dz) not in cells for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-            b.put(x, -1, z, m[1] if border else m[2] if h < 3 else m[0])
-    SEGS_OF[id(b.b)] = b.segs
+            block = m[1] if border and kind != "core" else m[2] if h < 3 else m[0]
+        b.put(x, -1, z, block)
+        segs[(x, -1, z)] = [seg[n] for n in names]
+    SEGS_OF[id(b.b)] = segs
+    SEGDEF_OF[id(b.b)] = plan["segments"]
     FOLLOW.add(id(b.b))
     return b.b
 
 
-# lamp posts: x, z and the direction their arm points (towards the road)
-LAMP_SPOTS = [(5, 22, 1, 0, "gate"), (9, 22, -1, 0, "gate"), (5, 30, 1, 0, "gate"), (9, 30, -1, 0, "gate"),
-              (5, 35, 1, 0, "gate"), (9, 35, -1, 0, "gate"),
-              (-6, 11, 0, 1, "smith"), (19, 11, 0, 1, "farm"), (32, 11, 0, 1, "pasture"),
-              (-10, 17, 0, 1, "street_w2"), (2, 17, 0, 1, "street_w1"), (13, 17, 0, 1, "street_e1"), (25, 17, 0, 1, "street_e2"),
-              (0, 9, 1, 0, "square"), (14, 9, -1, 0, "square")]
+def seg_trunks():
+    return {t[0] for t in ROAD_TRUNKS}
 
 
 def lamps(style, level):
@@ -1003,8 +1210,11 @@ def lamps(style, level):
     s = STYLES[style]
     b = B()
     fence = s["wood"] + "_fence"
-    for x, z, dx, dz, seg in LAMP_SPOTS:
-        b.seg = SEG[seg]
+    plan = ROAD_PLAN[style]
+    seg = {name: i for i, (name, _) in enumerate(plan["segments"])}
+    segs = {}
+    for x, z, dx, dz, name in plan["lamps"]:
+        before = set(b.b)
         if level == 1:
             b.put(x, 0, z, fence)
             b.put(x, 1, z, "torch")
@@ -1019,15 +1229,23 @@ def lamps(style, level):
             b.put(x + dx, 3, z + dz, fence)
             b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")
             b.put(x, 4, z, "lantern", hanging="false", waterlogged="false")
-    SEGS_OF[id(b.b)] = b.segs
+        for p in set(b.b) - before:
+            segs[p] = [seg[name]]
+    SEGS_OF[id(b.b)] = segs
+    SEGDEF_OF[id(b.b)] = plan["segments"]
     FOLLOW.add(id(b.b))
     return b.b
 
 
+def stairs_of(block):
+    return {"stone_bricks": "stone_brick_stairs", "mossy_stone_bricks": "mossy_stone_brick_stairs", "nether_bricks": "nether_brick_stairs",
+            "bricks": "brick_stairs", "mud_bricks": "mud_brick_stairs"}.get(block, block + "_stairs")
+
+
 def stone_walls(style, level):
-    """Walls 3: stone curtain wall, 5 high, crenellated, walkway behind the battlements, arched gate.
-    Walls 4: adds square stone towers at the corners and beside the gate, with banners."""
-    s = STYLES[style]
+    """Walls 3: stone curtain wall with a parapet and battlements, a walkway behind them and stairs up to it beside
+    the gate. Walls 4: square towers at the corners, beside the gate and along the long sides. Each tower has a door
+    at the ground, doors onto the walkway, a ladder inside up to the roof, arrow slits and the kingdom's banner."""
     b = B()
     # follows the land in 4-block sections: each section stands on the ground at its middle, so on a mountain
     # the wall steps up and down with the hills instead of floating over valleys
@@ -1040,6 +1258,7 @@ def stone_walls(style, level):
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     H = 5
+    POST = dict(up="true", north="none", south="none", east="none", west="none", waterlogged="false")
 
     def mat(x, y, z):
         h = (x * 73856093 ^ y * 19349663 ^ z * 83492791) % 20
@@ -1054,64 +1273,98 @@ def stone_walls(style, level):
     ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
     ring += [(x0, z) for z in range(z0 + 1, z1)] + [(x1, z) for z in range(z0 + 1, z1)]
     for x, z in ring:
-        gate = z == z1 and abs(x - gx) <= 1
+        passage = z == z1 and abs(x - gx) <= 1
+        house = z == z1 and abs(x - gx) <= 3  # where the gatehouse stands: plain stone, so both fit together
         b.anchor = section(x, z)
         for y in range(-6, -1):
             b.put(x, y, z, main)  # foundation: fills under a section where the ground dips
-        for y in range(0, H):
-            if gate and y < 4:
+        for y in range(0, H + 1):
+            if passage and y < 4:
                 continue
-            b.put(x, y, z, mat(x, y, z))
-        if (x + z) % 2 == 0:
-            b.put(x, H, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
-        b.put(x, -1, z, "cobblestone")
+            b.put(x, y, z, main if house else mat(x, y, z))
+        if (x + z) % 2 == 0 and not house:
+            b.put(x, H + 1, z, wall_top, **POST)
+        if not passage:
+            b.put(x, -1, z, "cobblestone")
     # walkway behind the battlements
-    inner = {(x, z0 + 1) for x in range(x0 + 1, x1)} | {(x, z1 - 1) for x in range(x0 + 1, x1)}
+    inner = {(x, z0 + 1) for x in range(x0 + 1, x1)} | {(x, z1 - 1) for x in range(x0 + 1, x1) if abs(x - gx) > 3}
     inner |= {(x0 + 1, z) for z in range(z0 + 1, z1)} | {(x1 - 1, z) for z in range(z0 + 1, z1)}
     for x, z in inner:
-        if not (z == z1 - 1 and abs(x - gx) <= 1):
-            ox = x0 if x == x0 + 1 else x1 if x == x1 - 1 else x
-            oz = z0 if z == z0 + 1 else z1 if z == z1 - 1 else z
-            b.anchor = section(ox, oz)
-            b.put(x, H - 1, z, slab, type="top", waterlogged="false")
-    # stairs up to the walkway on both sides of the gate
-    for i in range(H - 1):
-        for x in (gx - 3 - i, gx + 3 + i):
-            b.anchor = section(x, z1)
-            b.put(x, i, z1 - 2, main)
-    if level >= 4:
-        spots = [(x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - 4, z1), (gx + 4, z1), (x0, (z0 + z1) // 2), (x1, (z0 + z1) // 2)]
-        for cx, cz in spots:
+        ox = x0 if x == x0 + 1 else x1 if x == x1 - 1 else x
+        oz = z0 if z == z0 + 1 else z1 if z == z1 - 1 else z
+        b.anchor = section(ox, oz)
+        b.put(x, H - 1, z, slab, type="top", waterlogged="false")
+    if level == 3:
+        # stairs up to the walkway on both sides of the gate (the towers of the next level take their place)
+        for i in range(H):
+            for x, f in ((gx - 5 - i, "west"), (gx + 5 + i, "east")):
+                b.anchor = section(x, z1)
+                b.put(x, i, z1 - 2, stairs_of(main), facing=f, **ST)
+                for y in range(0, i):
+                    b.put(x, y, z1 - 2, main)
+    else:
+        for cx, cz in tower_spots(level):
             tx0 = max(x0 - 1, min(x1 - 3, cx - 2))
             tz0 = max(z0 - 1, min(z1 - 3, cz - 2))
             if cz == z1:
                 tz0 = z1 - 2
             b.anchor = (tx0 + 2, tz0 + 2)
+            dx, dz = inward(cx, cz)
+            mx, mz = tx0 + 2, tz0 + 2
+            # door at the ground, on the side that looks into the settlement
+            face = (mx, tz0 if dz < 0 else tz0 + 4) if dz else (tx0 if dx < 0 else tx0 + 4, mz)
+            # doors onto the walkway wherever it meets the tower
+            doors = set()
             for x in range(tx0, tx0 + 5):
                 for z in range(tz0, tz0 + 5):
-                    for y in range(-6, 0):
-                        b.put(x, y, z, main)  # tower foundation
+                    corner = x in (tx0, tx0 + 4) and z in (tz0, tz0 + 4)
+                    edge = x in (tx0, tx0 + 4) or z in (tz0, tz0 + 4)
+                    if edge and not corner:
+                        ox, oz = (x - 1 if x == tx0 else x + 1 if x == tx0 + 4 else x), (z - 1 if z == tz0 else z + 1 if z == tz0 + 4 else z)
+                        if (ox, oz) in inner:
+                            doors.add((x, z))
+            # the ladder stands in a corner no door opens into, on the east or west wall
+            lx = lz = side = None
+            for cz_ in (tz0 + 1, tz0 + 3):
+                for cx_, wx, f in ((tx0 + 1, tx0, "east"), (tx0 + 3, tx0 + 4, "west")):
+                    if lx is None and (wx, cz_) not in doors and (cx_, tz0 if cz_ == tz0 + 1 else tz0 + 4) not in doors:
+                        lx, lz, side = cx_, cz_, f
             for x in range(tx0, tx0 + 5):
                 for z in range(tz0, tz0 + 5):
                     edge = x in (tx0, tx0 + 4) or z in (tz0, tz0 + 4)
+                    for y in range(-6, 0):
+                        b.put(x, y, z, main)  # tower foundation
                     for y in range(0, 9):
                         if edge:
                             b.put(x, y, z, mat(x, y, z))
-                        elif y in (0, H - 1):
+                        elif y in (0, H - 1) and (x, z) != (lx, lz):
                             b.put(x, y, z, main)
                         else:
                             b.put(x, y, z, "air")
                     b.put(x, 9, z, main if not edge else mat(x, 9, z))
-                    if edge and (x + z) % 2 == 0:
-                        b.put(x, 10, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
-            # doorway onto the walkway, ladder from the ground to the top
-            lx, lz = tx0 + 2, tz0 + 2
-            for y in range(1, 9):
-                b.put(lx, y, lz + 1, main)
-                b.put(lx, y, lz, "ladder", facing="north", waterlogged="false")
-            b.put(lx, H - 1, lz, "ladder", facing="north", waterlogged="false")
-            b.put(lx, 9, lz, "air")
-            b.put(lx, 8, lz - 1, "lantern", hanging="true", waterlogged="false")
+                    if edge:
+                        b.put(x, 10, z, mat(x, 10, z))
+                        if (x + z) % 2 == 0:
+                            b.put(x, 11, z, wall_top, **POST)
+            b.put(lx, 0, lz, main)
+            for y in range(1, 10):
+                b.put(lx, y, lz, "ladder", facing=side, waterlogged="false")
+            for y in (1, 2):
+                b.put(face[0], y, face[1], "air")
+            for x, z in doors:
+                for y in (H, H + 1):
+                    b.put(x, y, z, "air")
+            # arrow slits on the other faces, the banner on the face that looks out
+            out_face = (mx, tz0 + 4 if dz < 0 else tz0) if dz else (tx0 + 4 if dx < 0 else tx0, mz)
+            for fx, fz in ((mx, tz0), (mx, tz0 + 4), (tx0, mz), (tx0 + 4, mz)):
+                if (fx, fz) in doors or (fx, fz) == face:
+                    continue
+                if (fx, fz) == out_face:
+                    ox, oz = fx + (fx == tx0 + 4) - (fx == tx0), fz + (fz == tz0 + 4) - (fz == tz0)
+                    b.put(ox, 7, oz, "{color}_wall_banner", facing="east" if ox > fx else "west" if ox < fx else "south" if oz > fz else "north")
+                else:
+                    b.put(fx, 6, fz, "iron_bars", **(PANE_X if fz in (tz0, tz0 + 4) else PANE_Z))
+            b.put(mx, 8, mz, "lantern", hanging="true", waterlogged="false")
     b.anchor = None
     return b.b
 
@@ -1170,6 +1423,7 @@ def town_hall(b, style, x0=1, z0=-1):
                 if edge and not (y in (14, 15) and (x == cx or z == tz0 + 1)):
                     b.put(x, y, z, stone if y < 14 else frame, **({} if y < 14 else {"axis": "y"}))
     b.put(cx, 13, tz0 + 1, "spruce_planks")
+    b.put(cx, 16, tz0 + 1, frame, **({"axis": "x"} if "log" in frame else {}))
     b.put(cx, 15, tz0 + 1, "bell", attachment="ceiling", facing="south", powered="false")
     for x in range(tx0 - 1, tx0 + 4):
         for z in range(tz0 - 1, tz0 + 4):
@@ -1194,36 +1448,238 @@ def town_hall(b, style, x0=1, z0=-1):
     b.put(x1 - 1, 1, z0 + 1, "cartography_table")
     b.put(x0 + 1, 1, z1 - 1, "{color}_bed", facing="north", part="foot", occupied="false")
     b.put(x0 + 1, 1, z1 - 2, "{color}_bed", facing="north", part="head", occupied="false")
+    for y in range(1, 5):
+        b.put(x1 - 1, y, z1 - 1, "ladder", facing="west", waterlogged="false")
+    for x in range(cx - 2, cx + 3):  # the council table upstairs
+        b.put(x, 5, z0 + 3, "spruce_slab", type="top", waterlogged="false")
+        b.put(x, 5, z0 + 2, "spruce_stairs", facing="south", **ST)
+    b.put(cx, 7, z0 + 4, "lantern", hanging="true", waterlogged="false")
+    b.put(x0 + 1, 5, z0 + 1, "bookshelf")
+    b.put(x0 + 1, 6, z0 + 1, "bookshelf")
+    b.put(x0 + 1, 5, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
 
 
-def stone_hut(b, x0, z0, x1, z1, walls_h, wall, corner, floor, door, roof_stairs, roof_slab):
-    """Rectangular building with corner posts, a door on the given side ('n'/'s') at the middle, gable roof along x."""
+def hsh(x, y, z):
+    return (x * 73856093 ^ y * 19349663 ^ z * 83492791) & 0x7FFFFFFF
+
+
+def pick(seq, x, y, z):
+    return seq[hsh(x, y, z) % len(seq)]
+
+
+# What the bigger buildings of each style are made of. "base" is the foundation course, "stone" the masonry of
+# stone ground floors, "plaster" the fill between the timbers; lists are mixed block by block so no wall is one flat texture.
+KIT = {
+    "temperate": dict(base=("cobblestone", "cobblestone", "mossy_cobblestone", "stone_bricks"),
+                      stone=("stone_bricks", "stone_bricks", "stone_bricks", "cobblestone", "mossy_stone_bricks", "andesite"),
+                      plaster=("calcite",), plank="spruce_planks", door="spruce_door", shutter="spruce_trapdoor",
+                      bush="flowering_azalea_leaves", flat=False, chimney="bricks"),
+    "frozen": dict(base=("cobblestone", "cobblestone", "mossy_cobblestone"),
+                   stone=("cobblestone", "cobblestone", "stone", "mossy_cobblestone", "andesite"),
+                   plaster=("spruce_planks",), plank="spruce_planks", door="spruce_door", shutter="spruce_trapdoor",
+                   bush=None, flat=False, chimney="cobblestone", logwall="spruce_log", ridge="dark_oak_slab"),
+    "arid": dict(base=("cut_sandstone", "cut_sandstone", "sandstone"),
+                 stone=("sandstone", "sandstone", "cut_sandstone", "smooth_sandstone"),
+                 plaster=("smooth_sandstone",), plank="acacia_planks", door="acacia_door", shutter="acacia_trapdoor",
+                 bush=None, flat=True, chimney="sandstone", post="cut_sandstone"),  # stone piers, timber only for the roof beams
+    "highland": dict(base=("cobblestone", "mossy_cobblestone", "andesite"),
+                     stone=("stone_bricks", "stone_bricks", "cobblestone", "andesite", "cracked_stone_bricks"),
+                     plaster=("cobblestone", "cobblestone", "andesite", "stone"), plank="spruce_planks", door="spruce_door",
+                     shutter="spruce_trapdoor", bush=None, flat=False, chimney="cobblestone"),
+    "wild": dict(base=("mossy_cobblestone", "mossy_cobblestone", "cobblestone"),
+                 stone=("mossy_cobblestone", "cobblestone", "mossy_stone_bricks", "cobblestone"),
+                 plaster=("bamboo_planks",), plank="jungle_planks", door="jungle_door", shutter="jungle_trapdoor",
+                 bush="azalea_leaves", flat=False, chimney="mud_bricks"),
+}
+NETHER_KIT = dict(base=("blackstone", "blackstone", "polished_blackstone_bricks"),
+                  stone=("nether_bricks", "nether_bricks", "cracked_nether_bricks"), plaster=("nether_bricks",),
+                  plank="blackstone", door="crimson_door", shutter="crimson_trapdoor", bush=None, flat=False, chimney="nether_bricks")
+PANE_X = dict(north="false", south="false", east="true", west="true", waterlogged="false")
+PANE_Z = dict(north="true", south="true", east="false", west="false", waterlogged="false")
+
+
+def posts_along(lo, hi, door=None):
+    """Timber posts of a wall from lo to hi: the corners, a pair framing the door, and one in every span of five or more."""
+    posts = [lo, hi]
+    if door is not None and door - 1 > lo and door + 1 < hi:
+        posts += [door - 1, door + 1]
+    elif (hi - lo) % 2 == 0:
+        posts.append((lo + hi) // 2)
+    posts = sorted(set(posts))
+    out = set(posts)
+    for a, c in zip(posts, posts[1:]):
+        if c - a - 1 >= 5:
+            out.add((a + c) // 2)
+    return sorted(out)
+
+
+def window_cells(posts, skip=None):
+    """The window cells of each bay between posts: one in a narrow bay, the middle two of a wide one."""
+    cells = []
+    for a, c in zip(posts, posts[1:]):
+        bay = [v for v in range(a + 1, c)]
+        if not bay or skip is not None and skip in bay:
+            continue
+        n = len(bay)
+        cells.append(bay if n <= 2 else bay[n // 2 - (0 if n % 2 else 1): n // 2 + 1])
+    return cells
+
+
+def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=None, chimney=None, windows_back=True):
+    """A building of the village in its style, used for every workshop, shop and hall: a stone foundation, timber
+    posts with fill between them (kind 'timber') or a masonry ground floor (kind 'stone'), windows in every bay with
+    shutters on the door side, a door with steps, and a roof with eaves on all sides (flat with a parapet in the
+    desert). With base_h the building has two storeys: the upper floor's beams lie at base_h + 1.
+    The roof reaches one block past the walls on every side, nothing else does."""
+    nether = kind == "nether"
+    k = NETHER_KIT if nether else KIT[style]
+    m = MAT[style]
+    frame = "red_nether_bricks" if nether else k.get("post", m["frame"])
+    roof, roof_slab = ("nether_brick_stairs", "nether_brick_slab") if nether else (m["roof"], k.get("ridge", m["roof_slab"]))
+    log = "log" in frame
+    cx = (x0 + x1) // 2
+    dz = z0 if door == "n" else z1
+    out = -1 if door == "n" else 1
+    facing = "north" if door == "n" else "south"
+    stone_kind = kind in ("stone", "nether")
+
+    def beam(x, y, z, axis):
+        b.put(x, y, z, frame, **({"axis": axis} if log else {}))
+
+    def fill(x, y, z, along):
+        upper = base_h is not None and y > base_h
+        if stone_kind and not upper:
+            b.put(x, y, z, pick(k["stone"], x, y, z))
+        elif k.get("logwall") and not upper and not stone_kind:
+            b.put(x, y, z, k["logwall"], axis=along)
+        else:
+            b.put(x, y, z, pick(k["plaster"], x, y, z))
+
+    px = posts_along(x0, x1, cx)
+    pz = posts_along(z0, z1)
+    rows = [2, 3] if (base_h or h) >= 5 else [2]
+    if base_h is not None:
+        rows += [base_h + 3]
+    plates = {h} | ({base_h + 1} if base_h is not None else set())
+    if k["flat"]:
+        plates = {base_h + 1} if base_h is not None else set()
+    # foundation and floor
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
             edge = x in (x0, x1) or z in (z0, z1)
-            b.put(x, 0, z, wall if edge else floor)
-            if edge:
-                c = x in (x0, x1) and z in (z0, z1)
-                for y in range(1, walls_h + 1):
-                    b.put(x, y, z, corner if c else wall, **({"axis": "y"} if c and "log" in corner else {}))
-    dx = (x0 + x1) // 2
-    dz = z0 if door == "n" else z1
-    facing = "north" if door == "n" else "south"
-    porch(b, dx, dz - 1 if door == "n" else dz + 1, "spruce", facing="south" if door == "n" else "north")
-    b.put(dx, 1, dz, "spruce_door", facing=facing, half="lower", hinge="left", open="false", powered="false")
-    b.put(dx, 2, dz, "spruce_door", facing=facing, half="upper", hinge="left", open="false", powered="false")
+            b.put(x, 0, z, pick(k["base"], x, 0, z) if edge else (floor or k["plank"]))
+    # walls
+    for y in range(1, h + 1):
+        for x in range(x0, x1 + 1):
+            for z in (z0, z1):
+                if x in px:
+                    beam(x, y, z, "y")
+                elif y in plates:
+                    beam(x, y, z, "x")
+                else:
+                    fill(x, y, z, "x")
+        for z in range(z0 + 1, z1):
+            for x in (x0, x1):
+                if z in pz:
+                    beam(x, y, z, "y")
+                elif y in plates:
+                    beam(x, y, z, "z")
+                else:
+                    fill(x, y, z, "z")
+    # windows
+    front = window_cells(px, cx)
+    for z in (z0, z1):
+        if z != dz and not windows_back:
+            continue
+        for group in front:
+            for x in group:
+                for y in rows:
+                    b.put(x, y, z, "glass_pane", **PANE_X)
+            if z == dz:
+                for y in [2] + ([base_h + 3] if base_h is not None else []):
+                    for x in (group[0] - 1, group[-1] + 1):
+                        if x != cx and x0 <= x <= x1:
+                            b.put(x, y, z + out, k["shutter"], facing=facing, half="bottom", open="true", powered="false", waterlogged="false")
+                if k["bush"]:
+                    for x in group:
+                        b.put(x, 0, z + out, k["bush"], distance="7", persistent="true", waterlogged="false")
+    for x in (x0, x1):
+        for group in window_cells(pz):
+            for z in group:
+                for y in rows:
+                    b.put(x, y, z, "glass_pane", **PANE_Z)
+    # door, steps and a lantern beside it
+    porch(b, cx, dz + out, k["plank"].replace("_planks", "") if not nether else "blackstone", facing="south" if door == "n" else "north")
+    for half, y in (("lower", 1), ("upper", 2)):
+        b.put(cx, y, dz, k["door"], facing=facing, half=half, hinge="left", open="false", powered="false")
+    if h >= 4 and 3 not in plates:
+        beam(cx, 3, dz, "x")
+    # roof
     depth = z1 - z0 + 1
-    half = depth // 2 + 1
-    for x in range(x0 - 1, x1 + 2):
-        for i in range(half):
-            b.put(x, walls_h + 1 + i, z0 - 1 + i, roof_stairs, facing="south", **ST)
-            b.put(x, walls_h + 1 + i, z1 + 1 - i, roof_stairs, facing="north", **ST)
-        if depth % 2 == 1:
-            b.put(x, walls_h + half, z0 - 1 + half, roof_slab, type="bottom", waterlogged="false")
-    for xx in (x0, x1):
-        for i in range(1, half):
-            for z in range(z0 + i, z1 - i + 1):
-                b.put(xx, walls_h + i, z, wall)
+    if k["flat"]:
+        top = h + 1
+        for x in range(x0, x1 + 1):
+            for z in range(z0, z1 + 1):
+                edge = x in (x0, x1) or z in (z0, z1)
+                if not edge:
+                    b.put(x, top, z, "smooth_sandstone")
+                elif (x + z) % 2 == 0 or (x in (x0, x1) and z in (z0, z1)):
+                    b.put(x, top, z, "cut_sandstone")
+                    b.put(x, top + 1, z, "sandstone_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+                else:
+                    b.put(x, top, z, "cut_sandstone")
+        for x in px[1:-1]:  # roof beams poke out of the long walls
+            for z, o in ((z0, -1), (z1, 1)):
+                b.put(x, h, z + o, m["frame"], axis="z")
+        for x in (cx - 1, cx, cx + 1):  # awning over the door
+            b.put(x, 3, dz + out, m["frame"].replace("stripped_", "").replace("_log", "_slab"), type="top", waterlogged="false")
+        peak = top
+    else:
+        half = depth // 2 + 1
+        for x in range(x0 - 1, x1 + 2):
+            for i in range(half):
+                b.put(x, h + i, z0 - 1 + i, roof, facing="south", **ST)
+                b.put(x, h + i, z1 + 1 - i, roof, facing="north", **ST)
+            if depth % 2 == 1:
+                b.put(x, h + half - 1, z0 - 1 + half, roof_slab, type="bottom", waterlogged="false")
+        mid = (z0 + z1) // 2
+        for xx in (x0, x1):
+            for i in range(1, half - (depth % 2)):
+                for z in range(z0 + i, z1 - i + 1):
+                    if depth % 2 == 1 and z == mid:
+                        beam(xx, h + i, z, "y")
+                    else:
+                        b.put(xx, h + i, z, pick(k["plaster"], xx, h + i, z))
+            if half >= 5 and depth % 2 == 1:
+                b.put(xx, h + 2, mid, "glass_pane", **PANE_Z)
+        # tie beams across the hall at every post: the lanterns hang on them
+        for x in px[1:-1]:
+            for z in range(z0 + 1, z1):
+                beam(x, h, z, "z")
+        peak = h + half - 1
+    if chimney:
+        chx, chz = chimney
+        for y in range(1, peak + 2):
+            b.put(chx, y, chz, k["chimney"])
+        b.put(chx, peak + 2, chz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    return peak
+
+
+def hang_lanterns(blocks):
+    """A hanging lantern with nothing above it gets a chain up to the next beam or roof block."""
+    for (x, y, z), (name, p) in list(blocks.items()):
+        if name == "minecraft:lantern" and p.get("hanging") == "true":
+            gap = []
+            for yy in range(y + 1, y + 9):
+                above = blocks.get((x, yy, z))
+                if above is not None and above[0] != "minecraft:air":
+                    for g in gap:
+                        blocks[g] = ("minecraft:iron_chain", {"axis": "y", "waterlogged": "false"})
+                    break
+                gap.append((x, yy, z))
+            else:
+                blocks[(x, y, z)] = ("minecraft:lantern", {"hanging": "false", "waterlogged": "false"})
+                # nothing to hang on: it stands on what is below (checked by tools/check.py)
 
 
 def mats(style):
@@ -1245,9 +1701,7 @@ def library(style, level):
     m = mats(style)
     b = B()
     x0, z0, x1, z1 = LIB
-    stone_hut(b, x0, z0, x1, z1, 4, m["stone"], m["corner"], "spruce_planks", "s", m["roof"], m["slab"])
-    for x in range(x0 + 2, x1 - 1, 2):
-        b.put(x, 2, z0, "glass_pane", north="false", south="false", east="true", west="true", waterlogged="false")
+    hall(b, style, x0, z0, x1, z1, 4, "s", kind="stone", windows_back=False)
     cx, cz = (x0 + x1) // 2, (z0 + z1) // 2 - 1
     b.put(cx, 1, cz, "enchanting_table")
     ring = [(cx + dx, cz + dz) for dx in range(-2, 3) for dz in range(-2, 3) if max(abs(dx), abs(dz)) == 2 and (dx, dz) != (0, 2)]
@@ -1274,11 +1728,8 @@ def brewery(style, level):
     m = mats(style)
     b = B()
     x0, z0, x1, z1 = BREW
-    stone_hut(b, x0, z0, x1, z1, 3, m["stone"], m["corner"], "packed_mud", "n", m["roof"], m["slab"])
+    hall(b, style, x0, z0, x1, z1, 3, "n", kind="stone", floor="packed_mud", chimney=(x1 - 1, z1))
     cx = (x0 + x1) // 2
-    for y in range(1, 9):
-        b.put(x1 - 1, y, z1, "bricks")
-    b.put(x1 - 1, 9, z1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
     b.put(cx - 2, 1, z1 - 1, "brewing_stand", has_bottle_0="false", has_bottle_1="false", has_bottle_2="false")
     b.put(cx - 1, 1, z1 - 1, "water_cauldron", level="3")
     b.put(cx + 1, 1, z1 - 1, "cauldron")
@@ -1355,7 +1806,7 @@ def gate(style, level):
         for x in (gx - 2, gx + 2):
             for y in range(0, 5):
                 b.put(x, y, z1, "stripped_" + log, axis="y")
-        b.put(gx, 4, z1 + 1, "{color}_wall_banner", facing="south")
+        b.put(gx, 3, z1 + 1, "{color}_wall_banner", facing="south")
         return b.b
     # stone gatehouse: x gx-3..gx+3, z z1-1..z1+1, passage 3 wide and 4 high
     for x in range(gx - 3, gx + 4):
@@ -1363,7 +1814,7 @@ def gate(style, level):
             for y in range(0, 8):
                 passage = abs(x - gx) <= 1 and y < 4
                 b.put(x, y, z, "air" if passage else stone)
-            if (x + z) % 2 == 0 and (x in (gx - 3, gx + 3) or z in (z1 - 1, z1 + 1)):
+            if (x + z) % 2 == 0 and (x in (gx - 3, gx + 3) or z in (z1 - 1, z1 + 1)) and (x, z) != (gx - 2, z1 - 1):
                 b.put(x, 8, z, "stone_brick_wall" if style != "frozen" else "cobblestone_wall", up="true", north="none", south="none",
                       east="none", west="none", waterlogged="false")
     for x in range(gx - 1, gx + 2):
@@ -1424,8 +1875,7 @@ def motte(b, style):
     H = 4
     for (x, y, z), v in t.b.items():
         b.b[(x, y + H, z)] = v
-    stone = "cobblestone" if style == "frozen" else "stone_bricks"
-    wall_top = "cobblestone_wall" if style == "frozen" else "stone_brick_wall"
+    stone, mossy, wall_top = MAT[style]["stone"], MAT[style]["alt"], MAT[style]["top"]
     x0, z0, x1, z1 = -4, -18, 18, 3
     cx = 7
     for x in range(x0, x1 + 1):
@@ -1435,7 +1885,7 @@ def motte(b, style):
             for y in range(0, H):
                 if (x, y + 0, z) in b.b:
                     continue
-                b.put(x, y, z, (stone if not (x * 7 + y * 3 + z) % 9 == 0 else "mossy_" + stone) if edge else ("grass_block" if y == H - 1 else "dirt"),
+                b.put(x, y, z, (stone if not (x * 7 + y * 3 + z) % 9 == 0 else mossy) if edge else ("grass_block" if y == H - 1 else "dirt"),
                       **({"snowy": "false"} if not edge and y == H - 1 else {}))
             if edge and not stairs and (x + z) % 2 == 0 and (x, H, z) not in b.b:
                 b.put(x, H, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
@@ -1444,7 +1894,7 @@ def motte(b, style):
         z = z1 + 1 + i
         y = H - 1 - i
         for x in range(cx - 2, cx + 3):
-            b.put(x, y, z, stone.replace("bricks", "brick") + "_stairs" if stone == "stone_bricks" else "cobblestone_stairs", facing="north", **ST)
+            b.put(x, y, z, stairs_of(stone), facing="north", **ST)
             for yy in range(0, y):
                 b.put(x, yy, z, stone)
         for x in (cx - 3, cx + 3):
@@ -1457,21 +1907,28 @@ def motte(b, style):
         b.put(x, H, z1, "air")
 
 
+KEEP_TRIM = {"temperate": "polished_andesite", "frozen": "stone_bricks", "arid": "cut_sandstone", "highland": "polished_andesite",
+             "wild": "mossy_stone_bricks"}
+
+
 def castle_keep(b, style, z_shift=0):
-    """Castle tier: a square stone keep replaces the town hall. Great hall with a carpet to the throne,
-    upper floor, walkable battlements and four corner towers rising above the roof."""
-    frozen = style == "frozen"
+    """Castle tier: a square stone keep replaces the town hall. Rough stone at the foot, a band at each floor,
+    arrow loops, a wall-walk on corbels behind battlements, and four corner turrets. Inside: the great hall with a
+    carpet to the throne and the lord's floor above. The turrets are the stairs: a door on every floor, a ladder
+    from the hall to the roof and on to the turret's top."""
+    k = KIT[style]
     stone, alt, wall_top = MAT[style]["stone"], MAT[style]["alt"], MAT[style]["top"]
+    trim = KEEP_TRIM[style]
     wood = "spruce"
     x0, z0, x1, z1 = -1, -12 + z_shift, 15, 4 + z_shift
     cx = (x0 + x1) // 2
     H = 12
+    POST = dict(up="true", north="none", south="none", east="none", west="none", waterlogged="false")
 
     def mat(x, y, z):
-        return alt if (x * 7 + y * 13 + z * 5) % 11 == 0 else stone
-
-    def crenel(x, y, z):
-        b.put(x, y, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+        if y <= 1:
+            return pick(k["stone"], x, y, z)
+        return alt if hsh(x, y, z) % 11 == 0 else stone
 
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
@@ -1479,68 +1936,105 @@ def castle_keep(b, style, z_shift=0):
             b.put(x, 0, z, mat(x, 0, z) if edge else "polished_andesite" if (x + z) % 2 else "stone_bricks")
             for y in range(1, H):
                 if edge:
-                    window = y in (3, 8) and ((x - x0) % 4 == 2 and z in (z0, z1) or (z - z0) % 4 == 2 and x in (x0, x1))
-                    if window:
-                        pane = dict(north="false", south="false", east="true", west="true") if z in (z0, z1) else dict(north="true", south="true", east="false", west="false")
-                        b.put(x, y, z, "iron_bars", waterlogged="false", **pane)
+                    loop = y in (3, 4, 8, 9) and ((x - x0) % 4 == 2 and z in (z0, z1) or (z - z0) % 4 == 2 and x in (x0, x1))
+                    if loop:
+                        b.put(x, y, z, "iron_bars", **(PANE_X if z in (z0, z1) else PANE_Z))
                     else:
-                        b.put(x, y, z, mat(x, y, z))
+                        b.put(x, y, z, trim if y in (6, H - 1) else mat(x, y, z))
                 else:
                     b.put(x, y, z, "air")
+            b.put(x, H, z, stone)  # the roof and the wall-walk
             if not edge:
                 b.put(x, 6, z, wood + "_planks")
-                b.put(x, H, z, stone)
-            elif (x + z) % 2 == 0:
-                crenel(x, H, z)
-    # corner towers, 5x5, rising 6 above the battlements
-    for tx, tz in ((x0 - 1, z0 - 1), (x1 - 3, z0 - 1), (x0 - 1, z1 - 3), (x1 - 3, z1 - 3)):
+    # the wall-walk juts out on corbels between the turrets and carries the battlements
+    for i in range(x0 + 4, x1 - 3):
+        for (x, z, f) in ((i, z0 - 1, "south"), (i, z1 + 1, "north")):
+            b.put(x, H - 1, z, stairs_of(stone), facing=f, half="top", shape="straight", waterlogged="false")
+            b.put(x, H, z, stone)
+            b.put(x, H + 1, z, stone if i % 2 else wall_top, **({} if i % 2 else POST))
+    for i in range(z0 + 4, z1 - 3):
+        for (x, z, f) in ((x0 - 1, i, "east"), (x1 + 1, i, "west")):
+            b.put(x, H - 1, z, stairs_of(stone), facing=f, half="top", shape="straight", waterlogged="false")
+            b.put(x, H, z, stone)
+            b.put(x, H + 1, z, stone if i % 2 else wall_top, **({} if i % 2 else POST))
+    # corner turrets, 5x5, rising 6 above the roof
+    T = H + 6
+    for west, north in ((True, True), (False, True), (True, False), (False, False)):
+        tx = x0 - 1 if west else x1 - 3
+        tz = z0 - 1 if north else z1 - 3
+        ladder = (tx + 3 if west else tx + 1, tz + 1 if north else tz + 3)   # leans on the turret's wall inside the keep
+        door = (tx + 2, tz + 4 if north else tz)                             # doorway in the wall that faces down the hall
         for x in range(tx, tx + 5):
             for z in range(tz, tz + 5):
                 edge = x in (tx, tx + 4) or z in (tz, tz + 4)
-                for y in range(0, H + 6):
+                for y in range(0, T):
                     if edge:
-                        b.put(x, y, z, mat(x, y, z))
-                b.put(x, H + 6, z, stone)
-                if edge and (x + z) % 2 == 0:
-                    crenel(x, H + 7, z)
-    # entrance: double door, porch, banners
-    for x in (cx - 1, cx + 1):
-        b.put(x, 1, z1, wood + "_door", facing="south", half="lower", hinge="left" if x < cx else "right", open="false", powered="false")
-        b.put(x, 2, z1, wood + "_door", facing="south", half="upper", hinge="left" if x < cx else "right", open="false", powered="false")
-    for y in (1, 2):
-        b.put(cx, y, z1, stone)
-    for y in (1, 2, 3):
-        for x in (cx - 1, cx, cx + 1):
-            if y == 3:
-                b.put(x, y, z1, "chiseled_stone_bricks" if not frozen else stone)
+                        b.put(x, y, z, trim if y in (6, H - 1, T - 1) else mat(x, y, z))
+                    elif y > H:
+                        b.put(x, y, z, "air")
+                if edge:
+                    b.put(x, T, z, stone)
+                    b.put(x, T + 1, z, stone)
+                    if (x + z) % 2 == 0:
+                        b.put(x, T + 2, z, wall_top, **POST)
+                else:
+                    for y in (6, H, T):
+                        b.put(x, y, z, stone)  # landings
+        for y in (1, 2, 7, 8, H + 1, H + 2):
+            b.put(door[0], y, door[1], "air")
+        for y in range(1, T + 1):
+            b.put(ladder[0], y, ladder[1], "ladder", facing="west" if west else "east", waterlogged="false")
+        # arrow loop high in each outer face, the kingdom's banner on a pole at the top
+        ox, oz = (tx if west else tx + 4), (tz if north else tz + 4)
+        b.put(ox, H + 3, tz + 2, "iron_bars", **PANE_Z)
+        b.put(tx + 2, H + 3, oz, "iron_bars", **PANE_X)
+        px, pz = (tx + 1 if west else tx + 3), (tz + 3 if north else tz + 1)
+        b.put(px, T + 1, pz, wood + "_fence")
+        b.put(px, T + 2, pz, wood + "_fence")
+        b.put(px, T + 3, pz, "{color}_banner", rotation="0" if north else "8")
+    # entrance: an archway three wide with a portcullis drawn up into it, steps, banners and lanterns
+    for x in (cx - 1, cx, cx + 1):
+        for y in (1, 2, 3):
+            b.put(x, y, z1, "air")
+        b.put(x, 4, z1, "chiseled_stone_bricks" if style in ("temperate", "highland") else stone)
+        b.put(x, 0, z1, "polished_andesite")
+    b.put(cx - 1, 3, z1, stairs_of(stone), facing="west", half="top", shape="straight", waterlogged="false")
+    b.put(cx + 1, 3, z1, stairs_of(stone), facing="east", half="top", shape="straight", waterlogged="false")
+    b.put(cx, 3, z1, "iron_bars", **PANE_X)
     porch(b, cx, z1 + 1, wood, width=5)
     for x in (cx - 4, cx + 4):
         b.put(x, 5, z1 + 1, "{color}_wall_banner", facing="south")
-    # great hall: carpet runner to the throne, tables, lanterns
-    for z in range(z0 + 3, z1):
+    for x in (cx - 2, cx + 2):
+        b.put(x, 3, z1 + 1, "lantern", hanging="true", waterlogged="false")
+        b.put(x, 4, z1 + 1, stairs_of(stone), facing="north", half="top", shape="straight", waterlogged="false")
+    # great hall: carpet runner to the throne on its dais, tables with benches, chandeliers
+    for z in range(z0 + 4, z1):
         b.put(cx, 1, z, "{color}_carpet")
-    b.put(cx, 1, z0 + 2, wood + "_stairs", facing="south", **ST)
-    b.put(cx - 1, 1, z0 + 2, stone)
-    b.put(cx + 1, 1, z0 + 2, stone)
-    b.put(cx, 3, z0 + 1, "{color}_wall_banner", facing="south")
-    for z in range(z0 + 4, z1 - 2, 2):
+    for x in (cx - 1, cx, cx + 1):
+        b.put(x, 1, z0 + 2, stone)
+        b.put(x, 1, z0 + 3, stairs_of(stone), facing="north", **ST)
+    b.put(cx, 2, z0 + 2, wood + "_stairs", facing="south", **ST)
+    b.put(cx, 4, z0 + 1, "{color}_wall_banner", facing="south")
+    for z in range(z0 + 5, z1 - 3, 3):
         for x in (cx - 4, cx + 4):
             b.put(x, 1, z, wood + "_fence")
             b.put(x, 2, z, wood + "_pressure_plate", powered="false")
-    for x in (cx - 5, cx + 5):
-        for z in (z0 + 4, z1 - 4):
+            b.put(x - 1, 1, z, wood + "_stairs", facing="east", **ST)
+            b.put(x + 1, 1, z, wood + "_stairs", facing="west", **ST)
+    for x in (cx - 4, cx + 4):
+        for z in (z0 + 5, z1 - 5):
             b.put(x, 5, z, "lantern", hanging="true", waterlogged="false")
-    # ladder to the upper floor and the battlements
-    for y in range(1, H):
-        b.put(x1 - 1, y, z0 + 6, "ladder", facing="west", waterlogged="false")
-    b.put(x1 - 1, 6, z0 + 6, "air")
-    b.put(x1 - 1, H, z0 + 6, "air")
-    # upper floor: beds, chests, map table
-    b.put(x0 + 2, 7, z0 + 2, "{color}_bed", facing="north", part="head", occupied="false")
-    b.put(x0 + 2, 7, z0 + 3, "{color}_bed", facing="north", part="foot", occupied="false")
-    b.put(x0 + 4, 7, z0 + 2, "chest", facing="south", type="single", waterlogged="false")
-    b.put(cx, 7, z0 + 6, "cartography_table")
-    b.put(cx, 10, z0 + 6, "lantern", hanging="true", waterlogged="false")
+    # the lord's floor: bed, chests, map table, a rug
+    b.put(cx - 1, 7, z0 + 2, "{color}_bed", facing="north", part="foot", occupied="false")
+    b.put(cx - 1, 7, z0 + 1, "{color}_bed", facing="north", part="head", occupied="false")
+    b.put(cx + 1, 7, z0 + 1, "chest", facing="south", type="single", waterlogged="false")
+    b.put(cx + 2, 7, z0 + 1, "chest", facing="south", type="single", waterlogged="false")
+    b.put(cx, 7, z0 + 7, "cartography_table")
+    b.put(cx - 4, 7, z0 + 7, "bookshelf")
+    b.put(cx - 4, 7, z0 + 8, "lectern", facing="east", has_book="false", powered="false")
+    for x in (cx - 3, cx + 3):
+        for z in (z0 + 5, z1 - 5):
+            b.put(x, H - 1, z, "lantern", hanging="true", waterlogged="false")
 
 
 CELLAR = (3, -2, 11, 4)    # x0, z0, x1, z1 under the square side of the main building
@@ -1548,10 +2042,12 @@ CELLAR_STORE = (4, -5, -1)
 
 
 def cellar(style, level):
-    """Cellar track: a stone cellar under the ground beside the main building, reached by a hatch and a ladder.
-    1 storeroom (chests, barrels, the cellar store); 2 treasury and armory (more storage, lanterns, banners)."""
+    """Cellar track: a stone cellar under the main building. Its entrance is a low stone cellar door beside the
+    building, as on an old farmhouse: steps lead down from the square to a doorway in the cellar's south wall.
+    (It can't open from inside: the building above changes with every tier, the cellar stays.)
+    1 storeroom (barrels, the cellar store); 2 treasury and armory (chests, more barrels, a rug and a banner)."""
     b = B()
-    stone = "cobblestone" if style == "frozen" else "stone_bricks"
+    stone = MAT[style]["stone"]
     x0, z0, x1, z1 = CELLAR
     top, bottom = -2, -6
     for x in range(x0 - 1, x1 + 2):
@@ -1559,36 +2055,38 @@ def cellar(style, level):
             edge = x in (x0 - 1, x1 + 1) or z in (z0 - 1, z1 + 1)
             for y in range(bottom, top + 1):
                 b.put(x, y, z, stone if edge or y in (bottom, top) else "air")
-    # stairway from the square down to a doorway in the cellar's south wall, with a railing around it
+    # the doorway is three high: coming up the first step you need the room above your head
     sx = x0
-    b.put(sx, bottom + 1, z1 + 1, "air")
-    b.put(sx, bottom + 2, z1 + 1, "air")
+    for y in range(bottom + 1, bottom + 4):
+        b.put(sx, y, z1 + 1, "air")
     for i in range(5):
         z = z1 + 2 + i
         step = bottom + 1 + i
-        b.put(sx, step, z, "stone_brick_stairs" if style != "frozen" else "cobblestone_stairs", facing="south", **ST)
+        b.put(sx, step, z, stairs_of(stone), facing="south", **ST)
         b.put(sx, step - 1, z, stone)
-        for y in range(step + 1, 0):
+        for y in range(step + 1, 1):
             b.put(sx, y, z, "air")
-        for y in range(bottom, -1):
-            b.put(sx - 1, y, z, stone)
+        for y in range(bottom, 1):
+            b.put(sx - 1, y, z, stone)  # the stairwell's walls, one block above the ground
             b.put(sx + 1, y, z, stone)
-        b.put(sx - 1, 0, z, "spruce_fence")
-        b.put(sx + 1, 0, z, "spruce_fence")
-    b.put(sx, 0, z1 + 1, "spruce_fence")
+        if i < 3:
+            for x in (sx - 1, sx, sx + 1):
+                b.put(x, 1, z, stone)   # roofed over; open above the top two steps, or you would hit your head
+    b.put(sx, 0, z1 + 1, stone)
+    b.put(sx, 1, z1 + 1, stone)
     b.put(sx - 1, 1, z1 + 6, "lantern", hanging="false", waterlogged="false")
-    for x in range(x0, x1):
+    for x in range(x0 + 1, x1):
         b.put(x, bottom + 1, z0, "barrel", facing="up", open="false")
     b.put(CELLAR_STORE[0], CELLAR_STORE[1], CELLAR_STORE[2], "chest", facing="south", type="single", waterlogged="false")
     for x in (x0 + 2, x1 - 2):
         b.put(x, top - 1, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     if level >= 2:
         for z in range(z0 + 1, z1):
-            b.put(x0, bottom + 1, z, "chest", facing="east", type="single", waterlogged="false")
-        for x in range(x0 + 2, x1 - 1):
+            b.put(x1, bottom + 1, z, "chest", facing="west", type="single", waterlogged="false")
+        for x in range(x0 + 3, x1 - 1):
             b.put(x, bottom + 1, z1, "barrel", facing="up", open="false")
         b.put((x0 + x1) // 2, bottom + 1, (z0 + z1) // 2, "{color}_carpet")
-        b.put((x0 + x1) // 2, bottom + 3, z0 - 1 + 1, "{color}_wall_banner", facing="south")
+        b.put((x0 + x1) // 2, bottom + 3, z0, "{color}_wall_banner", facing="south")
     return b.b
 
 
@@ -1602,7 +2100,7 @@ def barracks(style, level):
     m = mats(style)
     b = B()
     x0, z0, x1, z1 = BARRACKS
-    stone_hut(b, x0, z0, x1, z1, 8 if level >= 3 else 4, m["stone"], m["corner"], "spruce_planks", "n", m["roof"], m["slab"])
+    hall(b, style, x0, z0, x1, z1, 8 if level >= 3 else 4, "n", kind="stone", base_h=4 if level >= 3 else None)
     if level >= 3:  # bunk floor upstairs for the larger guard
         upper_floor(b, x0, z0, x1, z1, 5, x0 + 1, (z0 + z1) // 2)
         for x in range(x0 + 3, x1, 3):
@@ -1618,8 +2116,8 @@ def barracks(style, level):
     b.put((x0 + x1) // 2, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     b.put(x1 - 1, 1, z0 + 2, "smithing_table")
     if level >= 2:
-        b.put(x1 - 2, 1, z0 + 2, "chest", facing="west", type="single", waterlogged="false")
-        b.put(x0 + 2, 1, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
+        b.put(x1 - 1, 1, z0 + 3, "chest", facing="west", type="single", waterlogged="false")
+        b.put(x0 + 1, 1, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
         b.put(x0 + 1, 1, z0 + 3, "chest", facing="east", type="single", waterlogged="false")
         for x in (x0 + 3, x1 - 3):
             b.put(x, 4, z0 - 1, "{color}_wall_banner", facing="north")
@@ -1650,7 +2148,7 @@ def guild_hall(style, level):
     m = mats(style)
     b = B()
     x0, z0, x1, z1 = GUILD
-    stone_hut(b, x0, z0, x1, z1, 4, m["stone"], m["corner"], "spruce_planks", "s", m["roof"], m["slab"])
+    hall(b, style, x0, z0, x1, z1, 4, "s", kind="stone")
     cx = (x0 + x1) // 2
     b.put(*GUILD_STORE, "barrel", facing="up", open="false")
     b.put(cx, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
@@ -1759,6 +2257,7 @@ def apiary(style, level):
             b.put(x, 0, z1 - 2, "beehive", facing="south", honey_level="0")
             if x == x0 + 5:
                 b.put(x, -1, z1 - 3, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+                b.b.pop((x, 0, z1 - 3), None)
     return b.b
 
 
@@ -1802,7 +2301,7 @@ def trophy_hall(style, level):
     m = mats(style)
     b = B()
     x0, z0, x1, z1 = TROPHY
-    stone_hut(b, x0, z0, x1, z1, 5, m["stone"], m["corner"], "polished_andesite", "s", m["roof"], m["slab"])
+    hall(b, style, x0, z0, x1, z1, 5, "s", kind="stone", floor="polished_andesite")
     for x, y, z in TROPHY_SPOTS:
         b.put(x, 0, z, "polished_deepslate")
         b.put(x, 1, z, "polished_deepslate_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
@@ -1846,9 +2345,6 @@ def upper_floor(b, x0, z0, x1, z1, y, ladder_x, ladder_z):
             b.put(x, y, z, "spruce_planks")
     for yy in range(1, y + 1):
         b.put(ladder_x, yy, ladder_z, "ladder", facing="east", waterlogged="false")
-    for x in (x0, x1):
-        for z in range(z0 + 2, z1 - 1, 3):
-            b.put(x, y + 2, z, "glass_pane", east="false", west="false", north="true", south="true", waterlogged="false")
 
 
 def shop(style, name, level):
@@ -1860,11 +2356,9 @@ def shop(style, name, level):
     base_h = h
     if level >= 3:
         h += 4  # upper floor
-    if name == "nether":
-        stone_hut(b, x0, z0, x1, z1, h, "nether_bricks", "red_nether_bricks", "blackstone", door, "nether_brick_stairs", "nether_brick_slab")
-    else:
-        stone_hut(b, x0, z0, x1, z1, h, m["stone"] if name in ("mine", "armorer", "workshop") else m["wall"], m["corner"], "spruce_planks", door,
-                  m["roof"], m["slab"])
+    kind = "nether" if name == "nether" else "stone" if name in ("mine", "armorer", "workshop") else "timber"
+    hall(b, style, x0, z0, x1, z1, h, door, kind=kind, base_h=base_h if level >= 3 else None,
+         chimney=(x1 - 1, z0 if door == "s" else z1) if name in ("tavern", "armorer", "tannery") else None)
     back = z0 + 1 if door == "s" else z1 - 1
     front = z1 - 1 if door == "s" else z0 + 1
     cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
@@ -1904,8 +2398,6 @@ def shop(style, name, level):
     if name == "mine":
         # shaft with a ladder down to a lit gallery
         sx, sz = x0 + 2, cz
-        for y in range(-1, -21, -1):
-            b.put(sx, y, sz, "ladder", facing="east", waterlogged="false")  # hangs on the rock to the west
         b.put(sx, 0, sz, "spruce_trapdoor", facing="north", half="top", open="true", powered="false", waterlogged="false")
         for x in range(sx, sx + 7):
             for y in (-20, -19):
@@ -1913,14 +2405,19 @@ def shop(style, name, level):
             if (x - sx) % 3 == 0:
                 for y in (-20, -19):
                     b.put(x, y, sz + 1, "spruce_fence")
-                b.put(x, -18, sz, "spruce_planks")
+                if x != sx:
+                    b.put(x, -18, sz, "spruce_planks")
                 b.put(x, -19, sz - 1, "wall_torch", facing="south")
         b.put(sx + 6, -20, sz, "chest", facing="west", type="single", waterlogged="false")
+        for y in range(-1, -21, -1):
+            b.put(sx - 1, y, sz, "stone" if y < -3 else "cobblestone")      # the shaft's wall: the ladder hangs on it
+            b.put(sx, y, sz, "ladder", facing="east", waterlogged="false")
     if level >= 2:
         b.put(x0 + 1, 1, front, "{color}_banner", rotation="0")
         b.put(x1 - 1, h - 1, front, "lantern", hanging="true", waterlogged="false")
         if name == "tavern":
             b.put(x0 + 1, 1, back, "{color}_bed", facing="north" if door == "s" else "south", part="head", occupied="false")
+            b.put(x0 + 1, 1, back + (1 if door == "s" else -1), "{color}_bed", facing="north" if door == "s" else "south", part="foot", occupied="false")
     if level >= 3:
         fy = base_h + 1
         upper_floor(b, x0, z0, x1, z1, fy, x0 + 1, cz)
@@ -1995,6 +2492,8 @@ def donjon(b, style):
             b.put(x, base + height, z, stone)
             if edge and (x + z) % 2 == 0:
                 b.put(x, base + height + 1, z, top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+    for y in (base, base + 1):
+        b.put(cx, y, cz + 3, "air")  # doorway from the keep's roof
     for y in range(base, base + height):
         b.put(cx + 2, y, cz, "ladder", facing="west", waterlogged="false")
     b.put(cx + 2, base + height, cz, "air")
@@ -2036,9 +2535,6 @@ def lair(style, level):
         for y in range(0, 3):
             b.put(x, y, z1, stone)
         b.put(x, 3, z1, "lantern", hanging="false", waterlogged="false")
-    for z in range(z1 + 1, z1 + 6):
-        for x in range(cx - 1, cx + 2):
-            b.put(x, -1, z, stone if (x + z) % 3 else "cracked_" + stone if stone == "stone_bricks" else stone)
     for i in range(8):
         a = math.pi * 2 * i / 8
         px, pz = cx + round(math.cos(a) * (r - 3)), cz + round(math.sin(a) * (r - 3))
@@ -2089,19 +2585,20 @@ def to_json(blocks, seconds, storage=None, animals=None):
             palette.append(e)
         seg = segs.get((x - shift[0], y, z - shift[1]))
         anc = anchors.get((x - shift[0], y, z - shift[1]))
-        row = [x, y, z, names[key]]
-        if seg is not None or anc is not None:
-            row.append(seg if seg is not None else -1)
-        if anc is not None:
-            row += [anc[0] + shift[0], anc[1] + shift[1]]
-        out.append(row)
+        for one in (seg or [None]):  # a block shared by several lanes is listed once for each
+            row = [x, y, z, names[key]]
+            if one is not None or anc is not None:
+                row.append(one if one is not None else -1)
+            if anc is not None:
+                row += [anc[0] + shift[0], anc[1] + shift[1]]
+            out.append(row)
     j = {"size": list(size), "heart": list(heart), "seconds": seconds, "palette": palette, "blocks": out}
     if storage:
         j["storage"] = list(storage)
     if follow:
         j["follow"] = True
     if segs:
-        j["segments"] = [{"name": n, "any": [[t, l] for t, l in rules]} for n, rules in SEGMENTS]
+        j["segments"] = [{"name": n, "any": [[t, l] for t, l in rules]} for n, rules in SEGDEF_OF[id(orig)]]
     if animals:
         dx, dz = heart[0] - HEART[0], heart[2] - HEART[2]
         j["animals"] = [[a[0], a[1] + dx, a[2], a[3] + dz] for a in animals]
@@ -2110,10 +2607,29 @@ def to_json(blocks, seconds, storage=None, animals=None):
 
 SECONDS = {1: 60, 2: 90, 3: 150}
 
-if __name__ == "__main__":
-    jobs = []  # (style, id, blocks, seconds, storage, animals)
+def build_jobs(styles=None):
+    """Every template of every style: (style, id, blocks, seconds, storage, animals, apron), spacing moves applied."""
+    jobs = []
+    del DOCK_JOBS[:]
+    MOVE = {"brewery": (1, 1), "wood": (-3, 0), "guild": (-2, -3), "barracks": (0, 2)}  # spacing (see tools/check.py)
+
+    def moved(j):
+        style, name, blocks, seconds, storage, animals = j[:6]
+        d = MOVE.get(name.rsplit("_", 1)[0])
+        if not d:
+            return j
+        nb = {(x + d[0], y, z + d[1]): v for (x, y, z), v in blocks.items()}
+        for reg in (SEGS_OF, ANCHORS_OF):
+            if id(blocks) in reg:
+                reg[id(nb)] = {(x + d[0], y, z + d[1]): v for (x, y, z), v in reg[id(blocks)].items()}
+        if id(blocks) in FOLLOW:
+            FOLLOW.add(id(nb))
+        st = None if storage is None else (storage[0] + d[0], storage[1], storage[2] + d[1])
+        an = None if animals is None else [[a[0], a[1] + d[0], a[2], a[3] + d[1]] for a in animals]
+        return (style, name, nb, seconds, st, an) + tuple(j[6:])
     STORE = (FARM[0] - 2, 0, FARM[1] + FARM[3] // 2 - 1)
-    for style in STYLES:
+    for style in (styles or STYLES):
+        first = len(jobs)
         for level in (1, 2, 3):
             jobs.append((style, f"tent_{level}", tent(style, level), SECONDS[level], None, None))
         for level, secs in ((1, 240), (2, 200), (3, 200)):
@@ -2155,10 +2671,6 @@ if __name__ == "__main__":
             jobs.append((style, f"brewery_{level}", brewery(style, level), 180, BREW_STORE, None))
             jobs.append((style, f"stables_{level}", stables(style, level), 180, STABLE_STORE,
                          [["horse", 44, 0, 32], ["horse", 48, 0, 31]] if level == 1 else [["donkey", 50, 0, 32]]))
-        for level in (1, 2, 3, 4):
-            jobs.append((style, f"road_{level}", roads(style, level), 90 + 30 * level, None, None))
-        for level in (1, 2, 3):
-            jobs.append((style, f"lamp_{level}", lamps(style, level), 60 + 30 * level, None, None))
         for level, secs in ((1, 120), (2, 150), (3, 180)):
             jobs.append((style, f"farm_{level}", farm(style, level), secs, STORE,
                          [["cow", 39, 0, 4], ["cow", 40, 0, 6], ["sheep", 38, 0, 7], ["sheep", 41, 0, 3], ["chicken", 37, 0, 5],
@@ -2166,28 +2678,26 @@ if __name__ == "__main__":
         for level, secs in ((1, 150), (2, 150), (3, 180)):
             jobs.append((style, f"smith_{level}", smithy(style, level), secs, SMITH_STORE, None))
             jobs.append((style, f"wood_{level}", woodcutter(style, level), secs, WOOD_STORE, None))
-    MOVE = {"brewery": (1, 1), "wood": (-3, 0), "guild": (-2, -3), "barracks": (0, 2)}  # spacing (see tools check)
-
-    def moved(j):
-        style, name, blocks, seconds, storage, animals = j[:6]
-        d = MOVE.get(name.rsplit("_", 1)[0])
-        if not d:
-            return j
-        nb = {(x + d[0], y, z + d[1]): v for (x, y, z), v in blocks.items()}
-        for reg in (SEGS_OF, ANCHORS_OF):
-            if id(blocks) in reg:
-                reg[id(nb)] = {(x + d[0], y, z + d[1]): v for (x, y, z), v in reg[id(blocks)].items()}
-        if id(blocks) in FOLLOW:
-            FOLLOW.add(id(nb))
-        st = None if storage is None else (storage[0] + d[0], storage[1], storage[2] + d[1])
-        an = None if animals is None else [[a[0], a[1] + d[0], a[2], a[3] + d[1]] for a in animals]
-        return (style, name, nb, seconds, st, an) + tuple(j[6:])
-    jobs = [moved(j) for j in jobs]
+        # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
+        mine = jobs[first:]
+        for j in mine:
+            hang_lanterns(j[2])
+        mine = [moved(j) for j in mine]
+        plan_roads(style, mine)
+        for level in (1, 2, 3, 4):
+            mine.append((style, f"road_{level}", roads(style, level), 90 + 30 * level, None, None))
+        for level in (1, 2, 3):
+            mine.append((style, f"lamp_{level}", lamps(style, level), 60 + 30 * level, None, None))
+        jobs[first:] = mine
 
     def apron(name):
             # 14: the 1:1 slope reaches 11 blocks up, so cliffs next to a building are cut back into a natural slope
         return 0 if name.startswith(("road_", "lamp_", "wall_1", "wall_2")) else 4 if name.startswith("wall_") else 14
-    jobs = [j if len(j) == 7 else j + (apron(j[1]),) for j in jobs]
+    return [j if len(j) == 7 else j + (apron(j[1]),) for j in jobs]
+
+
+if __name__ == "__main__":
+    jobs = build_jobs()
     for style, name, blocks, seconds, storage, animals, apron in jobs:
         os.makedirs(os.path.join(OUT, style), exist_ok=True)
         with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
