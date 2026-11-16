@@ -1093,7 +1093,7 @@ def plan_roads(style, jobs):
             break
         # breadth-first from the connected part through any road cell to the nearest loose centre cell
         back = {c: None for c in comp}
-        queue = list(comp)
+        queue = sorted(comp)
         found = None
         i = 0
         while i < len(queue) and found is None:
@@ -1481,7 +1481,7 @@ KIT = {
     "arid": dict(base=("cut_sandstone", "cut_sandstone", "sandstone"),
                  stone=("sandstone", "sandstone", "cut_sandstone", "smooth_sandstone"),
                  plaster=("smooth_sandstone",), plank="acacia_planks", door="acacia_door", shutter="acacia_trapdoor",
-                 bush=None, flat=True, chimney="sandstone"),
+                 bush=None, flat=True, chimney="sandstone", post="cut_sandstone"),  # stone piers, timber only for the roof beams
     "highland": dict(base=("cobblestone", "mossy_cobblestone", "andesite"),
                      stone=("stone_bricks", "stone_bricks", "cobblestone", "andesite", "cracked_stone_bricks"),
                      plaster=("cobblestone", "cobblestone", "andesite", "stone"), plank="spruce_planks", door="spruce_door",
@@ -1534,7 +1534,7 @@ def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=No
     nether = kind == "nether"
     k = NETHER_KIT if nether else KIT[style]
     m = MAT[style]
-    frame = "red_nether_bricks" if nether else m["frame"]
+    frame = "red_nether_bricks" if nether else k.get("post", m["frame"])
     roof, roof_slab = ("nether_brick_stairs", "nether_brick_slab") if nether else (m["roof"], k.get("ridge", m["roof_slab"]))
     log = "log" in frame
     cx = (x0 + x1) // 2
@@ -1630,7 +1630,7 @@ def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=No
                     b.put(x, top, z, "cut_sandstone")
         for x in px[1:-1]:  # roof beams poke out of the long walls
             for z, o in ((z0, -1), (z1, 1)):
-                b.put(x, h, z + o, frame, axis="z")
+                b.put(x, h, z + o, m["frame"], axis="z")
         for x in (cx - 1, cx, cx + 1):  # awning over the door
             b.put(x, 3, dz + out, m["frame"].replace("stripped_", "").replace("_log", "_slab"), type="top", waterlogged="false")
         peak = top
