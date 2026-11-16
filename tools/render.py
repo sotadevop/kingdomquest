@@ -4,7 +4,6 @@ Usage: python3 render.py <structure.nbt> <out.png> [--rot 0..3] [--scale N] [--g
 """
 import json, math, os, sys, argparse
 from functools import lru_cache
-import nbtlib
 from PIL import Image
 
 ASSETS = os.path.join(os.path.dirname(__file__), "..", "ref", "assets", "assets", "minecraft")
@@ -17,6 +16,26 @@ SHADE = {"up": 1.0, "down": 0.5, "north": 0.8, "south": 0.8, "east": 0.6, "west"
 SKIP = {"minecraft:air", "minecraft:cave_air", "minecraft:structure_void", "minecraft:jigsaw", "minecraft:barrier"}
 
 
+RAW = "https://raw.githubusercontent.com/misode/mcmeta/26.3-assets/assets/minecraft/"
+MISSING = set()
+
+
+def fetch(path):
+    """With KQ_FETCH=1 a missing vanilla asset is downloaded from misode/mcmeta into ../ref (once)."""
+    if os.path.exists(path) or not os.environ.get("KQ_FETCH") or path in MISSING:
+        return
+    import urllib.request
+    rel = os.path.relpath(path, ASSETS).replace(os.sep, "/")
+    try:
+        data = urllib.request.urlopen(RAW + rel, timeout=30).read()
+    except Exception:
+        MISSING.add(path)
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        f.write(data)
+
+
 def strip(name):
     return name.split(":", 1)[-1]
 
@@ -24,6 +43,7 @@ def strip(name):
 @lru_cache(maxsize=None)
 def load_json(kind, name):
     path = os.path.join(ASSETS, kind, strip(name) + ".json")
+    fetch(path)
     with open(path) as f:
         return json.load(f)
 
@@ -58,6 +78,7 @@ def tex_ref(textures, ref, depth=0):
 @lru_cache(maxsize=None)
 def load_texture(ref, tint=None):
     path = os.path.join(ASSETS, "textures", strip(ref) + ".png")
+    fetch(path)
     if not os.path.exists(path):
         return None
     img = Image.open(path).convert("RGBA")
@@ -365,6 +386,7 @@ def render(blocks, size, rot=0, scale=2, bg=(0, 0, 0, 0)):
 
 
 def load_structure(path):
+    import nbtlib
     nbt = nbtlib.load(path)
     root = nbt if "blocks" in nbt else nbt[""]
     palette = root["palette"] if "palette" in root else root["palettes"][0]
