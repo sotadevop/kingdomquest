@@ -156,6 +156,10 @@ public class KingdomScreen extends Screen {
 			}).bounds(fx, this.top + H - 24, 110, 18).build();
 			this.tabButtons.add(this.addRenderableWidget(repair));
 		}
+		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.percent() < 0) {
+			// rebuilds everything from the mod's current plans (after an update to the buildings)
+			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.menu.rebuild", "rebuild", fx + (this.info.damaged() > 0 ? 114 : 0), 70)));
+		}
 		// the realm: map of all settlements, villages and roads, plus the register of buildings, people and animals
 		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.open"), b ->
 				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "realm")))

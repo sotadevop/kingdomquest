@@ -56,6 +56,8 @@ public final class Template {
 	public final BlockPos storage;
 	/** Land graded outside the template's area (walls), 0 for none. */
 	public final int apron;
+	/** The track's whole plot, {x0, z0, x1, z1} per level: levelled with every level, so upgrades find the room ready. */
+	public final List<int[]> pads;
 	/** Animals spawned once when the building is finished: entity id and position relative to the plot. */
 	public final List<Animal> animals;
 
@@ -106,6 +108,14 @@ public final class Template {
 		this.follow = json.has("follow") && json.get("follow").getAsBoolean();
 		this.anchored = json.has("anchored") && json.get("anchored").getAsBoolean();
 		this.apron = json.has("apron") ? json.get("apron").getAsInt() : 0;
+		List<int[]> pads = new ArrayList<>();
+		if (json.has("pads")) {
+			for (JsonElement e : json.getAsJsonArray("pads")) {
+				JsonArray a = e.getAsJsonArray();
+				pads.add(new int[] {a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt(), a.get(3).getAsInt()});
+			}
+		}
+		this.pads = List.copyOf(pads);
 		JsonArray st = json.getAsJsonArray("storage");
 		this.storage = st == null ? null : new BlockPos(st.get(0).getAsInt(), st.get(1).getAsInt(), st.get(2).getAsInt());
 		List<Animal> animals = new ArrayList<>();

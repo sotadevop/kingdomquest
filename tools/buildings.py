@@ -1832,10 +1832,15 @@ def gate(style, level):
                 ring |= {(x, z0 - o), (x, z1 + o)}
             for z in range(z0 - o, z1 + o + 1):
                 ring |= {(x0 - o, z), (x1 + o, z)}
-        for x, z in ring:
+        # the ditch follows the land: every column is dug from the ground just outside it (its anchor, 8 out from
+        # the wall, where nothing is ever dug), so it runs unbroken around the whole wall, over hills too
+        ANCHORS_OF[id(b.b)] = b.anchors
+        for x, z in sorted(ring):
+            b.anchor = (x0 - 8 if x < x0 else x1 + 8 if x > x1 else x, z0 - 8 if z < z0 else z1 + 8 if z > z1 else z)
             for y in range(-5, 0):
                 b.put(x, y, z, "air")
             b.put(x, -6, z, "coarse_dirt")
+        b.anchor = None
         # drawbridge: five wide over the moat (crimson wood doesn't burn: lava trap), a fixed sill in front of the gate
         for x in range(gx - 2, gx + 3):
             for z in range(z1 + 2, z1 + 7):
@@ -2567,7 +2572,7 @@ def normalize(blocks, extra=()):
     return nb, heart, size, [None if e is None else (e[0] + dx, e[1], e[2] + dz) for e in extra]
 
 
-def to_json(blocks, seconds, storage=None, animals=None):
+def to_json(blocks, seconds, storage=None, animals=None, pads=None):
     segs = SEGS_OF.get(id(blocks), {})
     anchors = ANCHORS_OF.get(id(blocks), {})
     follow = id(blocks) in FOLLOW
@@ -2595,6 +2600,8 @@ def to_json(blocks, seconds, storage=None, animals=None):
     j = {"size": list(size), "heart": list(heart), "seconds": seconds, "palette": palette, "blocks": out}
     if storage:
         j["storage"] = list(storage)
+    if pads:
+        j["pads"] = [[a + shift[0], c + shift[1], e + shift[0], g + shift[1]] for a, c, e, g in pads]
     if follow:
         j["follow"] = True
     if segs:
@@ -2698,10 +2705,23 @@ def build_jobs(styles=None):
 
 if __name__ == "__main__":
     jobs = build_jobs()
+    # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
+    # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
+    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar")
+    plots = {}
+    for style, name, blocks, *_ in jobs:
+        if name.startswith("tent_") or track_of(name) in NO_PLOT:
+            continue
+        cells = [(x, z) for (x, y, z), v in blocks.items() if y >= 0 and v[0] != "minecraft:air"]
+        if cells:
+            rect = (min(c[0] for c in cells), min(c[1] for c in cells), max(c[0] for c in cells), max(c[1] for c in cells))
+            rects = plots.setdefault((style, track_of(name)), [])
+            if rect not in rects:
+                rects.append(rect)
     for style, name, blocks, seconds, storage, animals, apron in jobs:
         os.makedirs(os.path.join(OUT, style), exist_ok=True)
         with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
-            j = to_json(blocks, seconds, storage, animals)
+            j = to_json(blocks, seconds, storage, animals, None if name.startswith("tent_") else plots.get((style, track_of(name))))
             if apron:
                 j["apron"] = apron
             json.dump(j, f, separators=(",", ":"))
