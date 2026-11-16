@@ -23,8 +23,8 @@ import java.util.Set;
  * Levels the ground before a building goes up: every column of the template's area is cleared down to the heart's
  * height and holes are filled. Around it (the template's "apron") the land is graded the way a hillside looks:
  * a rounded flat pad with an uneven edge, higher ground cut back at a gentle slope that steepens further out,
- * lower ground banked up with earth. Only where the land falls away too far for a bank does the pad end in a
- * stone wall or stand on a deck with piers.
+ * small dips filled with earth. Where the land falls away, the pad stands on a solid stone-faced foundation that
+ * goes down to the ground (a terrace wall): nothing is ever left on stilts or hanging.
  * Only natural blocks are removed (terrain, plants, trees, water); the player's own blocks and the settlement's
  * buildings stay.
  */
@@ -50,8 +50,14 @@ public final class SiteWork {
 		}
 	}
 
-	/** Deepest drop that is banked up with earth; beyond it a pad gets a wall or a deck on piers. */
-	private static final int BANK = 4;
+	/** How deep a pad's stone foundation goes to find the ground. */
+	private static final int PLINTH = 48;
+
+	/** Flowers, saplings, mushrooms and other small plants: not ground, and no reason to leave a hole when land is filled. */
+	static boolean plant(BlockState st) {
+		return !st.isAir() && !st.isSolid() && !(st.getBlock() instanceof LiquidBlock) && !st.is(BlockTags.LOGS) && !st.is(BlockTags.LEAVES)
+				&& !st.hasBlockEntity() && natural(st);
+	}
 
 	private static final Map<String, List<Column>> CACHE = new HashMap<>();
 
@@ -95,6 +101,15 @@ public final class SiteWork {
 				long key = BlockPos.asLong(e.x(), 0, e.z());
 				if (dist.putIfAbsent(key, 0) == null) {
 					queue.add(new long[] {e.x(), e.z(), 0});
+				}
+			}
+			for (int[] r : t.pads) { // the plot of the track's later levels is levelled from the start
+				for (int x = r[0]; x <= r[2]; x++) {
+					for (int z = r[1]; z <= r[3]; z++) {
+						if (dist.putIfAbsent(BlockPos.asLong(x, 0, z), 0) == null) {
+							queue.add(new long[] {x, z, 0});
+						}
+					}
 				}
 			}
 			while (!queue.isEmpty()) {
@@ -271,88 +286,35 @@ public final class SiteWork {
 		}
 		// foundation: fill holes, water and leaves below the ground layer
 		int fillTop = heart.getY() - 1 - c.drop();
+		int reach = margin ? PLINTH : FOUNDATION;
 		int depth = 0;
-		for (int y = fillTop; y >= fillTop - FOUNDATION; y--) {
+		for (int y = fillTop; y >= fillTop - reach && y > level.getMinY(); y--) {
 			pos.set(x, y, z);
+			if (built.contains(pos.asLong())) {
+				break;
+			}
 			BlockState state = level.getBlockState(pos);
-			if (built.contains(pos.asLong()) || !(state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock
-					|| state.is(BlockTags.LEAVES))) {
+			if (margin && state.is(BlockTags.LOGS)) {
+				removeTreeAt(level, pos.immutable(), built); // a tree growing up from below the pad
+				state = level.getBlockState(pos);
+			}
+			if (!(state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock || state.is(BlockTags.LEAVES) || plant(state))) {
 				break;
 			}
 			depth++;
 		}
-		if (depth == 0 || !margin && depth > BANK) {
-			return; // a steep drop outside the pad stays natural: the pad ends in a wall or a deck there, not a dirt cliff
+		if (depth == 0 || !margin && depth > 2) {
+			return; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
 		}
+		// a pad over lower land is built up solid: earth on top, stone below, and its rim is a masonry wall
 		BlockState wall = wallFor(surface);
-		if (margin && depth > BANK + 1) {
-			platform(level, x, z, fillTop, depth, c.edge(), wall);
-			return;
-		}
-		// drops up to BANK are banked with earth from outside, so the pad's rim only needs stone where it is deeper
 		for (int y = fillTop; y > fillTop - depth; y--) {
 			pos.set(x, y, z);
-			BlockState fill = c.edge() && depth > BANK ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
+			boolean stone = margin && depth > 2 && (c.edge() || y < fillTop - 2);
+			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : Blocks.DIRT.defaultBlockState();
 			level.setBlock(pos, fill, FLAGS);
 		}
-	}
-
-	/**
-	 * Ground that drops away more than 3 blocks (a building at the edge of a hill) isn't filled with a dirt
-	 * cliff: the pad becomes a stone deck on piers, like a real platform. Every 4th block in both directions a
-	 * pier goes down to the ground, the blocks next to a pier get an arch brace under the deck, the deck's
-	 * outer edge is a double beam with a low railing.
-	 */
-	private static void platform(ServerLevel level, int x, int z, int top, int depth, boolean edge, BlockState wall) {
-		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-		pos.set(x, top, z);
-		level.setBlock(pos, wall, FLAGS); // the deck
-		int mx = Math.floorMod(x, 4);
-		int mz = Math.floorMod(z, 4);
-		boolean pier = mx == 0 && mz == 0;
-		if (pier) {
-			// down to solid ground, however far (water, plants and leaves don't count)
-			for (int y = top - 1; y > top - 64 && y > level.getMinY(); y--) {
-				pos.set(x, y, z);
-				BlockState st = level.getBlockState(pos);
-				if (!(st.isAir() || st.canBeReplaced() || st.getBlock() instanceof LiquidBlock || st.is(BlockTags.LEAVES))) {
-					break;
-				}
-				level.setBlock(pos, (Math.floorMod(y, 5) == 0 ? mossy(wall) : wall), FLAGS);
-			}
-			return;
-		}
-		if (edge) {
-			pos.set(x, top - 1, z);
-			level.setBlock(pos, wall, FLAGS); // edge beam
-			pos.set(x, top + 1, z);
-			if (level.getBlockState(pos).isAir()) {
-				level.setBlock(pos, railing(level, pos.immutable(), wall), FLAGS);
-			}
-		}
-		// arch braces: the blocks next to a pier, under the deck, lean on it
-		net.minecraft.core.Direction toPier = mz == 0 && mx == 1 ? net.minecraft.core.Direction.WEST
-				: mz == 0 && mx == 3 ? net.minecraft.core.Direction.EAST
-				: mx == 0 && mz == 1 ? net.minecraft.core.Direction.NORTH
-				: mx == 0 && mz == 3 ? net.minecraft.core.Direction.SOUTH : null;
-		if (toPier != null) {
-			pos.set(x, top - (edge ? 2 : 1), z);
-			if (level.getBlockState(pos).isAir() || level.getBlockState(pos).canBeReplaced()) {
-				level.setBlock(pos, stairs(wall).setValue(net.minecraft.world.level.block.StairBlock.FACING, toPier)
-						.setValue(net.minecraft.world.level.block.StairBlock.HALF, net.minecraft.world.level.block.state.properties.Half.TOP), FLAGS);
-			}
-		}
-	}
-
-	private static BlockState railing(ServerLevel level, BlockPos at, BlockState wall) {
-		return Block.updateFromNeighbourShapes((wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SANDSTONE_WALL : wall.is(Blocks.COBBLESTONE)
-				? Blocks.COBBLESTONE_WALL : Blocks.STONE_BRICK_WALL).defaultBlockState(), level, at);
-	}
-
-	private static BlockState stairs(BlockState wall) {
-		return (wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SMOOTH_SANDSTONE_STAIRS : wall.is(Blocks.COBBLESTONE) ? Blocks.COBBLESTONE_STAIRS
-				: Blocks.STONE_BRICK_STAIRS).defaultBlockState();
 	}
 
 	/** Stone for retaining walls, matching the ground: sandstone in deserts, cobblestone in the snow, stone bricks elsewhere. */
@@ -467,8 +429,9 @@ public final class SiteWork {
 
 	/**
 	 * Evens out the ground inside a settlement after a build: single-block holes are filled and single-block
-	 * bumps cut (terraces of two and more blocks stay), and the banks along roads are matched to the road so
-	 * paths don't run in trenches. Only natural ground is touched.
+	 * bumps cut, walls of earth one block thick and trenches one block wide are levelled (terraces stay), and the
+	 * banks along roads are matched to the road so paths don't run in trenches. Only natural ground is touched;
+	 * flowers and other small plants never stop a fill.
 	 */
 	public static void smooth(ServerLevel level, BlockPos heart, int x0, int z0, int x1, int z1, Set<Long> built, Set<Long> roads,
 			BlockState surface) {
@@ -489,7 +452,7 @@ public final class SiteWork {
 			}
 		}
 		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-		for (int pass = 0; pass < 2; pass++) {
+		for (int pass = 0; pass < 4; pass++) {
 			for (int i = 1; i < w - 1; i++) {
 				for (int k = 1; k < d - 1; k++) {
 					int c = i * d + k;
@@ -517,11 +480,29 @@ public final class SiteWork {
 						target = lo; // hole
 					} else if (h[c] > hi && h[c] - hi <= 2) {
 						target = hi; // bump
+					} else {
+						int we = Math.max(h[c - d], h[c + d]);
+						int ns = Math.max(h[c - 1], h[c + 1]);
+						int weLow = Math.min(h[c - d], h[c + d]);
+						int nsLow = Math.min(h[c - 1], h[c + 1]);
+						boolean ridgeX = h[c] - we >= 2;
+						boolean ridgeZ = h[c] - ns >= 2;
+						boolean trenchX = weLow - h[c] >= 2;
+						boolean trenchZ = nsLow - h[c] >= 2;
+						if (ridgeX || ridgeZ) {
+							target = ridgeX && ridgeZ ? Math.max(we, ns) : ridgeX ? we : ns; // a wall of earth one block thick
+						} else if (trenchX || trenchZ) {
+							target = trenchX && trenchZ ? Math.min(weLow, nsLow) : trenchX ? weLow : nsLow; // a slot one block wide
+						}
+					}
+					if (target > h[c] && level.getBlockState(pos.set(x, h[c] + 1, z)).getBlock() instanceof LiquidBlock) {
+						target = h[c]; // a stream or pond stays
 					}
 					if (target > h[c]) {
 						for (int y = h[c] + 1; y <= target; y++) {
 							pos.set(x, y, z);
-							if (built.contains(pos.asLong()) || !level.getBlockState(pos).canBeReplaced()) {
+							BlockState there = level.getBlockState(pos);
+							if (built.contains(pos.asLong()) || !(there.canBeReplaced() || plant(there))) {
 								break;
 							}
 							level.setBlock(pos, y == target ? surface : Blocks.DIRT.defaultBlockState(), FLAGS);
@@ -564,9 +545,17 @@ public final class SiteWork {
 	 */
 	/** Like {@link #groundTop}, but searches 30 blocks up and 48 down: mountains and valleys. */
 	public static int groundDeep(ServerLevel level, int x, int z, int heartY) {
+		return groundDeep(level, x, z, heartY, Set.of());
+	}
+
+	/** {@code skip}: blocks to look through (what the settlement built: a road under a gatehouse lies on the ground, not on its roof). */
+	public static int groundDeep(ServerLevel level, int x, int z, int heartY, Set<Long> skip) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int y = heartY + 30; y >= heartY - 48; y--) {
 			pos.set(x, y, z);
+			if (!skip.isEmpty() && skip.contains(pos.asLong())) {
+				continue;
+			}
 			BlockState st = level.getBlockState(pos);
 			if (st.isAir() || st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES) || st.canBeReplaced() || st.getBlock() instanceof LiquidBlock) {
 				if (st.getBlock() instanceof LiquidBlock) {

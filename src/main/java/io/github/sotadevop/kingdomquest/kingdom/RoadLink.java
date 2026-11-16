@@ -150,6 +150,26 @@ final class RoadLink {
 			}
 			h[i] = w[i] ? pos.getY() + 2 : pos.getY(); // bridge deck two blocks above the water
 		}
+		// a hole in the ground (a cave mouth, a ravine): where the land drops 4 or more in one step and comes back up
+		// within 48 blocks, the road keeps its height and crosses on a bridge, the same as over water
+		for (int i = 1; i < n; i++) {
+			if (w[i] || w[i - 1] || h[i - 1] - h[i] < 4) {
+				continue;
+			}
+			int j = i;
+			while (j < n && j < i + 48 && !w[j] && h[j] < h[i - 1] - 2) {
+				j++;
+			}
+			if (j >= n || j >= i + 48 || w[j]) {
+				continue; // no far side: a slope, not a hole
+			}
+			int deck = Math.max(h[i - 1], h[j]);
+			for (int k = i; k < j; k++) {
+				h[k] = deck;
+				w[k] = true;
+			}
+			i = j;
+		}
 		// one deck height per crossing (the highest), ramps of one block per block on both banks
 		for (int i = 0; i < n; ) {
 			if (!w[i]) {

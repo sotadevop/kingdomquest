@@ -289,6 +289,43 @@ public final class Production {
 		return g;
 	}
 
+	/**
+	 * The steward's round: everything the workshops, farms and shops have put in their stores is handed to the lord
+	 * (what does not fit is dropped at his feet). Returns {items, stores emptied}.
+	 */
+	static int[] collect(ServerLevel level, Settlement s, net.minecraft.server.level.ServerPlayer player) {
+		int items = 0;
+		int stores = 0;
+		for (String track : Progression.ORDER) {
+			Progression.Step step = Progression.current(s, track);
+			if (step == null || track.equals(Progression.CELLAR) || track.equals(s.jobTrack())) {
+				continue; // the cellar is the lord's own store
+			}
+			Container box = storage(level, s, s.style() + "/" + step.building());
+			if (box == null) {
+				continue;
+			}
+			boolean any = false;
+			for (int i = 0; i < box.getContainerSize(); i++) {
+				ItemStack stack = box.getItem(i);
+				if (stack.isEmpty()) {
+					continue;
+				}
+				box.setItem(i, ItemStack.EMPTY);
+				items += stack.getCount();
+				any = true;
+				if (!player.getInventory().add(stack) && !stack.isEmpty()) {
+					net.minecraft.world.Containers.dropItemStack(level, player.getX(), player.getY(), player.getZ(), stack);
+				}
+			}
+			if (any) {
+				box.setChanged();
+				stores++;
+			}
+		}
+		return new int[] {items, stores};
+	}
+
 	private static Item item(String id) {
 		return BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(id));
 	}

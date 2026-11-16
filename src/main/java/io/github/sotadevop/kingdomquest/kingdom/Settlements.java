@@ -334,6 +334,18 @@ public final class Settlements {
 	static final Set<String> LIFTED = Set.of("farm", "smith", "wood", "library", "brewery", "stables", "barracks", "guild", "apiary", "kennel",
 			"trophy", "tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether");
 
+	/** The track (key of {@link Settlement#built()}) a job's building belongs to. */
+	static String builtTrack(String job) {
+		String b = trackOf(job);
+		return switch (b) {
+			case "road" -> Progression.ROADS;
+			case "lamp" -> Progression.LAMPS;
+			case "wall" -> Progression.WALLS;
+			case "tent", "hamlet", "village", "town", "castle", "citadel" -> Settlement.MAIN;
+			default -> b;
+		};
+	}
+
 	static String trackOf(String job) {
 		String b = job.substring(job.indexOf('/') + 1);
 		int i = b.lastIndexOf('_');
@@ -358,6 +370,14 @@ public final class Settlements {
 		Set<Long> cols = new HashSet<>();
 		for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
 			cols.add(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()));
+		}
+		for (int[] r : t.pads) { // the whole plot, so the terrace also suits the later levels
+			for (int x = r[0]; x <= r[2]; x += 2) {
+				for (int z = r[1]; z <= r[3]; z += 2) {
+					BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), Rotation.values()[s.rotation()]);
+					cols.add(BlockPos.asLong(rel.getX(), 0, rel.getZ()));
+				}
+			}
 		}
 		List<Integer> hs = new ArrayList<>();
 		int n = 0;
@@ -439,12 +459,56 @@ public final class Settlements {
 			case "link_kingdom" -> RoadLink.connect(player, s, false);
 			case "link_village" -> RoadLink.connect(player, s, true);
 			case "repair" -> startRepair(player, s);
+			case "rebuild" -> startRebuild(player, s);
 			default -> {
 				if (action.equals("realm")) {
 					Realm.send(player, s);
 				} else if (action.startsWith("realm")) {
 					Realm.handle(player, s, action);
 				}
+			}
+		}
+	}
+
+	/**
+	 * Rebuilds everything that stands, track by track, from the mod's current plans: after an update to the
+	 * buildings or the way land is shaped, an existing kingdom gets the new version. Nothing is paid again.
+	 */
+	private static void startRebuild(ServerPlayer player, Settlement s) {
+		if (!s.job().isEmpty() || !s.names().getOrDefault("rebuild", "").isEmpty()) {
+			player.sendOverlayMessage(Component.translatable("kingdomquest.rebuild.busy"));
+			return;
+		}
+		List<String> queue = new ArrayList<>();
+		for (String track : Progression.ORDER) {
+			if (Progression.current(s, track) != null && !track.equals(Progression.DOCK)) {
+				queue.add(track);
+			}
+		}
+		putState(player.level().getServer(), s.withName("rebuild", String.join(",", queue)));
+		player.sendSystemMessage(Component.translatable("kingdomquest.rebuild.start", queue.size()));
+	}
+
+	/** The next track of a running rebuild, once the builders are free. */
+	private static void rebuildTick(MinecraftServer server, Settlement s) {
+		String queue = s.names().getOrDefault("rebuild", "");
+		if (queue.isEmpty() || !s.job().isEmpty() || !server.overworld().isLoaded(s.heart())) {
+			return;
+		}
+		int cut = queue.indexOf(',');
+		String track = cut < 0 ? queue : queue.substring(0, cut);
+		Settlement rest = s.withName("rebuild", cut < 0 ? "" : queue.substring(cut + 1));
+		Progression.Step step = Progression.current(rest, track);
+		if (step == null || Template.get(rest.style() + "/" + step.building()) == null) {
+			put(server, rest);
+			return;
+		}
+		put(server, rest);
+		start(server, rest, track, step);
+		if (cut < 0) {
+			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+			if (owner != null) {
+				owner.sendSystemMessage(Component.translatable("kingdomquest.rebuild.last"));
 			}
 		}
 	}
@@ -810,8 +874,8 @@ public final class Settlements {
 		List<Template.Placement> base = basePlacements(s, job);
 		Template t = Template.get(job);
 		if (t != null && !t.follow && server != null && trackOf(job).equals("gate") && s.level(Progression.GATE) >= 3) {
-			// the dry moat is only dug where the land is at the gate's height; on hills and over valleys the
-			// terrain-following wall stands without it (no hidden trenches inside a mountain)
+			// the dry moat follows the land: each column is dug from the ground just outside the ditch (its anchor,
+			// never dug itself, so the depth is the same every time it is worked out), unbroken around the wall
 			String key = s.id() + "|" + job + "|moat|" + base.size() + "|" + s.color();
 			return FOLLOWED.computeIfAbsent(key, k -> {
 				ServerLevel level = server.overworld();
@@ -820,12 +884,14 @@ public final class Settlements {
 				for (Template.Placement p : base) {
 					boolean moat = p.offset().getY() < 0 && (p.state().isAir() || p.state().is(Blocks.COARSE_DIRT));
 					if (moat) {
-						BlockPos col = s.heart().offset(p.offset().getX(), 0, p.offset().getZ());
+						BlockPos col = s.heart().offset(p.anchor());
 						int g = ground.computeIfAbsent(col.asLong(), c -> SiteWork.groundDeep(level, col.getX(), col.getZ(), s.heart().getY()) + 1
 								- s.heart().getY());
-						if (Math.abs(g) > 2) {
-							continue;
+						if (Math.abs(g) > 16) {
+							continue; // a cliff: no ditch needed there
 						}
+						out.add(g == 0 ? p : new Template.Placement(p.offset().above(g), p.state(), p.segment(), p.anchor()));
+						continue;
 					}
 					out.add(p);
 				}
@@ -838,13 +904,119 @@ public final class Settlements {
 		String key = s.id() + "|" + job + "|" + base.size() + "|" + s.color();
 		return FOLLOWED.computeIfAbsent(key, k -> {
 			ServerLevel level = server.overworld();
+			String track = builtTrack(job);
+			boolean walls = track.equals(Progression.WALLS);
+			Set<Long> own = new HashSet<>(s.built().getOrDefault(track, List.of()));
+			// what other tracks built is looked through: a road under the gatehouse lies on the ground, not on its roof
+			Set<Long> others = new HashSet<>();
+			s.built().forEach((k2, v) -> {
+				if (!k2.equals(track)) {
+					others.addAll(v);
+				}
+			});
+			Set<Long> through = new HashSet<>(others);
+			through.addAll(own);
+			int heartY = s.heart().getY();
 			Map<Long, Integer> ground = new HashMap<>();
 			List<Template.Placement> out = new ArrayList<>(base.size());
+			int minY = 0;
+			for (Template.Placement p : base) {
+				minY = Math.min(minY, p.offset().getY());
+			}
+			Set<Long> placed = new HashSet<>();
+			// a wall that stands (after a restart, for repairs, for a rebuild) is found where it is: the top of
+			// what was built in an anchor column against the top of the plan there gives its height exactly
+			Progression.Step standing = Progression.current(s, track);
+			boolean same = walls && !own.isEmpty() && !job.equals(s.job()) && standing != null && job.endsWith("/" + standing.building());
+			Map<Long, Integer> planTop = new HashMap<>();
+			if (same) {
+				for (Template.Placement p : base) {
+					if (p.offset().getX() == p.anchor().getX() && p.offset().getZ() == p.anchor().getZ()) {
+						planTop.merge(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.offset().getY(), Math::max);
+					}
+				}
+			}
 			for (Template.Placement p : base) {
 				BlockPos col = s.heart().offset(p.anchor());
-				int off = ground.computeIfAbsent(col.asLong(), c ->
-						Math.max(-40, Math.min(30, SiteWork.groundDeep(level, col.getX(), col.getZ(), s.heart().getY()) + 1 - s.heart().getY())));
-				out.add(new Template.Placement(p.offset().above(off), p.state(), p.segment(), p.anchor()));
+				Integer top = planTop.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
+				int off = ground.computeIfAbsent(col.asLong(), c -> {
+					int g;
+					if (top != null) {
+						BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+						for (int y = heartY + 70; y >= heartY - 70; y--) {
+							if (own.contains(at.set(col.getX(), y, col.getZ()).asLong())) {
+								return y - heartY - top;
+							}
+						}
+					}
+					if (walls && !own.isEmpty()) {
+						// a wall that already stands replaced the ground under itself: take the land beside it
+						// (two blocks to each side, looking through everything built), so a rebuild stays where it is
+						List<Integer> near = new ArrayList<>();
+						for (int[] d2 : new int[][] {{2, 0}, {-2, 0}, {0, 2}, {0, -2}}) {
+							near.add(SiteWork.groundDeep(level, col.getX() + d2[0], col.getZ() + d2[1], heartY, through));
+						}
+						java.util.Collections.sort(near);
+						g = near.get(2);
+					} else {
+						g = SiteWork.groundDeep(level, col.getX(), col.getZ(), heartY, others);
+					}
+					return Math.max(-40, Math.min(30, g + 1 - heartY));
+				});
+				Template.Placement at = new Template.Placement(p.offset().above(off), p.state(), p.segment(), p.anchor());
+				out.add(at);
+				placed.add(at.offset().asLong());
+			}
+			if (track.equals(Progression.ROADS)) {
+				// a paved road that climbs gets a slab on the lower block of every step: you walk up, you don't jump
+				// (trodden dirt paths stay bare: a path under a slab turns to dirt)
+				Map<Long, Integer> top = new HashMap<>();
+				for (Template.Placement p : out) {
+					top.merge(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()), p.offset().getY(), Math::max);
+				}
+				List<Template.Placement> steps = new ArrayList<>();
+				for (Template.Placement p : out) {
+					BlockState st = p.state();
+					if (st.is(Blocks.DIRT_PATH) || st.is(Blocks.COARSE_DIRT) || !st.isSolid()) {
+						continue;
+					}
+					boolean climbs = false;
+					for (int[] d2 : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+						Integer n = top.get(BlockPos.asLong(p.offset().getX() + d2[0], 0, p.offset().getZ() + d2[1]));
+						climbs |= n != null && n == p.offset().getY() + 1;
+					}
+					BlockPos above = p.offset().above();
+					if (climbs && !others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
+						boolean rough = st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE) || st.is(Blocks.GRAVEL);
+						steps.add(new Template.Placement(above, (rough ? Blocks.COBBLESTONE_SLAB : Blocks.STONE_BRICK_SLAB).defaultBlockState(),
+								p.segment(), p.anchor()));
+					}
+				}
+				out.addAll(steps);
+			}
+			if (walls && minY <= -3) {
+				// foundations go down to the ground: where the land dips under a wall section or a tower, the
+				// lowest course is carried on down, so no piece of wall hangs in the air
+				List<Template.Placement> footing = new ArrayList<>();
+				BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+				for (int i = 0; i < base.size(); i++) {
+					if (base.get(i).offset().getY() != minY) {
+						continue;
+					}
+					Template.Placement low = out.get(i);
+					for (int down = 1; down <= 40; down++) {
+						BlockPos rel = low.offset().below(down);
+						pos.set(s.heart().getX() + rel.getX(), heartY + rel.getY(), s.heart().getZ() + rel.getZ());
+						BlockState st = level.getBlockState(pos);
+						boolean open = st.isAir() || st.canBeReplaced() || st.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock
+								|| st.is(net.minecraft.tags.BlockTags.LEAVES) || SiteWork.plant(st);
+						if (!open && !own.contains(pos.asLong()) || placed.contains(rel.asLong())) {
+							break;
+						}
+						footing.add(new Template.Placement(rel, low.state(), low.segment(), low.anchor()));
+					}
+				}
+				out.addAll(0, footing);
 			}
 			return List.copyOf(out);
 		});
@@ -863,17 +1035,33 @@ public final class Settlements {
 				continue;
 			}
 			String job = s.style() + "/" + current.building();
-			List<Long> built = new ArrayList<>(s.built().getOrDefault(track, List.of()));
+			// the land may have been cut or filled under them since they were laid: work out again where they lie,
+			// take up what is left hanging or buried, and lay what is missing (new lanes included)
+			String prefix = s.id() + "|" + job + "|";
+			FOLLOWED.keySet().removeIf(k -> k.startsWith(prefix));
+			List<Template.Placement> list = placements(s, job);
+			Set<Long> next = new HashSet<>();
+			for (Template.Placement p : list) {
+				next.add(s.heart().offset(p.offset()).asLong());
+			}
+			List<Long> built = new ArrayList<>();
+			for (long old : s.built().getOrDefault(track, List.of())) {
+				if (next.contains(old)) {
+					built.add(old);
+					continue;
+				}
+				BlockPos p = BlockPos.of(old);
+				boolean ground = track.equals(Progression.ROADS) && level.getBlockState(p.below()).isSolid();
+				level.setBlock(p, !ground ? Blocks.AIR.defaultBlockState()
+						: level.getBlockState(p.above()).isSolid() ? Blocks.DIRT.defaultBlockState() : surface, NO_DROPS);
+			}
 			Set<Long> have = new HashSet<>(built);
 			Set<Long> all = new HashSet<>();
 			s.built().values().forEach(all::addAll);
-			for (Template.Placement p : placements(s, job)) {
+			for (Template.Placement p : list) {
 				BlockPos pos = s.heart().offset(p.offset());
 				if (have.contains(pos.asLong())) {
 					continue;
-				}
-				if (p.offset().getY() < 0) {
-					SiteWork.clear(level, s.heart(), new SiteWork.Column(p.offset().getX(), p.offset().getZ(), 0), all, surface);
 				}
 				level.setBlock(pos, neighbourShaped(p.state(), level, pos), NO_DROPS);
 				SiteWork.clearAbove(level, pos, all);
@@ -905,6 +1093,7 @@ public final class Settlements {
 	// ---- building over time ----
 
 	static void tick(MinecraftServer server) {
+		WorldMap.tick(server);
 		boolean produce = server.getTickCount() % Production.INTERVAL == 0;
 		boolean people = server.getTickCount() % 200 == 0;
 		for (Settlement s : all(server)) {
@@ -915,6 +1104,7 @@ public final class Settlements {
 				Workers.tick(server.overworld(), s);
 			}
 			repairTick(server, s);
+			rebuildTick(server, s);
 			if (server.getTickCount() % 1200 == 0) {
 				Defense.guards(server.overworld(), s);
 				Collections.pets(server, s);
