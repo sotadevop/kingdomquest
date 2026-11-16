@@ -967,6 +967,33 @@ public final class Settlements {
 				out.add(at);
 				placed.add(at.offset().asLong());
 			}
+			if (track.equals(Progression.ROADS)) {
+				// a paved road that climbs gets a slab on the lower block of every step: you walk up, you don't jump
+				// (trodden dirt paths stay bare: a path under a slab turns to dirt)
+				Map<Long, Integer> top = new HashMap<>();
+				for (Template.Placement p : out) {
+					top.merge(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()), p.offset().getY(), Math::max);
+				}
+				List<Template.Placement> steps = new ArrayList<>();
+				for (Template.Placement p : out) {
+					BlockState st = p.state();
+					if (st.is(Blocks.DIRT_PATH) || st.is(Blocks.COARSE_DIRT) || !st.isSolid()) {
+						continue;
+					}
+					boolean climbs = false;
+					for (int[] d2 : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+						Integer n = top.get(BlockPos.asLong(p.offset().getX() + d2[0], 0, p.offset().getZ() + d2[1]));
+						climbs |= n != null && n == p.offset().getY() + 1;
+					}
+					BlockPos above = p.offset().above();
+					if (climbs && !others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
+						boolean rough = st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE) || st.is(Blocks.GRAVEL);
+						steps.add(new Template.Placement(above, (rough ? Blocks.COBBLESTONE_SLAB : Blocks.STONE_BRICK_SLAB).defaultBlockState(),
+								p.segment(), p.anchor()));
+					}
+				}
+				out.addAll(steps);
+			}
 			if (walls && minY <= -3) {
 				// foundations go down to the ground: where the land dips under a wall section or a tower, the
 				// lowest course is carried on down, so no piece of wall hangs in the air
@@ -1066,6 +1093,7 @@ public final class Settlements {
 	// ---- building over time ----
 
 	static void tick(MinecraftServer server) {
+		WorldMap.tick(server);
 		boolean produce = server.getTickCount() % Production.INTERVAL == 0;
 		boolean people = server.getTickCount() % 200 == 0;
 		for (Settlement s : all(server)) {

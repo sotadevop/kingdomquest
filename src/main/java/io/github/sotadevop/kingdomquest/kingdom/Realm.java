@@ -88,6 +88,23 @@ final class Realm {
 		j.add("settlements", settlements);
 		j.add("villages", villages);
 		j.add("links", links);
+		// the land under it all: everything the realm reaches, with room around it
+		int minX = Math.min(here.heart().getX(), (int) player.getX());
+		int maxX = Math.max(here.heart().getX(), (int) player.getX());
+		int minZ = Math.min(here.heart().getZ(), (int) player.getZ());
+		int maxZ = Math.max(here.heart().getZ(), (int) player.getZ());
+		for (JsonArray list : List.of(settlements, villages, links)) {
+			for (com.google.gson.JsonElement e : list) {
+				int x = e.getAsJsonObject().get("x").getAsInt();
+				int z = e.getAsJsonObject().get("z").getAsInt();
+				minX = Math.min(minX, x);
+				maxX = Math.max(maxX, x);
+				minZ = Math.min(minZ, z);
+				maxZ = Math.max(maxZ, z);
+			}
+		}
+		WorldMap.refresh(level, here.heart(), 7);
+		j.add("map", WorldMap.layer(server, minX - 320, minZ - 320, maxX + 320, maxZ + 320));
 		// buildings of this settlement
 		JsonArray buildings = new JsonArray();
 		String last = here.names().getOrDefault("last_built", "");
@@ -110,6 +127,20 @@ final class Realm {
 			buildings.add(e);
 		}
 		j.add("buildings", buildings);
+		int bx0 = here.heart().getX() - 40;
+		int bx1 = here.heart().getX() + 40;
+		int bz0 = here.heart().getZ() - 40;
+		int bz1 = here.heart().getZ() + 40;
+		for (com.google.gson.JsonElement e : buildings) {
+			JsonObject b = e.getAsJsonObject();
+			bx0 = Math.min(bx0, b.get("x0").getAsInt());
+			bz0 = Math.min(bz0, b.get("z0").getAsInt());
+			bx1 = Math.max(bx1, b.get("x1").getAsInt());
+			bz1 = Math.max(bz1, b.get("z1").getAsInt());
+		}
+		int cxm = (bx0 + bx1) / 2;
+		int czm = (bz0 + bz1) / 2;
+		j.add("plan", WorldMap.plan(level, Math.max(bx0 - 12, cxm - 99), Math.max(bz0 - 12, czm - 99), Math.min(bx1 + 12, cxm + 99), Math.min(bz1 + 12, czm + 99)));
 		// people and animals around it
 		JsonArray people = new JsonArray();
 		JsonArray animals = new JsonArray();

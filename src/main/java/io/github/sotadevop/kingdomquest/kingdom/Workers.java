@@ -126,7 +126,21 @@ final class Workers {
 				return true;
 			}
 			if (name.equals("Steward")) {
+				// the steward runs the settlement for the lord: he brings what the stores hold, reports damage
+				// and what can be built, and opens the kingdom's book wherever he stands
+				ServerLevel lvl = player.level().getServer().overworld();
+				int[] got = Production.collect(lvl, s, player);
+				if (got[0] > 0) {
+					People.say(player, name, "I have made my round, my lord: " + got[0] + " goods from " + got[1] + (got[1] == 1 ? " store." : " stores."));
+				}
+				int broken = Settlements.damaged(lvl, s).size();
+				if (broken > 0) {
+					People.say(player, name, broken + " blocks of our buildings are damaged. Order the repair in the book.");
+				}
 				Settlements.stewardAdvice(player, s);
+				if (s.owner().equals(player.getUUID())) {
+					Settlements.sendInfo(player, s);
+				}
 			} else {
 				People.say(player, name, Defense.status(player.level().getServer(), s));
 			}
