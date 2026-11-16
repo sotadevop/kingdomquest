@@ -315,7 +315,7 @@ public final class Production {
 				items += stack.getCount();
 				any = true;
 				if (!player.getInventory().add(stack) && !stack.isEmpty()) {
-					player.drop(stack, false);
+					net.minecraft.world.Containers.dropItemStack(level, player.getX(), player.getY(), player.getZ(), stack);
 				}
 			}
 			if (any) {
