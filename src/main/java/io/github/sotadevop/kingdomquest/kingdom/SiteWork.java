@@ -725,9 +725,11 @@ public final class SiteWork {
 					if (y < target) {
 						fill = subsoil(surface);
 					} else if (target < top) {
-						fill = (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(); // the bed off the shore
+						fill = level.getBiome(pos).getRegisteredName().contains("swamp") ? Blocks.MUD.defaultBlockState()
+								: (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(); // the bed off the shore
 					} else {
-						fill = grass && o >= 3 ? Blocks.SAND.defaultBlockState() : surface; // a beach outside the walls
+						// a beach outside the walls; a swamp's shore is its own mud and grass, never sand
+						fill = grass && o >= 3 && !level.getBiome(pos).getRegisteredName().contains("swamp") ? Blocks.SAND.defaultBlockState() : surface;
 					}
 					level.setBlock(pos.set(x, y, z), fill, FLAGS);
 				}

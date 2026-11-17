@@ -2271,6 +2271,7 @@ def apiary(style, level):
                 else:
                     b.put(x, 0, z, w + "_fence")
             elif (x * 5 + z * 3) % 3 != 0:
+                b.put(x, -1, z, "grass_block", snowy="false")  # the meadow's own soil: flowers can't stand on sand
                 b.put(x, 0, z, flowers[(x * 7 + z) % len(flowers)])
     for x, z in ((x0 + 2, z0 + 2), (x1 - 2, z0 + 2)):
         b.put(x, 0, z, w + "_fence")

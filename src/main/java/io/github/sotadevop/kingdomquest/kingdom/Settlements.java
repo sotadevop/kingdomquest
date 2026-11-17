@@ -1424,7 +1424,7 @@ public final class Settlements {
 						continue;
 					}
 					Template.Placement low = out.get(i);
-					for (int down = 1; down <= 40; down++) {
+					for (int down = 1; down <= 96; down++) { // over a ravine too: masonry down the rock, never a hanging wall
 						BlockPos rel = low.offset().below(down);
 						pos.set(s.heart().getX() + rel.getX(), heartY + rel.getY(), s.heart().getZ() + rel.getZ());
 						BlockState st = level.getBlockState(pos);
@@ -1676,9 +1676,19 @@ public final class Settlements {
 					otherTracks.addAll(v);
 				}
 			});
+			// a lamp is placed whole or not at all: a post left out (another building's block in the way) would
+			// leave its arm and lantern hanging
+			Set<Long> blockedLamps = new HashSet<>();
+			if (track.equals(Progression.LAMPS)) {
+				for (Template.Placement p : list) {
+					if (otherTracks.contains(s.heart().offset(p.offset()).asLong())) {
+						blockedLamps.add(p.anchor().asLong());
+					}
+				}
+			}
 			for (Template.Placement p : list) {
 				BlockPos pos = s.heart().offset(p.offset());
-				if (otherTracks.contains(pos.asLong())) {
+				if (otherTracks.contains(pos.asLong()) || blockedLamps.contains(p.anchor().asLong())) {
 					continue; // never over another building's block (a lamp in the cellar wall, a road through a gate pier)
 				}
 				if (have.contains(pos.asLong())) {
