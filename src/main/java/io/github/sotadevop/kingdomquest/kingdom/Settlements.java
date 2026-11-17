@@ -1002,6 +1002,8 @@ public final class Settlements {
 		});
 	}
 
+	/** Per job: columns its land shaping filled up (made ground), for {@link SiteWork#dressFaces}. */
+	private static final Map<String, Set<Long>> FILLED = new HashMap<>();
 	/** Per job: columns in front of other buildings' doors that its land shaping leaves alone. */
 	private static final Map<String, Set<Long>> RAMPS = new HashMap<>();
 	/** (RAMPS: per job, the columns straight out from its own doors, shaped as an earth ramp.) */
@@ -1060,6 +1062,7 @@ public final class Settlements {
 				BlockState surface = SiteWork.surface(level, s.heart());
 				List<Template.Placement> out = new ArrayList<>(base.size());
 				List<Template.Placement> banks = new ArrayList<>();
+				List<Template.Placement> moatOut = new ArrayList<>();
 				// each side of the ring decides on its own (agreed with the user): where the land along a side falls
 				// away or rises steeply, that side gets no ditch and the slope is its defence, as at a hill castle.
 				// The gate side always keeps its ditch: the drawbridge spans it.
@@ -1122,6 +1125,7 @@ public final class Settlements {
 						}
 						Template.Placement mp = new Template.Placement(p.offset().above(g), state, p.segment(), p.anchor());
 						out.add(mp);
+						moatOut.add(mp);
 						if (!state.isAir()) {
 							banks.add(mp);
 						}
@@ -1129,6 +1133,23 @@ public final class Settlements {
 					}
 					out.add(p);
 				}
+				// at a corner the two arms of the ditch overlap: one digs a column out, the other would lay its bank turf
+				// on top of the same column (turf hanging over a dug hole). The dig wins: no moat turf above a dug cell
+				Map<Long, Integer> lowestDug = new HashMap<>();
+				for (Template.Placement o : moatOut) {
+					if (o.state().isAir()) {
+						lowestDug.merge(BlockPos.asLong(o.offset().getX(), 0, o.offset().getZ()), o.offset().getY(), Math::min);
+					}
+				}
+				Set<Template.Placement> hanging = new HashSet<>();
+				for (Template.Placement o : moatOut) {
+					Integer dug = lowestDug.get(BlockPos.asLong(o.offset().getX(), 0, o.offset().getZ()));
+					if (!o.state().isAir() && dug != null && dug < o.offset().getY()) {
+						hanging.add(o);
+					}
+				}
+				out.removeAll(hanging);
+				banks.removeAll(hanging);
 				// where the land falls away under the bank (a hillside), earth is carried down under it: no floating turf
 				Set<Long> taken = new HashSet<>();
 				out.forEach(o -> taken.add(o.offset().asLong()));
@@ -1706,7 +1727,9 @@ public final class Settlements {
 			if (keepClear.contains(colKey)) {
 				continue;
 			}
-			SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank || !c.pad() && ramps.contains(colKey), roadBlocks);
+			if (SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank || !c.pad() && ramps.contains(colKey), roadBlocks)) {
+				FILLED.computeIfAbsent(s.id() + "|" + s.job(), k -> new HashSet<>()).add(colKey);
+			}
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
@@ -1780,6 +1803,12 @@ public final class Settlements {
 						Math.max(ringA.getX(), ringB.getX()), Math.max(ringA.getZ(), ringB.getZ()), nowBuilt, moatColumns(done), SiteWork.surface(level, s.heart()));
 			}
 			smoothGround(level, done);
+			// made ground whose side was later left standing 3 or more blocks high (a neighbour column cut away after it
+			// was filled) gets a masonry face like every other terrace wall
+			Set<Long> filled = FILLED.remove(s.id() + "|" + s.job());
+			if (filled != null) {
+				SiteWork.dressFaces(level, filled, nowBuilt, SiteWork.surface(level, s.heart()));
+			}
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			{
 				Rotation turn = Rotation.values()[s.rotation()];

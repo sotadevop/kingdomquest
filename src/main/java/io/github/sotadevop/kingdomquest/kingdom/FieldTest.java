@@ -305,6 +305,17 @@ public final class FieldTest {
 				}
 				Direction f = st.getValue(DoorBlock.FACING);
 				StringBuilder now = new StringBuilder();
+				for (Direction g : new Direction[] {f, f.getOpposite()}) {
+					BlockPos q = d.relative(g, 2);
+					BlockPos t = new BlockPos(q.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, q.getX(), q.getZ()) - 1, q.getZ());
+					String who = "";
+					for (Map.Entry<String, List<Long>> o : s.built().entrySet()) {
+						if (o.getValue().contains(t.asLong())) {
+							who = "@" + o.getKey();
+						}
+					}
+					now.append(name(level.getBlockState(t))).append(who).append(' ');
+				}
 				for (Direction g : new Direction[] {f, f.getOpposite()}) { // doors face in or out: both sides
 					for (int k = 1; k <= 3; k++) {
 						BlockPos q = d.relative(g, k);
@@ -791,6 +802,11 @@ public final class FieldTest {
 		}
 		REPORT.append(row).append(" |\n");
 		boolean any = false;
+		for (String extra : new String[] {"door gaps", "way out"}) {
+			if (samples.containsKey(extra) && "final".equals(stage)) {
+				problems.add(stage + ": " + extra + " " + samples.get(extra));
+			}
+		}
 		for (Map.Entry<String, Integer> e : c.entrySet()) {
 			boolean fail = e.getKey().equals("walk out") ? e.getValue() == 0 : e.getValue() > 0;
 			if (fail) {
@@ -971,6 +987,19 @@ public final class FieldTest {
 			}
 		}
 		w.out = spread(level, h, reach, queue, Set.of(), 400_000);
+		if (!w.out) {
+			List<Long> edge = new ArrayList<>();
+			for (int i = -R + 1; i < R; i += 2) {
+				for (int[] e2 : new int[][] {{i, -R + 1}, {i, R - 1}, {-R + 1, i}, {R - 1, i}}) {
+					int x = h.getX() + e2[0], z = h.getZ() + e2[1];
+					int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+					if (!Double.isNaN(feet(level, x, y, z, false))) {
+						edge.add(BlockPos.asLong(x, y, z));
+					}
+				}
+			}
+			sample(samples, "way out", gap(level, s, reach, reverse(level, h, edge, 400_000)));
+		}
 		int doors = 0;
 		for (Map.Entry<Long, String> e : owner.entrySet()) {
 			BlockPos p = BlockPos.of(e.getKey());
@@ -979,6 +1008,7 @@ public final class FieldTest {
 				doors++;
 				if (!reach.contains(e.getKey())) {
 					w.doorsMissed++;
+					sample(samples, "door gaps", e.getValue() + " " + rel(s, p) + " " + gap(level, s, reach, reverse(level, h, List.of(e.getKey()), 60_000)));
 					sample(samples, "doors unreached", e.getValue() + " " + rel(s, p) + " front " + DOOR_GROUND.getOrDefault(e.getKey(), List.of()));
 					marks.add(new Mark(p.getX(), p.getZ(), 0xFF00A0));
 				}
@@ -1136,6 +1166,61 @@ public final class FieldTest {
 			}
 		}
 		return true;
+	}
+
+	/** Every cell from which {@code seeds} can be walked to (moves taken backwards: up 3.5, down 1.25). */
+	private static Set<Long> reverse(ServerLevel level, BlockPos h, java.util.Collection<Long> seeds, int cap) {
+		Set<Long> out = new HashSet<>(seeds);
+		ArrayDeque<long[]> queue = new ArrayDeque<>();
+		seeds.forEach(k -> queue.add(new long[] {k}));
+		while (!queue.isEmpty() && out.size() < cap) {
+			long key = queue.poll()[0];
+			int x = BlockPos.getX(key), y = BlockPos.getY(key), z = BlockPos.getZ(key);
+			if (Math.abs(x - h.getX()) >= R || Math.abs(z - h.getZ()) >= R) {
+				continue;
+			}
+			double f = feet(level, x, y, z, false);
+			for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+				for (int dy = 4; dy >= -2; dy--) {
+					long nk = BlockPos.asLong(x + d[0], y + dy, z + d[1]);
+					if (out.contains(nk)) {
+						continue;
+					}
+					double g = feet(level, x + d[0], y + dy, z + d[1], false);
+					if (!Double.isNaN(g) && f - g <= 1.25 && g - f <= 3.5) {
+						out.add(nk);
+						queue.add(new long[] {nk});
+					}
+				}
+			}
+		}
+		return out;
+	}
+
+	/** The smallest climb from the walked area {@code from} into {@code to} (neighbouring columns), and where. */
+	private static String gap(ServerLevel level, Settlement s, Set<Long> from, Set<Long> to) {
+		double best = Double.MAX_VALUE;
+		String where = "";
+		for (long b : to) {
+			int x = BlockPos.getX(b), y = BlockPos.getY(b), z = BlockPos.getZ(b);
+			double fb = feet(level, x, y, z, false);
+			for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+				for (int dy = -8; dy <= 8; dy++) {
+					long a = BlockPos.asLong(x + d[0], y + dy, z + d[1]);
+					if (!from.contains(a)) {
+						continue;
+					}
+					double climb = fb - feet(level, x + d[0], y + dy, z + d[1], false);
+					if (climb < best) {
+						best = climb;
+						BlockPos pa = BlockPos.of(a), pb = BlockPos.of(b);
+						where = String.format("climb %.1f from %s to %s (%s under, %s beside)", climb, rel(s, pa), rel(s, pb),
+								name(level.getBlockState(pb.below())), name(level.getBlockState(pb.relative(Direction.fromDelta(-d[0], 0, -d[1])))));
+					}
+				}
+			}
+		}
+		return to.size() < 12 ? "enclosed (" + to.size() + " cells) " + where : where.isEmpty() ? "no contact" : where;
 	}
 
 	// ---- map ----

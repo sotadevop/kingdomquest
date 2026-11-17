@@ -281,6 +281,41 @@ public final class SiteWork {
 		clear(level, heart, c, built, surface, loose, false, Set.of());
 	}
 
+	/** Earth and sand that can show as the side of made ground. */
+	private static boolean earthy(BlockState st) {
+		return st.is(Blocks.DIRT) || st.is(Blocks.GRASS_BLOCK) || st.is(Blocks.COARSE_DIRT) || st.is(Blocks.ROOTED_DIRT) || st.is(Blocks.PODZOL)
+				|| st.is(Blocks.SAND) || st.is(Blocks.RED_SAND) || st.is(Blocks.GRAVEL) || st.is(Blocks.SANDSTONE) || st.is(Blocks.RED_SANDSTONE)
+				|| st.is(Blocks.MUD) || st.is(Blocks.SNOW_BLOCK) || st.is(BlockTags.TERRACOTTA);
+	}
+
+	/**
+	 * Made ground (columns a build filled up) whose side stands open 3 or more blocks high gets a masonry face there,
+	 * the top block stays turf: the same look as the terrace walls, never a tall bare wall of earth.
+	 */
+	public static void dressFaces(ServerLevel level, Set<Long> filled, Set<Long> built, BlockState surface) {
+		BlockState wall = wallFor(surface);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (long col : filled) {
+			int x = BlockPos.getX(col), z = BlockPos.getZ(col);
+			int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+			int low = Integer.MAX_VALUE;
+			for (Direction d : Direction.Plane.HORIZONTAL) {
+				low = Math.min(low, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + d.getStepX(), z + d.getStepZ()) - 1);
+			}
+			if (top - low < 3) {
+				continue; // no side of it stands 3 or more above its lowest neighbour
+			}
+			for (int y = top - 1; y > low; y--) {
+				pos.set(x, y, z);
+				BlockState st = level.getBlockState(pos);
+				if (built.contains(pos.asLong()) || !earthy(st) || !openSide(level, pos, built)) {
+					continue;
+				}
+				level.setBlock(pos, Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall, FLAGS);
+			}
+		}
+	}
+
 	/** Deepest drop under a pad's rim that is still made up with a natural bank of earth; beyond it the pad gets a stone terrace wall. */
 	public static final int BANK_LIMIT = 9;
 
@@ -312,7 +347,7 @@ public final class SiteWork {
 	 * instead of masonry, and around it a bank that falls away to the land (also under water: a shore).
 	 * {@code roads}: road blocks, which a bank may cover (they are laid again on top of it).
 	 */
-	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose, boolean bank,
+	public static boolean clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose, boolean bank,
 			Set<Long> roads) {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
@@ -390,7 +425,7 @@ public final class SiteWork {
 			depth++;
 		}
 		if (depth == 0 || !margin && !terrace && depth > 2 && (!bank || blocked) || terrace && blocked) {
-			return; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
+			return false; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
 		}
 		// a pad over lower land is built up solid: earth on top, stone below, and its rim is a masonry wall
 		BlockState wall = wallFor(surface);
@@ -409,6 +444,7 @@ public final class SiteWork {
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
 		}
+		return true;
 	}
 
 	/** How far the land beside a column lies below {@code top} at its lowest side (open blocks counted, at most 3). */

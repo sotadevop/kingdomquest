@@ -1124,7 +1124,7 @@ def plan_roads(style, jobs):
                     queue.append(n)
         changed = True
 
-    # lamp posts along the streets: every ninth block of a centre line, on alternating sides, never on a road,
+    # lamp posts along the streets: every 13th block of a centre line, on alternating sides, never on a road,
     # in a doorway or against a wall
     lamps = []
     goal_cells = {g for _, _, g in goals}
@@ -1135,7 +1135,9 @@ def plan_roads(style, jobs):
         along = range(za, zb + 1) if axis == "x" else range(xa, xb + 1)
         side = 1
         for n, v in enumerate(along):
-            if n % 9 != 4:
+            # one post every 13 blocks, sides alternating: a lantern's light reaches ~14 blocks, and since 1.18
+            # hostile mobs only spawn in complete darkness, so the streets stay safe with half the clutter
+            if n % 13 != 6:
                 continue
             for sgn in (side, -side):
                 for off in (1, 2, 3):
@@ -1228,8 +1230,7 @@ def lamps(style, level):
             for y in (1, 2, 3):
                 b.put(x, y, z, fence)
             b.put(x + dx, 3, z + dz, fence)
-            b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")
-            b.put(x, 4, z, "lantern", hanging="false", waterlogged="false")
+            b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")  # one lantern per post, on the arm
         for p in set(b.b) - before:
             segs[p] = [seg[name]]
     SEGS_OF[id(b.b)] = segs
