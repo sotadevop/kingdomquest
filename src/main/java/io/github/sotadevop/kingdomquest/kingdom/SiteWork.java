@@ -38,10 +38,11 @@ public final class SiteWork {
 	 * @param floor how far above the pad the land may stay in this column (0 on the pad itself)
 	 * @param edge  the outermost ring of the flat pad, where a terrace gets its retaining wall
 	 * @param drop  how far below the pad a bank of earth ends in this column (0 on the pad itself)
+	 * @param out   how many blocks this column lies outside the flat pad (0 on the pad itself)
 	 */
-	public record Column(int dx, int dz, int floor, boolean edge, int drop) {
+	public record Column(int dx, int dz, int floor, boolean edge, int drop, int out) {
 		public Column(int dx, int dz, int floor) {
-			this(dx, dz, floor, false, floor);
+			this(dx, dz, floor, false, floor, floor);
 		}
 
 		/** On the flat pad itself (not the graded land around it). */
@@ -49,6 +50,16 @@ public final class SiteWork {
 			return this.drop == 0;
 		}
 	}
+
+	/**
+	 * How far around a building the land is shaped: cut slopes and banks run on until they meet the land, and over a
+	 * deep drop the terraces step down to it, instead of stopping at the template's apron in a cliff.
+	 */
+	private static final int REACH = 14;
+	/** Over a deep drop the made ground steps down in terraces: a stone face this high, then a bench of earth. */
+	static final int TERRACE_STEP = 4;
+	/** Width of each terrace bench (the flat strip of earth between two stone faces). */
+	static final int BENCH = 3;
 
 	/** How deep a pad's stone foundation goes to find the ground. */
 	private static final int PLINTH = 48;
@@ -91,6 +102,7 @@ public final class SiteWork {
 			}
 			int a = t.apron;
 			int flat = Math.min(3, Math.max(1, a / 2));
+			int reach = a == 0 ? 0 : Math.max(a, REACH);
 			// distance from the footprint in tenths of a block, diagonal steps cost 1.4: pads get round corners
 			Map<Long, Integer> dist = new HashMap<>();
 			java.util.PriorityQueue<long[]> queue = new java.util.PriorityQueue<long[]>(java.util.Comparator.<long[]>comparingLong(c -> c[2]));
@@ -124,14 +136,14 @@ public final class SiteWork {
 						}
 						int d = (int) c[2] + (dx != 0 && dz != 0 ? 14 : 10);
 						long key = BlockPos.asLong((int) c[0] + dx, 0, (int) c[1] + dz);
-						if (d <= a * 10 && d < dist.getOrDefault(key, Integer.MAX_VALUE)) {
+						if (d <= reach * 10 && d < dist.getOrDefault(key, Integer.MAX_VALUE)) {
 							dist.put(key, d);
 							queue.add(new long[] {c[0] + dx, c[1] + dz, d});
 						}
 					}
 				}
 			}
-			Map<Long, int[]> shape = new HashMap<>(); // column -> {floor, drop}
+			Map<Long, int[]> shape = new HashMap<>(); // column -> {floor, drop, out}
 			for (Map.Entry<Long, Integer> e : dist.entrySet()) {
 				int x = BlockPos.getX(e.getKey());
 				int z = BlockPos.getZ(e.getKey());
@@ -142,7 +154,8 @@ public final class SiteWork {
 				int floor = out <= 0 ? 0 : (int) Math.floor(out <= 4 ? out * 0.5 + 0.5 : out - 1.5);
 				// made ground falls away the same way: gently at first, then one block per block
 				int drop = out <= 0 ? 0 : (int) Math.ceil(out <= 4 ? out * 0.5 : out - 2);
-				shape.put(e.getKey(), new int[] {e.getValue() == 0 ? 0 : floor, e.getValue() == 0 ? 0 : drop});
+				shape.put(e.getKey(), new int[] {e.getValue() == 0 ? 0 : floor, e.getValue() == 0 ? 0 : drop,
+						e.getValue() == 0 || out <= 0 ? 0 : (int) Math.ceil(out)});
 			}
 			List<Column> list = new ArrayList<>();
 			for (Map.Entry<Long, int[]> e : shape.entrySet()) {
@@ -156,7 +169,7 @@ public final class SiteWork {
 					}
 				}
 				BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
-				list.add(new Column(rel.getX(), rel.getZ(), e.getValue()[0], edge, e.getValue()[1]));
+				list.add(new Column(rel.getX(), rel.getZ(), e.getValue()[0], edge, e.getValue()[1], e.getValue()[2]));
 			}
 			list.sort(java.util.Comparator.comparingInt(Column::dx).thenComparingInt(Column::dz));
 			return List.copyOf(list);
@@ -345,7 +358,14 @@ public final class SiteWork {
 		}
 		// foundation: fill holes, water and leaves below the ground layer
 		int fillTop = heart.getY() - 1 - c.drop();
-		int reach = margin ? PLINTH : FOUNDATION;
+		// over a deep drop (no bank) the land around the pad steps down in terraces: benches BENCH wide, each
+		// TERRACE_STEP lower than the last, made up to the land below; the outer row of each bench is its stone face
+		boolean terrace = !bank && !margin && c.out() > 0;
+		int bench = terrace ? (c.out() + BENCH - 1) / BENCH : 0;
+		if (terrace) {
+			fillTop = heart.getY() - 1 - bench * TERRACE_STEP;
+		}
+		int reach = margin || terrace ? PLINTH : FOUNDATION;
 		int depth = 0;
 		boolean blocked = false;
 		for (int y = fillTop; y >= fillTop - reach && y > level.getMinY(); y--) {
@@ -368,7 +388,7 @@ public final class SiteWork {
 			}
 			depth++;
 		}
-		if (depth == 0 || !margin && depth > 2 && (!bank || blocked)) {
+		if (depth == 0 || !margin && !terrace && depth > 2 && (!bank || blocked) || terrace && blocked) {
 			return; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
 		}
 		// a pad over lower land is built up solid: earth on top, stone below, and its rim is a masonry wall
@@ -378,7 +398,8 @@ public final class SiteWork {
 			if (built.contains(pos.asLong()) && !(bank && roads.contains(pos.asLong()))) {
 				continue;
 			}
-			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2);
+			boolean face = terrace && c.out() % BENCH == 0; // the bench's outer row: its retaining wall
+			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face && depth > 1;
 			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);

@@ -172,8 +172,8 @@ public final class FieldTest {
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
 				.append(", facing ").append(rot).append(", relief ").append(relief).append(", style ")
 				.append(Style.forBiome(biome)).append(", ground ").append(SiteWork.surface(level, heart).getBlock().getDescriptionId().replace("block.minecraft.", ""))
-				.append(".\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost |\n|")
-				.append("---|".repeat(20)).append('\n');
+				.append(".\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost |\n|")
+				.append("---|".repeat(21)).append('\n');
 		Settlement s = new Settlement(UUID.randomUUID(), OWNER, "FT " + sc.name(), 11, Identifier.withDefaultNamespace("stone_bricks"),
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
@@ -597,6 +597,8 @@ public final class FieldTest {
 		}
 		int cliffs = 0;
 		int pits = 0;
+		int tall = 0;
+		Set<String> masonry = Set.of("stone_bricks", "mossy_stone_bricks", "cobblestone", "mossy_cobblestone", "smooth_sandstone", "cut_red_sandstone");
 		for (int i = 1; i < n - 1; i++) {
 			for (int k = 1; k < n - 1; k++) {
 				int a = i * n + k;
@@ -606,6 +608,16 @@ public final class FieldTest {
 				for (int[] d : new int[][] {{1, 0}, {0, 1}}) {
 					int b = (i + d[0]) * n + k + d[1];
 					if (open[b] && Math.abs(now[a] - now[b]) >= 3 && Math.abs(base.ground()[a] - base.ground()[b]) < 3) {
+						int hi = now[a] > now[b] ? a : b;
+						String cap = name(level.getBlockState(pos.set(base.x0() + hi / n, now[hi], base.z0() + hi % n)));
+						if (masonry.contains(cap)) { // a terrace's retaining wall: meant, unless it towers
+							if (Math.abs(now[a] - now[b]) >= 7) {
+								tall++;
+								marks.add(new Mark(base.x0() + i, base.z0() + k, 0xFFFFFF));
+								sample(samples, "tall walls", rel(s, new BlockPos(base.x0() + i, now[a], base.z0() + k)) + " " + (now[b] - now[a]));
+							}
+							continue;
+						}
 						cliffs++;
 						marks.add(new Mark(base.x0() + i, base.z0() + k, 0xFFD000));
 						sample(samples, "new cliffs", rel(s, new BlockPos(base.x0() + i, now[a], base.z0() + k)) + " to " + (now[b] - now[a]));
@@ -636,6 +648,7 @@ public final class FieldTest {
 			}
 		}
 		c.put("new cliffs", cliffs);
+		c.put("tall walls", tall);
 		c.put("pits", pits);
 
 		// 7 roads, 8 walls
