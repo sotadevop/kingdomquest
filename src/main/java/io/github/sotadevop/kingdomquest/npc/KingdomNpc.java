@@ -55,6 +55,28 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	private UUID lord;
 	/** Guards patrol around this point; 0 = none. */
 	private long home;
+	/** A guard's fixed post (gate, tower, keep door); 0 = none, he patrols. */
+	private long post;
+	/** Ticks a posted guard has been away from his post with nothing to fight. */
+	private int away;
+	/** False for NPCs saved before skins were fixed per person: they get theirs on the first tick. */
+	private boolean skinFixed = true;
+	/** The look every guard has. */
+	public static final int GUARD_SKIN = 0;
+
+	/** The fixed look of a named person: the same name looks the same in every kingdom and after every respawn. */
+	public static int skinFor(String name) {
+		return Math.floorMod(name.hashCode() * 31 + 7, 9);
+	}
+
+	public long post() {
+		return this.post;
+	}
+
+	/** Gives a guard a fixed post; set before {@link #setup}. Tower guards carry a bow and never leave. */
+	public void setPost(net.minecraft.core.BlockPos pos) {
+		this.post = pos.asLong();
+	}
 	private int tier;
 	private int spellCooldown;
 
@@ -120,18 +142,20 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		this.home = pos.asLong();
 	}
 
-	/** Gear for a guard: barracks level 1 leather + iron sword, 2 chainmail + shield, 3 iron; the tunic in the kingdom color. */
-	public void guardGear(int barracks, int rgb) {
-		ItemStack tunic = new ItemStack(Items.LEATHER_CHESTPLATE);
-		tunic.set(net.minecraft.core.component.DataComponents.DYED_COLOR, new net.minecraft.world.item.component.DyedItemColor(rgb));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, tunic);
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(barracks >= 3 ? Items.IRON_HELMET : barracks >= 2 ? Items.CHAINMAIL_HELMET
-				: Items.LEATHER_HELMET));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, new ItemStack(barracks >= 3 ? Items.IRON_LEGGINGS : Items.CHAINMAIL_LEGGINGS));
-		if (barracks >= 2) {
-			this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
-		}
+	/**
+	 * Gear for a guard: every guard wears full iron and has the same face, so they read as one garrison. The
+	 * barracks level shows in the weapons: 1 iron sword, 2 a shield as well, 3 a diamond sword. Archers carry a bow.
+	 */
+	public void guardGear(int barracks, boolean archer) {
+		this.setSkin(GUARD_SKIN);
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(archer ? Items.BOW : barracks >= 3 ? Items.DIAMOND_SWORD
+				: Items.IRON_SWORD));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, barracks >= 2 && !archer ? new ItemStack(Items.SHIELD) : ItemStack.EMPTY);
+		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(archer ? 3 + barracks : 6);
 		for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
 			this.setDropChance(slot, 0);
 		}
@@ -191,13 +215,14 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 			return;
 		}
 		this.roleGoals = true;
-		if (role().equals("archer")) {
+		if (role().equals("archer") || role().equals("guard") && this.getMainHandItem().is(Items.BOW)) {
 			this.goalSelector.addGoal(2, new ShootGoal(this));
 		} else if (!role().equals("mage")) {
 			this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.2, true));
 		}
 		if (role().equals("guard")) {
-			this.goalSelector.addGoal(3, new PatrolGoal(this));
+			this.goalSelector.addGoal(3, new PostGoal(this));
+			this.goalSelector.addGoal(4, new PatrolGoal(this));
 		} else {
 			this.goalSelector.addGoal(3, new FollowLordGoal(this));
 		}
@@ -209,6 +234,27 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	@Override
 	public void tick() {
 		super.tick();
+		if (!this.level().isClientSide() && !this.skinFixed) {
+			this.skinFixed = true;
+			String r = role();
+			// people of the settlement (not the guild's fighters, whose looks are part of their class) get their fixed face
+			if (this.getCustomName() != null && !r.equals("sword") && !r.equals("archer") && !r.equals("mage") && !r.equals("companion")
+					&& !r.equals("guard") && !r.equals("worker")) {
+				this.setSkin(skinFor(this.getCustomName().getString()));
+			}
+		}
+		if (!this.level().isClientSide() && this.post != 0 && this.tickCount % 20 == 0) {
+			// a posted guard who is off his post with nobody to fight walks back; if he can't get there (a tower
+			// top, a closed gate) he is simply put back after ten seconds
+			net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.of(this.post);
+			boolean off = this.getTarget() == null && this.distanceToSqr(p.getX() + 0.5, p.getY(), p.getZ() + 0.5) > 3.5 * 3.5;
+			this.away = off ? this.away + 1 : 0;
+			if (this.away >= 10) {
+				this.away = 0;
+				this.getNavigation().stop();
+				this.snapTo(p.getX() + 0.5, p.getY(), p.getZ() + 0.5, this.getYRot(), 0);
+			}
+		}
 		if (!this.level().isClientSide() && ally()) {
 			this.addRoleGoals();
 			if (role().equals("mage") && --this.spellCooldown <= 0) {
@@ -266,6 +312,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		out.putInt("Skin", skin());
 		out.putInt("Tier", this.tier);
 		out.putLong("Home", this.home);
+		out.putLong("Post", this.post);
+		out.putBoolean("SkinFixed", true);
 		out.putString("Role", role());
 		if (this.lord != null) {
 			out.putString("Lord", this.lord.toString());
@@ -278,6 +326,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		this.entityData.set(SKIN, in.getIntOr("Skin", 0));
 		this.tier = in.getIntOr("Tier", 0);
 		this.home = in.getLongOr("Home", 0L);
+		this.post = in.getLongOr("Post", 0L);
+		this.skinFixed = in.getBooleanOr("SkinFixed", false);
 		this.entityData.set(ROLE, in.getStringOr("Role", ""));
 		String lord = in.getStringOr("Lord", "");
 		this.lord = lord.isEmpty() ? null : UUID.fromString(lord);
@@ -308,7 +358,9 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 			this.npc.getLookControl().setLookAt(t, 30, 30);
 			double d = this.npc.distanceToSqr(t);
 			boolean sees = this.npc.getSensing().hasLineOfSight(t);
-			if (d > 14 * 14 || !sees) {
+			if (this.npc.post != 0) {
+				this.npc.getNavigation().stop(); // a tower guard shoots from where he stands
+			} else if (d > 14 * 14 || !sees) {
 				this.npc.getNavigation().moveTo(t, 1.0);
 			} else {
 				this.npc.getNavigation().stop();
@@ -321,6 +373,42 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	}
 
 	/** Allies stay with their lord: walk to him when he is 6+ blocks away, appear next to him beyond 24. */
+	/** A posted guard stays at his post: he walks back when he is off it and now and then takes a step or two around it. */
+	static final class PostGoal extends Goal {
+		private final KingdomNpc npc;
+
+		PostGoal(KingdomNpc npc) {
+			this.npc = npc;
+			this.setFlags(EnumSet.of(Goal.Flag.MOVE));
+		}
+
+		private double off() {
+			net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.of(this.npc.post);
+			return this.npc.distanceToSqr(p.getX() + 0.5, p.getY(), p.getZ() + 0.5);
+		}
+
+		@Override
+		public boolean canUse() {
+			if (this.npc.post == 0 || this.npc.getTarget() != null || !this.npc.getNavigation().isDone()) {
+				return false;
+			}
+			return off() > 2.5 * 2.5 || !this.npc.getMainHandItem().is(Items.BOW) && this.npc.getRandom().nextInt(200) == 0;
+		}
+
+		@Override
+		public void start() {
+			net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.of(this.npc.post);
+			int r = off() > 2.5 * 2.5 ? 0 : 1;
+			this.npc.getNavigation().moveTo(p.getX() + 0.5 + (r == 0 ? 0 : this.npc.getRandom().nextInt(3) - 1), p.getY(),
+					p.getZ() + 0.5 + (r == 0 ? 0 : this.npc.getRandom().nextInt(3) - 1), 0.6);
+		}
+
+		@Override
+		public boolean canContinueToUse() {
+			return this.npc.getTarget() == null && !this.npc.getNavigation().isDone();
+		}
+	}
+
 	/** Guards walk between random points within 24 blocks of their post. */
 	static final class PatrolGoal extends Goal {
 		private final KingdomNpc npc;
@@ -332,7 +420,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 		@Override
 		public boolean canUse() {
-			return this.npc.home != 0 && this.npc.getTarget() == null && this.npc.getNavigation().isDone() && this.npc.getRandom().nextInt(60) == 0;
+			return this.npc.post == 0 && this.npc.home != 0 && this.npc.getTarget() == null && this.npc.getNavigation().isDone()
+					&& this.npc.getRandom().nextInt(60) == 0;
 		}
 
 		@Override

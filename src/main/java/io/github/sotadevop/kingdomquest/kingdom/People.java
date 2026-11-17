@@ -118,7 +118,7 @@ final class People {
 		if (v == null) {
 			return null;
 		}
-		v.setup(role, level.getRandom().nextInt(9), s.owner());
+		v.setup(role, KingdomNpc.skinFor(name), s.owner()); // a fixed face per person, not a random one
 		BlockPos pos = at;
 		for (int up = 0; up < 12 && !(level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir()); up++) {
 			pos = pos.above();

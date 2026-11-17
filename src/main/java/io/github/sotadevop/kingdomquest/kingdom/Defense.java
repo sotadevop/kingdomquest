@@ -17,6 +17,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,7 +65,96 @@ final class Defense {
 		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, 0, bz - 10), Rotation.values()[s.rotation()]));
 	}
 
-	/** Every minute: guards (2/4/6 by barracks level) in the kingdom's colors patrol the village; fallen ones are replaced. */
+	/** A guard's fixed post: where he stands, and whether he is a tower guard (bow, never leaves). */
+	record Post(BlockPos pos, boolean tower) {
+	}
+
+	/** Nearest place to stand in a column around {@code y}: a full block under two free ones. Null if there is none within 10. */
+	private static BlockPos standAt(ServerLevel level, int x, int z, int y) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int d = 0; d <= 10; d++) {
+			for (int sign : new int[] {1, -1}) {
+				pos.set(x, y + d * sign, z);
+				if (level.getBlockState(pos).getCollisionShape(level, pos).isEmpty() && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
+						&& level.getBlockState(pos.below()).isCollisionShapeFullBlock(level, pos.below())) {
+					return pos.immutable();
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The fixed posts of a settlement: two guards inside the gate, two in front of the main building, and one on
+	 * every wall tower (from the walls' first towers on). Tower tops are found in the world, on what the walls built.
+	 */
+	static List<Post> posts(ServerLevel level, Settlement s) {
+		List<Post> out = new ArrayList<>();
+		int y = s.heart().getY();
+		for (int[] p : new int[][] {{4, 46}, {10, 46}, {4, 7}, {10, 7}}) {
+			BlockPos at = at(s, p[0], p[1]);
+			BlockPos stand = level.isLoaded(at) ? standAt(level, at.getX(), at.getZ(), y) : null;
+			if (stand != null) {
+				out.add(new Post(stand, false));
+			}
+		}
+		int walls = s.level(Progression.WALLS);
+		if (walls >= 2 && !Progression.WALLS.equals(s.jobTrack())) {
+			java.util.Set<Long> built = new java.util.HashSet<>(s.built().getOrDefault(Progression.WALLS, List.of()));
+			int x0 = -56, x1 = 76, z0 = -46, z1 = 50, gx = 7; // the wall ring of tools/buildings.py (WALL, tower_spots)
+			List<int[]> spots = new ArrayList<>(List.of(new int[] {x0, z0}, new int[] {x1, z0}, new int[] {x0, z1}, new int[] {x1, z1},
+					new int[] {gx - 6, z1}, new int[] {gx + 6, z1}));
+			if (walls >= 4) {
+				int mz = (z0 + z1) / 2;
+				spots.addAll(List.of(new int[] {x0, mz}, new int[] {x1, mz}, new int[] {(x0 + x1) / 2, z0}, new int[] {x0 + 33, z0},
+						new int[] {x1 - 33, z0}, new int[] {x0 + 33, z1}, new int[] {x1 - 33, z1}));
+			}
+			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+			for (int[] spot : spots) {
+				// stone towers stand one block inside the ring line, wooden ones on it
+				int cx = walls >= 3 ? Math.max(x0 + 1, Math.min(x1 - 1, spot[0])) : spot[0];
+				int cz = walls >= 3 ? (spot[1] == z1 ? z1 : Math.max(z0 + 1, Math.min(z1 - 1, spot[1]))) : spot[1];
+				BlockPos col = at(s, cx, cz);
+				for (int yy = y + 60; yy >= y - 40 && level.isLoaded(col); yy--) {
+					pos.set(col.getX(), yy, col.getZ());
+					// the highest floor the walls built there: the fighting platform (roof slabs and lanterns are no floor)
+					if (built.contains(pos.asLong()) && level.getBlockState(pos).isCollisionShapeFullBlock(level, pos)
+							&& level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
+							&& level.getBlockState(pos.above(2)).getCollisionShape(level, pos.above(2)).isEmpty()) {
+						out.add(new Post(pos.above().immutable(), true));
+						break;
+					}
+				}
+			}
+		}
+		return out;
+	}
+
+	private static io.github.sotadevop.kingdomquest.npc.KingdomNpc spawnGuard(ServerLevel level, Settlement s, int lvl, BlockPos where, Post post) {
+		io.github.sotadevop.kingdomquest.npc.KingdomNpc g = io.github.sotadevop.kingdomquest.npc.KingdomNpc.TYPE.create(level, EntitySpawnReason.EVENT);
+		if (g == null) {
+			return null;
+		}
+		if (post != null) {
+			g.setPost(post.pos());
+		}
+		g.guardGear(lvl, post != null && post.tower()); // before setup: the bow decides how he fights
+		g.setup("guard", io.github.sotadevop.kingdomquest.npc.KingdomNpc.GUARD_SKIN, s.owner());
+		g.setTier(lvl);
+		g.setHome(s.heart());
+		g.setCustomName(net.minecraft.network.chat.Component.literal(post == null ? "Guard" : post.tower() ? "Tower Guard" : "Gate Guard"));
+		g.setAttached(People.ROLE, GUARD + "|" + s.id());
+		g.snapTo(where.getX() + 0.5, where.getY(), where.getZ() + 0.5, 0, 0);
+		level.addFreshEntity(g);
+		level.sendParticles(ParticleTypes.POOF, g.getX(), g.getY() + 1, g.getZ(), 10, 0.4, 0.6, 0.4, 0.02);
+		return g;
+	}
+
+	/**
+	 * Every minute: the garrison is brought up to strength. All guards look the same (one face, full iron armor).
+	 * Patrols (2/4/6 by barracks level) walk the village; posted guards stand at the gate, before the main building
+	 * and on every tower. Fallen ones are replaced.
+	 */
 	static void guards(ServerLevel level, Settlement s) {
 		int lvl = s.level(Progression.BARRACKS);
 		int want = lvl * 2;
@@ -76,29 +166,39 @@ final class Defense {
 				m -> !(m instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc) && (GUARD + "|" + s.id()).equals(m.getAttached(People.ROLE)))
 				.forEach(Mob::discard);
 		List<Mob> guards = find(level, s, GUARD, 120);
-		int rgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor();
-		for (Mob g : guards) {
-			if (g instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc npc && npc.tier() != lvl) {
-				npc.guardGear(lvl, rgb);
-				npc.setTier(lvl);
-			}
+		List<Post> posts = lvl >= 1 && s.job().isEmpty() ? posts(level, s) : null; // while something is being built, posts stay as they are
+		java.util.Set<Long> wanted = new java.util.HashSet<>();
+		if (posts != null) {
+			posts.forEach(p -> wanted.add(p.pos().asLong()));
 		}
-		for (int i = guards.size(); i < want; i++) {
-			io.github.sotadevop.kingdomquest.npc.KingdomNpc g = io.github.sotadevop.kingdomquest.npc.KingdomNpc.TYPE.create(level, EntitySpawnReason.EVENT);
-			if (g == null) {
+		java.util.Set<Long> manned = new java.util.HashSet<>();
+		int patrols = 0;
+		for (Mob g : guards) {
+			if (!(g instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc npc)) {
 				continue;
 			}
-			BlockPos post = at(s, 16, 33);
-			g.setup("guard", level.getRandom().nextInt(9), s.owner());
-			g.guardGear(lvl, rgb);
-			g.setTier(lvl);
-			g.setHome(s.heart());
-			g.setCustomName(net.minecraft.network.chat.Component.literal("Guard"));
-			g.setAttached(People.ROLE, GUARD + "|" + s.id());
-			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, post.getX(), post.getZ());
-			g.snapTo(post.getX() + 0.5, y, post.getZ() + 0.5, 0, 0);
-			level.addFreshEntity(g);
-			level.sendParticles(ParticleTypes.POOF, g.getX(), g.getY() + 1, g.getZ(), 10, 0.4, 0.6, 0.4, 0.02);
+			boolean gone = posts != null && !wanted.contains(npc.post()) && level.isLoaded(BlockPos.of(npc.post()));
+			if (npc.post() != 0 && (lvl == 0 || gone || !manned.add(npc.post()))) {
+				npc.discard(); // his post is gone (the walls changed) or double: a new guard takes the new one
+				continue;
+			}
+			if (npc.post() == 0) {
+				patrols++;
+			}
+			npc.guardGear(lvl, npc.getMainHandItem().is(net.minecraft.world.item.Items.BOW)); // same face and iron for all, old guards too
+			npc.setTier(lvl);
+		}
+		for (int i = patrols; i < want; i++) {
+			BlockPos yard = at(s, 16, 33);
+			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, yard.getX(), yard.getZ());
+			spawnGuard(level, s, lvl, new BlockPos(yard.getX(), y, yard.getZ()), null);
+		}
+		if (posts != null) {
+			for (Post p : posts) {
+				if (!manned.contains(p.pos().asLong())) {
+					spawnGuard(level, s, lvl, p.pos(), p);
+				}
+			}
 		}
 	}
 

@@ -1788,6 +1788,10 @@ def stables(style, level):
     return b.b
 
 
+# distance from the wall -> depth of the moat there: scarp, bottom, then the bank rising away from the castle
+MOAT_PROFILE = {3: 3, 4: 5, 5: 5, 6: 5, 7: 4, 8: 3, 9: 2, 10: 1}
+
+
 def gate(style, level):
     """Gate track. 1 wooden gate (fence gates under a log lintel); 2 stone gatehouse with a portcullis;
     3 moat around the walls with a drawbridge; 4 arrow traps: dispensers above the gate, fired by levers on the roof."""
@@ -1825,21 +1829,34 @@ def gate(style, level):
         b.put(gx - 2, y, z1 - 2, "ladder", facing="north", waterlogged="false")  # up to the roof, on the inner face
     b.put(gx, 6, z1 + 2, "{color}_wall_banner", facing="south")
     if level >= 3:
-        # dry moat: four blocks wide, five deep, three blocks outside the wall; too deep to climb out of
-        ring = set()
-        for o in (3, 4, 5, 6):
+        # dry moat, three blocks outside the wall: a steep scarp on the castle side (too high to climb), a flat
+        # bottom five deep, and on the far side a bank that rises one block per block like a natural hollow.
+        # In front of the gate it keeps its full depth right up to the landing: only the drawbridge crosses it.
+        ring = {}
+        for o, depth in MOAT_PROFILE.items():
+            cells = set()
             for x in range(x0 - o, x1 + o + 1):
-                ring |= {(x, z0 - o), (x, z1 + o)}
+                cells |= {(x, z0 - o), (x, z1 + o)}
             for z in range(z0 - o, z1 + o + 1):
-                ring |= {(x0 - o, z), (x1 + o, z)}
-        # the ditch follows the land: every column is dug from the ground just outside it (its anchor, 8 out from
-        # the wall, where nothing is ever dug), so it runs unbroken around the whole wall, over hills too
+                cells |= {(x0 - o, z), (x1 + o, z)}
+            for x, z in cells:
+                front = z > z1 and abs(x - gx) <= 4
+                if front and o > 6:
+                    continue  # the landing stands here
+                ring[(x, z)] = 5 if front else depth
+        # the ditch follows the land: every column is dug from the ground just outside it (its anchor, beyond the
+        # bank, where nothing is ever dug), so it runs unbroken around the whole wall, over hills too. In front of
+        # the gate it is tied to the gate's own level (anchor = the heart column, which the mod reads as "level").
         ANCHORS_OF[id(b.b)] = b.anchors
-        for x, z in sorted(ring):
-            b.anchor = (x0 - 8 if x < x0 else x1 + 8 if x > x1 else x, z0 - 8 if z < z0 else z1 + 8 if z > z1 else z)
-            for y in range(-5, 0):
+        far = max(MOAT_PROFILE) + 4
+        for (x, z), depth in sorted(ring.items()):
+            if z > z1 and abs(x - gx) <= 6:
+                b.anchor = (HEART[0], HEART[2])
+            else:
+                b.anchor = (x0 - far if x < x0 else x1 + far if x > x1 else x, z0 - far if z < z0 else z1 + far if z > z1 else z)
+            for y in range(-depth, 0):
                 b.put(x, y, z, "air")
-            b.put(x, -6, z, "coarse_dirt")
+            b.put(x, -depth - 1, z, "coarse_dirt")
         b.anchor = None
         # drawbridge: five wide over the moat (crimson wood doesn't burn: lava trap), a fixed sill in front of the gate
         for x in range(gx - 2, gx + 3):
@@ -2185,8 +2202,9 @@ def lava_trap(style, level):
     """Gate level 5: a murder hole above the gate. Three pistons over a stone channel on the gatehouse roof and a
     lever beside them: pulled, the mod pours lava over the front of the gate for eight seconds."""
     b = B()
-    for block in gate(style, 4).items():
-        b.b[block[0]] = block[1]
+    g4 = gate(style, 4)
+    b.b.update(g4)
+    ANCHORS_OF[id(b.b)] = ANCHORS_OF.pop(id(g4), {})  # the moat keeps following the land (it used to lose its anchors here)
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     for x in range(gx - 1, gx + 2):
@@ -2319,6 +2337,90 @@ def trophy_hall(style, level):
         for x in (x0 + 2, x1 - 2):
             b.put(x, 4, z0 + 1, "{color}_wall_banner", facing="south")
             b.put(x, 3, z1 - 1, "lantern", hanging="true", waterlogged="false")
+    return b.b
+
+
+ROYAL = (22, -42, 38, -30)  # the lord's own house, north-east of the keep; door south
+
+
+def royal_house(style, level):
+    """The lord's own house: the biggest house of the settlement, two storeys of stone and timber. Downstairs a hall
+    with a hearth, a long table and a library wall; a real staircase leads up to the bedchamber with a double bed,
+    wardrobes and a writing desk. Level 2 furnishes it richly: carpets, more books, banners and gold."""
+    b = B()
+    w = STYLES[style]["wood"]
+    x0, z0, x1, z1 = ROYAL
+    cx = (x0 + x1) // 2
+    hearth = (x1 - 1, z0 + 6)
+    hall(b, style, x0, z0, x1, z1, 9, "s", kind="stone", base_h=4, chimney=hearth, windows_back=False)
+    # the upper floor, open over the staircase along the west wall
+    steps = [(x0 + 1, z1 - 2 - i) for i in range(5)]
+    for x in range(x0 + 1, x1):
+        for z in range(z0 + 1, z1):
+            if (x, z) == hearth:
+                continue
+            b.put(x, 5, z, "air" if (x, z) in steps else w + "_planks")
+    for i, (x, z) in enumerate(steps):
+        b.put(x, 1 + i, z, w + "_stairs", facing="north", **ST)
+        for y in range(1, 1 + i):
+            b.put(x, y, z, w + "_planks")
+    for z in range(z1 - 6, z1 - 1):  # a rail beside the stairwell upstairs
+        b.put(x0 + 2, 6, z, w + "_fence")
+    # downstairs: the hall
+    b.put(hearth[0] - 1, 1, hearth[1], "campfire", facing="west", lit="true", signal_fire="false", waterlogged="false")
+    for z in (hearth[1] - 1, hearth[1] + 1):
+        b.put(hearth[0], 1, z, "stone_bricks")
+    for z in range(z1 - 1, z0 + 3, -1):
+        b.put(cx, 1, z, "{color}_carpet")
+    for x in range(cx + 3, cx + 6):  # the long table with benches
+        b.put(x, 1, z0 + 6, w + "_slab", type="top", waterlogged="false")
+        b.put(x, 1, z0 + 5, w + "_stairs", facing="north", **ST)
+        b.put(x, 1, z0 + 7, w + "_stairs", facing="south", **ST)
+    for x in range(x0 + 2, cx - 1):  # the library wall
+        b.put(x, 1, z0 + 1, "bookshelf")
+        b.put(x, 2, z0 + 1, "bookshelf")
+    b.put(cx - 1, 1, z0 + 1, "lectern", facing="south", has_book="false", powered="false")
+    for x in (x1 - 1, x1 - 2):
+        b.put(x, 1, z0 + 1, "chest", facing="south", type="single", waterlogged="false")
+    b.put(x1 - 1, 1, z1 - 1, "barrel", facing="up", open="false")
+    b.put(x1 - 2, 1, z1 - 1, "crafting_table")
+    b.put(x1 - 3, 1, z1 - 1, "furnace", facing="north", lit="false")
+    for x in (cx - 4, cx + 4):
+        b.put(x, 4, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    # upstairs: the bedchamber
+    for x in (cx, cx + 1):
+        b.put(x, 6, z0 + 1, "{color}_bed", facing="north", part="head", occupied="false")
+        b.put(x, 6, z0 + 2, "{color}_bed", facing="north", part="foot", occupied="false")
+    for x in (cx - 1, cx + 2):
+        b.put(x, 6, z0 + 1, "bookshelf")
+        b.put(x, 7, z0 + 1, "lantern", hanging="false", waterlogged="false")
+    for x in range(cx - 1, cx + 3):
+        for z in range(z0 + 3, z0 + 6):
+            b.put(x, 6, z, "{color}_carpet")
+    for z in (z1 - 2, z1 - 3):
+        b.put(x1 - 1, 6, z, "chest", facing="west", type="single", waterlogged="false")
+    b.put(x1 - 1, 6, z0 + 2, "lectern", facing="west", has_book="false", powered="false")
+    b.put(x1 - 1, 6, z0 + 1, "bookshelf")
+    b.put(cx, 9, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    if level >= 2:
+        for x in range(x0 + 4, cx - 1):
+            b.put(x, 6, z0 + 1, "bookshelf")
+            b.put(x, 7, z0 + 1, "bookshelf")
+        b.put(x0 + 3, 6, z0 + 1, "enchanting_table")
+        for x in range(cx - 3, cx + 5):
+            for z in range(z0 + 6, z0 + 9):
+                if (x, 6, z) not in b.b and (x, z) != hearth:
+                    b.put(x, 6, z, "{color}_carpet")
+        for z in (z0 + 2, z1 - 2):
+            b.put(x1 - 1, 1, z, "gold_block")
+            b.put(x1 - 1, 2, z, "lantern", hanging="false", waterlogged="false")
+        b.put(x0 + 3, 1, z1 - 1, "jukebox", has_record="false")
+        b.put(x0 + 4, 1, z1 - 1, "anvil", facing="north")
+        for x in (cx - 5, cx + 5):
+            if (x, 6, z1 + 1) not in b.b:
+                b.put(x, 6, z1 + 1, "{color}_wall_banner", facing="south")
+        for x in (cx - 4, cx + 4):
+            b.put(x, 9, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     return b.b
 
 
@@ -2666,6 +2768,7 @@ def build_jobs(styles=None):
             jobs.append((style, f"apiary_{level}", apiary(style, level), 150, APIARY_STORE,
                          [["bee", 52, 1, 5], ["bee", 50, 1, 7], ["bee", 54, 1, 6]] if level == 1 else [["bee", 51, 1, 6], ["bee", 53, 1, 7]]))
             jobs.append((style, f"trophy_{level}", trophy_hall(style, level), 200, None, None))
+            jobs.append((style, f"royal_{level}", royal_house(style, level), 360, None, None))
         for level in (1, 2, 3):
             jobs.append((style, f"kennel_{level}", kennel(style, level), 120, None, None))
         jobs.append((style, "cellar_3", secret_vault(style, 3), 200, CELLAR_STORE, None))
