@@ -959,7 +959,7 @@ public final class Settlements {
 		});
 	}
 
-	/** Per job: columns next to other buildings that its land shaping leaves alone. */
+	/** Per job: columns in front of other buildings' doors that its land shaping leaves alone. */
 	private static final Map<String, Set<Long>> PROTECTED = new HashMap<>();
 
 	/** The side of the wall ring a position outside it faces, in the template's frame: 0 north, 1 south (the gate), 2 west, 3 east. */
@@ -1612,22 +1612,21 @@ public final class Settlements {
 		Set<Long> roadBlocks = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		Set<Long> loose = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
-		// the ground around buildings that already stand (2 blocks out: door steps, porches, the strip by the wall)
-		// is theirs: this job's slopes and terraces never cut it away or heap earth onto it
+		// the ground in front of the doors of buildings that already stand (2 blocks around each door: the step,
+		// the porch, where the lane arrives) is theirs: this job's slopes and terraces never cut it away or heap onto it
 		Set<Long> keepClear = index < cols ? PROTECTED.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
 			Set<Long> out = new HashSet<>();
 			s.built().forEach((otherTrack, otherBlocks) -> {
-				if (otherTrack.equals(s.jobTrack()) || otherTrack.equals(Progression.ROADS) || otherTrack.equals(Progression.LAMPS)) {
+				if (otherTrack.equals(s.jobTrack())) {
 					return;
 				}
-				Set<Long> cols0 = new HashSet<>();
 				for (long p : otherBlocks) {
-					cols0.add(BlockPos.asLong(BlockPos.getX(p), 0, BlockPos.getZ(p)));
-				}
-				for (long c0 : cols0) {
-					for (int dx = -2; dx <= 2; dx++) {
-						for (int dz = -2; dz <= 2; dz++) {
-							out.add(BlockPos.asLong(BlockPos.getX(c0) + dx, 0, BlockPos.getZ(c0) + dz));
+					Block b = level.getBlockState(BlockPos.of(p)).getBlock();
+					if (b instanceof net.minecraft.world.level.block.DoorBlock || b instanceof net.minecraft.world.level.block.FenceGateBlock) {
+						for (int dx = -2; dx <= 2; dx++) {
+							for (int dz = -2; dz <= 2; dz++) {
+								out.add(BlockPos.asLong(BlockPos.getX(p) + dx, 0, BlockPos.getZ(p) + dz));
+							}
 						}
 					}
 				}
