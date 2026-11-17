@@ -1704,6 +1704,29 @@ public final class Settlements {
 					built.add(pos.asLong());
 				}
 			}
+			if (track.equals(Progression.ROADS)) {
+				// whatever cut the land since, no road block is left hanging: earth is carried down under it to the
+				// ground (like the masonry under a building's ground course). Water stays: there the road is a causeway
+				BlockState earth = SiteWork.subsoil(surface);
+				Set<Long> ditch = moatColumns(s); // never a land bridge over the moat: the drawbridge is the only way across
+				for (long r : List.copyOf(built)) {
+					BlockPos rp = BlockPos.of(r);
+					if (level.getBlockState(rp).isAir() || ditch.contains(BlockPos.asLong(rp.getX(), 0, rp.getZ()))) {
+						continue;
+					}
+					for (int down = 1; down <= 24; down++) {
+						BlockPos q = rp.below(down);
+						BlockState qs = level.getBlockState(q);
+						if (all.contains(q.asLong()) && !qs.isAir() || !(qs.isAir() || qs.canBeReplaced()) || !qs.getFluidState().isEmpty()) {
+							break;
+						}
+						level.setBlock(q, earth, NO_DROPS);
+						if (have.add(q.asLong())) {
+							built.add(q.asLong());
+						}
+					}
+				}
+			}
 			s = s.withBuilt(track, built);
 		}
 		put(server, s);

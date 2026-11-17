@@ -383,7 +383,7 @@ public final class SiteWork {
 			// nobody owns is land too
 			if (margin ? natural(st) || earthwork(st) : terrain(st) || earthwork(st)) {
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
-				if (level.getBlockState(pos.above()).is(BlockTags.LOGS) && !built.contains(pos.above().asLong())) {
+				if (trunk(level.getBlockState(pos.above())) && !built.contains(pos.above().asLong())) {
 					removeTreeAt(level, pos.above(), built); // the ground under a tree was cut: the tree goes too
 				}
 			}
