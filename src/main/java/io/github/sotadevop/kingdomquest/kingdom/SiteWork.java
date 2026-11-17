@@ -85,7 +85,7 @@ public final class SiteWork {
 			Blocks.SUGAR_CANE, Blocks.CACTUS, Blocks.BAMBOO, Blocks.SWEET_BERRY_BUSH, Blocks.SNOW_BLOCK, Blocks.POWDER_SNOW, Blocks.MUD,
 			Blocks.SANDSTONE, Blocks.RED_SANDSTONE, Blocks.POINTED_DRIPSTONE, Blocks.DRIPSTONE_BLOCK, Blocks.BROWN_MUSHROOM,
 			Blocks.RED_MUSHROOM, Blocks.BROWN_MUSHROOM_BLOCK, Blocks.RED_MUSHROOM_BLOCK, Blocks.MUSHROOM_STEM, Blocks.BEE_NEST,
-			Blocks.COBWEB, Blocks.LILY_PAD, Blocks.KELP, Blocks.KELP_PLANT, Blocks.SEAGRASS, Blocks.TALL_SEAGRASS);
+			Blocks.COBWEB, Blocks.MANGROVE_ROOTS, Blocks.MUDDY_MANGROVE_ROOTS, Blocks.LILY_PAD, Blocks.KELP, Blocks.KELP_PLANT, Blocks.SEAGRASS, Blocks.TALL_SEAGRASS);
 
 	private SiteWork() {
 	}
@@ -394,6 +394,8 @@ public final class SiteWork {
 		}
 		// a pad over lower land is built up solid: earth on top, stone below, and its rim is a masonry wall
 		BlockState wall = wallFor(surface);
+		// a terrace step of up to 2 blocks is a grassy bank; only a real step (3 and more) gets a stone face
+		boolean high = terrace && openBelow(level, x, fillTop, z, built) >= 3;
 		for (int y = fillTop; y > fillTop - depth; y--) {
 			pos.set(x, y, z);
 			if (built.contains(pos.asLong()) && !(bank && roads.contains(pos.asLong()))) {
@@ -401,12 +403,31 @@ public final class SiteWork {
 			}
 			// a terrace block whose side is open is part of a retaining wall: masonry. Where the next bench later
 			// covers it, the stone is simply hidden; every face that stays in sight is stone, never bare earth
-			boolean face = terrace && depth > 1 && y < fillTop && openSide(level, pos, built);
+			boolean face = high && depth > 1 && y < fillTop && openSide(level, pos, built);
 			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face;
 			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
 		}
+	}
+
+	/** How far the land beside a column lies below {@code top} at its lowest side (open blocks counted, at most 3). */
+	private static int openBelow(ServerLevel level, int x, int top, int z, Set<Long> built) {
+		int most = 0;
+		BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			int n = 0;
+			while (n < 3) {
+				p.set(x + d.getStepX(), top - n, z + d.getStepZ());
+				BlockState st = level.getBlockState(p);
+				if (built.contains(p.asLong()) || !(st.isAir() || st.canBeReplaced() || !st.getFluidState().isEmpty())) {
+					break;
+				}
+				n++;
+			}
+			most = Math.max(most, n);
+		}
+		return most;
 	}
 
 	/** Air, water or a plant beside this block on any side (not counting built blocks): it would show. */

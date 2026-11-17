@@ -959,6 +959,24 @@ public final class Settlements {
 		});
 	}
 
+	/** The side of the wall ring a position outside it faces, in the template's frame: 0 north, 1 south (the gate), 2 west, 3 east. */
+	private static final int SOUTH = 1;
+
+	private static int ringSide(BlockPos rel, Rotation turn) {
+		Rotation back = switch (turn) {
+			case CLOCKWISE_90 -> Rotation.COUNTERCLOCKWISE_90;
+			case COUNTERCLOCKWISE_90 -> Rotation.CLOCKWISE_90;
+			default -> turn;
+		};
+		BlockPos t = Template.rotate(rel, back);
+		int ex = t.getX() < -63 ? -63 - t.getX() : Math.max(0, t.getX() - 69);
+		int ez = t.getZ() < -56 ? -56 - t.getZ() : Math.max(0, t.getZ() - 40);
+		if (ez >= ex) {
+			return t.getZ() > -8 ? SOUTH : 0;
+		}
+		return t.getX() < 3 ? 2 : 3;
+	}
+
 	/** Water at the surface within two blocks of a column (looking through what the gate track built: bridge, landing). */
 	private static boolean waterNear(ServerLevel level, int x, int z, Set<Long> skip) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -994,8 +1012,40 @@ public final class Settlements {
 				BlockState surface = SiteWork.surface(level, s.heart());
 				List<Template.Placement> out = new ArrayList<>(base.size());
 				List<Template.Placement> banks = new ArrayList<>();
+				// each side of the ring decides on its own (agreed with the user): where the land along a side falls
+				// away or rises steeply, that side gets no ditch and the slope is its defence, as at a hill castle.
+				// The gate side always keeps its ditch: the drawbridge spans it.
+				Rotation turn = Rotation.values()[s.rotation()];
+				int[][] count = new int[4][2]; // side -> {columns, steep columns}
+				Set<Long> seen = new HashSet<>();
+				for (Template.Placement p : base) {
+					if (!(p.offset().getY() < 0 && (p.state().isAir() || p.state().is(Blocks.COARSE_DIRT)))
+							|| p.anchor().getX() == 0 && p.anchor().getZ() == 0) {
+						continue;
+					}
+					BlockPos here = s.heart().offset(p.offset());
+					if (!seen.add(BlockPos.asLong(here.getX(), 0, here.getZ()))) {
+						continue;
+					}
+					BlockPos col = s.heart().offset(p.anchor());
+					int g = ground.computeIfAbsent(col.asLong(), c -> SiteWork.groundDeep(level, col.getX(), col.getZ(), s.heart().getY()) + 1
+							- s.heart().getY());
+					int local = SiteWork.groundDeep(level, here.getX(), here.getZ(), s.heart().getY(), mine) + 1 - s.heart().getY();
+					int side = ringSide(p.offset(), turn);
+					count[side][0]++;
+					if (Math.abs(local - g) > 4) {
+						count[side][1]++;
+					}
+				}
+				boolean[] steep = new boolean[4];
+				for (int side = 0; side < 4; side++) {
+					steep[side] = side != SOUTH && count[side][1] * 5 > count[side][0];
+				}
 				for (Template.Placement p : base) {
 					boolean moat = p.offset().getY() < 0 && (p.state().isAir() || p.state().is(Blocks.COARSE_DIRT));
+					if (moat && steep[ringSide(p.offset(), turn)]) {
+						continue;
+					}
 					if (moat) {
 						BlockPos here = s.heart().offset(p.offset());
 						// by the sea, a lake or a river the water is the moat: a ditch dug there only floods in patches

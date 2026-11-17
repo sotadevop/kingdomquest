@@ -1030,6 +1030,14 @@ public final class FieldTest {
 		centres.put("corner", h.offset(Template.rotate(new BlockPos(-60, 0, -52), r)));
 		centres.put("square", h);
 		java.util.regex.Pattern rel = java.util.regex.Pattern.compile("\\((-?\\d+),(-?\\d+),(-?\\d+)\\)");
+		int doorViews = 0;
+		for (String text : samples.getOrDefault("doors unreached", List.of())) {
+			java.util.regex.Matcher m = rel.matcher(text);
+			if (m.find() && doorViews < 3) {
+				centres.put("door" + (++doorViews) + "_" + text.substring(0, text.indexOf(' ')),
+						h.offset(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3))));
+			}
+		}
 		for (Map.Entry<String, List<String>> e : samples.entrySet()) {
 			for (String text : e.getValue()) {
 				java.util.regex.Matcher m = rel.matcher(text);
