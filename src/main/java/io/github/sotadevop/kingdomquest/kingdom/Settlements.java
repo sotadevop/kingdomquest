@@ -475,9 +475,17 @@ public final class Settlements {
 	 * building would grade away the land in front of a raised house and leave its door hanging (field test).
 	 */
 	static Set<Long> doorApproaches(ServerLevel level, Settlement s) {
+		return doorApproaches(level, s, "");
+	}
+
+	/** {@link #doorApproaches(ServerLevel, Settlement)} without the doors of track {@code except}. */
+	static Set<Long> doorApproaches(ServerLevel level, Settlement s, String except) {
 		Set<Long> out = new HashSet<>();
-		for (List<Long> blocks : s.built().values()) {
-			for (long p : blocks) {
+		for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
+			if (e.getKey().equals(except)) {
+				continue;
+			}
+			for (long p : e.getValue()) {
 				BlockPos d = BlockPos.of(p);
 				BlockState st = level.getBlockState(d);
 				if (!(st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
@@ -1646,25 +1654,15 @@ public final class Settlements {
 		Set<Long> roadBlocks = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		Set<Long> loose = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
-		// the ground in front of the doors of buildings that already stand (2 blocks around each door: the step,
-		// the porch, where the lane arrives) is theirs: this job's slopes and terraces never cut it away or heap onto it
+		// the approach to the doors of buildings that already stand is theirs: this job's slopes, terraces and plot
+		// levelling never cut it away or heap onto it. Its own blocks still go where they belong (field test: the
+		// main building's plot covers the whole square and flattened the land in front of raised houses)
 		Set<Long> keepClear = index < cols ? PROTECTED.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
-			Set<Long> out = new HashSet<>();
-			s.built().forEach((otherTrack, otherBlocks) -> {
-				if (otherTrack.equals(s.jobTrack())) {
-					return;
-				}
-				for (long p : otherBlocks) {
-					Block b = level.getBlockState(BlockPos.of(p)).getBlock();
-					if (b instanceof net.minecraft.world.level.block.DoorBlock || b instanceof net.minecraft.world.level.block.FenceGateBlock) {
-						for (int dx = -2; dx <= 2; dx++) {
-							for (int dz = -2; dz <= 2; dz++) {
-								out.add(BlockPos.asLong(BlockPos.getX(p) + dx, 0, BlockPos.getZ(p) + dz));
-							}
-						}
-					}
-				}
-			});
+			Set<Long> out = doorApproaches(level, s, s.jobTrack());
+			for (Template.Placement p : list) {
+				BlockPos q = s.heart().offset(p.offset());
+				out.remove(BlockPos.asLong(q.getX(), 0, q.getZ()));
+			}
 			return out;
 		}) : Set.of();
 		// straight out from this building's own doors the land is an earth ramp (the bank's slope), never a terrace
@@ -1692,7 +1690,7 @@ public final class Settlements {
 			if (moat.contains(colKey)) {
 				continue; // the moat is nobody's building ground: never levelled, never filled
 			}
-			if (!c.pad() && keepClear.contains(colKey)) {
+			if (keepClear.contains(colKey)) {
 				continue;
 			}
 			SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank || !c.pad() && ramps.contains(colKey), roadBlocks);
