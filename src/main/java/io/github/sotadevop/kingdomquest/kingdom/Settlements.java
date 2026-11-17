@@ -412,7 +412,11 @@ public final class Settlements {
 		// on the median height of its land, but never more than 10 blocks above the lowest ground under it:
 		// up to 3 blocks of drop get a retaining wall, 4-10 a deck on piers; more and the building steps down the slope
 		int dy = Math.min(hs.get(hs.size() / 2), hs.get(0) + 10);
-		dy = Math.max(-12, Math.min(12, dy));
+		// at most 7 from the square: the trunk roads run near the square's level and the lane from a trunk to a door is
+		// often only 5-8 blocks long, so a building lower or higher than that can't be walked to (field test: houses
+		// at -11 on steep sites sat in pits nobody could climb out of). Steeper land around the plot is cut and
+		// terraced instead.
+		dy = Math.max(-LIFT_LIMIT, Math.min(LIFT_LIMIT, dy));
 		return Math.abs(dy) < 2 ? 0 : dy;
 	}
 
@@ -1002,6 +1006,8 @@ public final class Settlements {
 		});
 	}
 
+	/** How far above or below the square an add-on's plot may lie. */
+	static final int LIFT_LIMIT = 7;
 	/** Per job: columns its land shaping filled up (made ground), for {@link SiteWork#dressFaces}. */
 	private static final Map<String, Set<Long>> FILLED = new HashMap<>();
 	/** Per job: columns in front of other buildings' doors that its land shaping leaves alone. */
