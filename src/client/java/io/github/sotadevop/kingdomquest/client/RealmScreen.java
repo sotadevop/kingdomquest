@@ -216,18 +216,6 @@ public class RealmScreen extends Screen {
 			next.active = this.page < pages - 1;
 			this.themed.add(this.addRenderableWidget(prev));
 			this.themed.add(this.addRenderableWidget(next));
-			if (this.tab == 2) {
-				for (int i = 0; i < ROWS; i++) {
-					int idx = this.page * ROWS + i;
-					if (idx >= list.size()) {
-						break;
-					}
-					JsonObject p = list.get(idx).getAsJsonObject();
-					this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.look"),
-							b -> send("realm_skin|" + p.get("uuid").getAsString() + "|" + (p.get("skin").getAsInt() + 1)))
-							.bounds(this.left + W - 8 - 60, rowY(i) - 2, 56, 14).build()));
-				}
-			}
 		}
 		this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 60, fy, 60, 18).build()));
@@ -235,6 +223,19 @@ public class RealmScreen extends Screen {
 
 	private int rowY(int i) {
 		return this.top + 50 + i * 18;
+	}
+
+	private static final String[] LOOKS = {"Steve", "Alex", "Ari", "Efe", "Kai", "Makena", "Noor", "Sunny", "Zuri"};
+	private static final int LOOK_W = 84;
+
+	/** Left edge of the "look" field in a people row; a click on it gives that person the next look. */
+	private int lookX() {
+		return this.left + W - 8 - LOOK_W;
+	}
+
+	/** Guards all wear the same face and armor: their look is not changed one by one. */
+	private static boolean fixedLook(JsonObject person) {
+		return "Guard".equals(person.get("role").getAsString());
 	}
 
 	// ---- map geometry ----
@@ -616,11 +617,28 @@ public class RealmScreen extends Screen {
 			int x = o.get("x").getAsInt();
 			int z = o.get("z").getAsInt();
 			g.text(this.font, x + " " + o.get("y").getAsInt() + " " + z + "  " + direction(x, z), mapX0() + 230, y, t.secondary(), false);
+			if (people && !fixedLook(o)) {
+				// drawn and clicked by the screen itself (the small buttons that were here could not be pressed)
+				String look = Component.translatable("kingdomquest.realm.look").getString() + ": "
+						+ LOOKS[Math.floorMod(o.get("skin").getAsInt(), LOOKS.length)] + " >";
+				g.fill(lookX(), y - 3, lookX() + LOOK_W, y + 11, t.secondary() & 0x00FFFFFF | 0x38000000);
+				g.text(this.font, Text.fit(this.font, look, LOOK_W - 6), lookX() + 4, y, t.text(), false);
+			}
 		}
 	}
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+		if (this.tab == 2 && event.x() >= lookX() && event.x() <= lookX() + LOOK_W) {
+			JsonArray list = arr("people");
+			for (int i = 0; i < ROWS && this.page * ROWS + i < list.size(); i++) {
+				JsonObject p = list.get(this.page * ROWS + i).getAsJsonObject();
+				if (event.y() >= rowY(i) - 3 && event.y() <= rowY(i) + 11 && !fixedLook(p)) {
+					send("realm_skin|" + p.get("uuid").getAsString() + "|" + (p.get("skin").getAsInt() + 1));
+					return true;
+				}
+			}
+		}
 		if (this.tab == 0 && inMap(event.x(), event.y())) {
 			double[] f = view(0);
 			for (Node n : this.nodes) {

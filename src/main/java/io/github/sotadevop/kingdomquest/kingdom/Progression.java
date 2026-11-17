@@ -135,6 +135,13 @@ public final class Progression {
 	public static final String APIARY = "apiary";
 	public static final String KENNEL = "kennel";
 	public static final String TROPHY = "trophy";
+	/** The lord's own house. */
+	public static final String ROYAL = "royal";
+	public static final List<Step> ROYAL_STEPS = List.of(
+			new Step(ROYAL, "royal_1", 1, "kingdomquest.addon.royal_1", 6, adv("adventure/sleep_in_bed"), "kingdomquest.req.sleep",
+					List.of(item(Items.STONE_BRICKS, 128), tag(ItemTags.PLANKS, "planks", 96), item(Items.GLASS, 24))),
+			new Step(ROYAL, "royal_2", 2, "kingdomquest.addon.royal_2", 8, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+					List.of(item(Items.GOLD_INGOT, 18), item(Items.BOOKSHELF, 12), item(Items.LANTERN, 6))));
 	public static final Map<String, List<Step>> ADDONS_3 = Map.of(
 			LIBRARY, List.of(
 					new Step(LIBRARY, "library_1", 1, "kingdomquest.addon.library_1", 7, adv("story/enchant_item"), "kingdomquest.req.enchant",
@@ -269,7 +276,7 @@ public final class Progression {
 					List.of(item(Items.GOLD_BLOCK, 2), item(Items.RESPAWN_ANCHOR, 1))));
 
 	/** Order the tracks appear in the menu. */
-	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
+	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
 
 	public static List<Step> steps(String track) {
@@ -284,6 +291,7 @@ public final class Progression {
 			case LAIR -> LAIR_STEPS;
 			case NETHER -> NETHER_STEPS;
 			case GUILD -> GUILD_STEPS;
+			case ROYAL -> ROYAL_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
