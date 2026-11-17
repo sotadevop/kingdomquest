@@ -141,7 +141,9 @@ public final class FieldTest {
 
 	private static boolean runSite(MinecraftServer server, ServerLevel level, Scenario sc, int index, List<BlockPos> used, Path dir) {
 		BlockPos origin = new BlockPos((index % 6) * 2500 - 6000, 80, (index / 6) * 2500 - 2500);
+		KingdomQuest.LOG.info("Field test {}: looking for a site", sc.name());
 		BlockPos heart = locate(level, sc, origin, used);
+		KingdomQuest.LOG.info("Field test {}: site {}", sc.name(), heart);
 		if (heart == null) {
 			REPORT.append("## ").append(sc.name()).append("\n\nNo site found near ").append(origin.toShortString()).append(".\n\n");
 			SUMMARY.add("| " + sc.name() + " | not found |");
@@ -157,6 +159,7 @@ public final class FieldTest {
 				level.getChunk(cx, cz);
 			}
 		}
+		KingdomQuest.LOG.info("Field test {}: chunks loaded", sc.name());
 		String biome = level.getBiome(heart).getRegisteredName();
 		Snapshot base = Snapshot.take(level, heart, Set.of());
 		int relief = Settlements.relief(level, heart);
@@ -227,6 +230,8 @@ public final class FieldTest {
 			}
 			blame(level, s, main.building(), destroyedBefore, problems);
 			check(level, s, base, main.building(), (System.nanoTime() - t2) / 1_000_000, problems, dir, sc.name(), destroyedBefore);
+			KingdomQuest.LOG.info("Field test {}: {} built and checked", sc.name(), main.building());
+			write(dir);
 		}
 		check(level, s, base, "final", 0, problems, dir, sc.name(), destroyedBefore);
 		StringBuilder levels = new StringBuilder();
