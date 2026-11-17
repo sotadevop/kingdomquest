@@ -1658,6 +1658,11 @@ public final class Settlements {
 					continue;
 				}
 				BlockPos p = BlockPos.of(old);
+				if (level.getBlockState(p).isAir()) {
+					// opened earthwork over a cut road: it just leaves the list. Filled back as ground it put a turf
+					// block on top of the road, and the road climbed one block every time it was worked out (field test)
+					continue;
+				}
 				boolean ground = track.equals(Progression.ROADS) && level.getBlockState(p.below()).isSolid();
 				level.setBlock(p, !ground ? Blocks.AIR.defaultBlockState()
 						: level.getBlockState(p.above()).isSolid() ? Blocks.DIRT.defaultBlockState() : surface, NO_DROPS);
