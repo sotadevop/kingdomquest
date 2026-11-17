@@ -59,9 +59,9 @@ jobs:
           printf 'level-type=minecraft\\:normal\nlevel-seed=20261117\nonline-mode=false\nspawn-protection=0\nmax-tick-time=-1\nview-distance=4\nsimulation-distance=4\n' > run/server.properties
           touch server.log
           {
-            for i in $(seq 1 600); do grep -q 'Done (' server.log && break; sleep 2; done
+            for i in $(seq 1 600); do grep -q 'Done (' server.log && break; grep -q 'BUILD FAILED\|Compilation failed' server.log && break; sleep 2; done
             echo "kingdomquest fieldtest ${{ matrix.site }}"
-            for i in $(seq 1 1650); do grep -q 'Field test finished' server.log && break; grep -q 'Crash report\|Stopping the server' server.log && break; sleep 2; done
+            for i in $(seq 1 1650); do grep -q 'Field test finished' server.log && break; grep -q 'Crash report\|Stopping the server\|BUILD FAILED' server.log && break; sleep 2; done
             # a stack dump of the server thread if it is still busy
             pid=$(jps -l | grep -i -E 'KnotServer|knot|minecraft' | awk '{print $1}' | head -1); [ -n "$pid" ] && jstack "$pid" > jstack.txt 2>/dev/null || true
             echo "stop"

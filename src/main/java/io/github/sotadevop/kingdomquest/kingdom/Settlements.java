@@ -1616,12 +1616,12 @@ public final class Settlements {
 		// is theirs: this job's slopes and terraces never cut it away or heap earth onto it
 		Set<Long> keepClear = index < cols ? PROTECTED.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
 			Set<Long> out = new HashSet<>();
-			s.built().forEach((track, list) -> {
-				if (track.equals(s.jobTrack()) || track.equals(Progression.ROADS) || track.equals(Progression.LAMPS)) {
+			s.built().forEach((otherTrack, otherBlocks) -> {
+				if (otherTrack.equals(s.jobTrack()) || otherTrack.equals(Progression.ROADS) || otherTrack.equals(Progression.LAMPS)) {
 					return;
 				}
 				Set<Long> cols0 = new HashSet<>();
-				for (long p : list) {
+				for (long p : otherBlocks) {
 					cols0.add(BlockPos.asLong(BlockPos.getX(p), 0, BlockPos.getZ(p)));
 				}
 				for (long c0 : cols0) {
