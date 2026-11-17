@@ -1646,6 +1646,37 @@ public final class Settlements {
 			// take up what is left hanging or buried, and lay what is missing (new lanes included)
 			String prefix = s.id() + "|" + job + "|";
 			FOLLOWED.keySet().removeIf(k -> k.startsWith(prefix));
+			if (track.equals(Progression.ROADS)) {
+				// road blocks left hanging (the land under them was cut since) are taken up first, so the road is
+				// worked out again from the land itself and laid on it, with proper fill where a ramp has to be
+				// raised. Filling under them instead locked a misplaced block in place (a 4-block step at a gate)
+				Set<Long> ditch = moatColumns(s);
+				Set<Long> others = new HashSet<>();
+				s.built().forEach((k2, v) -> {
+					if (!k2.equals(Progression.ROADS)) {
+						others.addAll(v);
+					}
+				});
+				List<Long> kept = new ArrayList<>();
+				boolean any = false;
+				for (long r : s.built().getOrDefault(track, List.of())) {
+					BlockPos rp = BlockPos.of(r);
+					BlockState here = level.getBlockState(rp);
+					BlockState under = level.getBlockState(rp.below());
+					boolean hanging = !here.isAir() && !(here.getBlock() instanceof net.minecraft.world.level.block.SlabBlock)
+							&& (under.isAir() || under.canBeReplaced()) && under.getFluidState().isEmpty() && !others.contains(rp.below().asLong())
+							&& !ditch.contains(BlockPos.asLong(rp.getX(), 0, rp.getZ()));
+					if (hanging) {
+						level.setBlock(rp, Blocks.AIR.defaultBlockState(), NO_DROPS);
+						any = true;
+					} else {
+						kept.add(r);
+					}
+				}
+				if (any) {
+					s = s.withBuilt(track, kept);
+				}
+			}
 			List<Template.Placement> list = placements(s, job);
 			Set<Long> next = new HashSet<>();
 			for (Template.Placement p : list) {
@@ -1702,29 +1733,6 @@ public final class Settlements {
 				SiteWork.clearAbove(level, pos, all);
 				if (have.add(pos.asLong())) {
 					built.add(pos.asLong());
-				}
-			}
-			if (track.equals(Progression.ROADS)) {
-				// whatever cut the land since, no road block is left hanging: earth is carried down under it to the
-				// ground (like the masonry under a building's ground course). Water stays: there the road is a causeway
-				BlockState earth = SiteWork.subsoil(surface);
-				Set<Long> ditch = moatColumns(s); // never a land bridge over the moat: the drawbridge is the only way across
-				for (long r : List.copyOf(built)) {
-					BlockPos rp = BlockPos.of(r);
-					if (level.getBlockState(rp).isAir() || ditch.contains(BlockPos.asLong(rp.getX(), 0, rp.getZ()))) {
-						continue;
-					}
-					for (int down = 1; down <= 24; down++) {
-						BlockPos q = rp.below(down);
-						BlockState qs = level.getBlockState(q);
-						if (all.contains(q.asLong()) && !qs.isAir() || !(qs.isAir() || qs.canBeReplaced()) || !qs.getFluidState().isEmpty()) {
-							break;
-						}
-						level.setBlock(q, earth, NO_DROPS);
-						if (have.add(q.asLong())) {
-							built.add(q.asLong());
-						}
-					}
 				}
 			}
 			s = s.withBuilt(track, built);
