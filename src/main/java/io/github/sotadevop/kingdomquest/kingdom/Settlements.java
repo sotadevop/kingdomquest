@@ -420,7 +420,85 @@ public final class Settlements {
 		// building's plot, which stays at the square's level: next to the main plot that is only a few blocks
 		int limit = Math.max(2, Math.min(LIFT_LIMIT, roomToSquare(s, t) - 1));
 		dy = Math.max(-limit, Math.min(limit, dy));
+		// plots that face each other share a level: a door looking onto a neighbour's plot within 4 blocks, either
+		// way round, puts both on the same level (one block either side), or the door looks at a wall (field test)
+		int[] range = facingLevels(level, s, t, cols);
+		if (range != null) {
+			dy = Math.max(range[0], Math.min(range[1], dy));
+		}
 		return Math.abs(dy) < 2 ? 0 : dy;
+	}
+
+	/**
+	 * The levels (lift, relative to the heart) a new plot may take so it meets the doors around it: an existing door
+	 * whose way out (4 blocks, 3 wide, both sides) crosses the new plot wants the plot at its own floor; a door of the
+	 * new building whose way out crosses an existing building wants the plot at that building's level. Null: free.
+	 */
+	private static int[] facingLevels(ServerLevel level, Settlement s, Template t, Set<Long> plot) {
+		int lo = Integer.MIN_VALUE, hi = Integer.MAX_VALUE;
+		boolean any = false;
+		BlockPos h = s.heart();
+		Map<Long, Integer> levelOf = new HashMap<>(); // column -> level of the building standing there
+		for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
+			String track = e.getKey();
+			if (!LIFTED.contains(track) && !track.equals(Settlement.MAIN)) {
+				continue;
+			}
+			int lift = track.equals(Settlement.MAIN) ? 0 : s.level("lift_" + track);
+			for (long p : e.getValue()) {
+				BlockPos b = BlockPos.of(p);
+				long col = BlockPos.asLong(b.getX() - h.getX(), 0, b.getZ() - h.getZ());
+				levelOf.putIfAbsent(col, lift);
+				Block block = level.getBlockState(b).getBlock();
+				if (block instanceof net.minecraft.world.level.block.DoorBlock
+						&& level.getBlockState(b).getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+								== net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+					int floor = b.getY() - h.getY(); // a plot at this lift has its ground just under this door's sill
+					net.minecraft.core.Direction f0 = level.getBlockState(b).getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+					for (net.minecraft.core.Direction f : new net.minecraft.core.Direction[] {f0, f0.getOpposite()}) {
+						boolean hits = false;
+						for (int k = 1; k <= 4 && !hits; k++) {
+							for (int side = -1; side <= 1; side++) {
+								BlockPos q = b.relative(f, k).relative(f.getClockWise(), side);
+								hits |= plot.contains(BlockPos.asLong(q.getX() - h.getX(), 0, q.getZ() - h.getZ()));
+							}
+						}
+						if (hits) {
+							lo = Math.max(lo, floor - 1);
+							hi = Math.min(hi, floor + 1);
+							any = true;
+						}
+					}
+				}
+			}
+		}
+		for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
+			BlockState st = p.state();
+			if (!(st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock) || st.getValue(net.minecraft.world.level.block.DoorBlock.HALF)
+					!= net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+				continue;
+			}
+			net.minecraft.core.Direction f0 = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+			for (net.minecraft.core.Direction f : new net.minecraft.core.Direction[] {f0, f0.getOpposite()}) {
+				for (int k = 1; k <= 4; k++) {
+					for (int side = -1; side <= 1; side++) {
+						BlockPos q = p.offset().relative(f, k).relative(f.getClockWise(), side);
+						Integer other = levelOf.get(BlockPos.asLong(q.getX(), 0, q.getZ()));
+						if (other != null && !plot.contains(BlockPos.asLong(q.getX(), 0, q.getZ()))) {
+							// this door's sill sits at lift + its height in the template; the other plot's ground at its lift
+							int want = other - p.offset().getY();
+							lo = Math.max(lo, want - 1);
+							hi = Math.min(hi, want + 1);
+							any = true;
+						}
+					}
+				}
+			}
+		}
+		if (!any) {
+			return null;
+		}
+		return lo <= hi ? new int[] {lo, hi} : new int[] {lo, lo}; // conflicting neighbours: the stricter one wins
 	}
 
 	/** Blocks (walking, along the grid) from the nearest door of {@code t} to the main building's plot; large if unknown. */
