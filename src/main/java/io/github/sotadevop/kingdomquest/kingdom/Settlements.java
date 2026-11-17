@@ -439,8 +439,10 @@ public final class Settlements {
 		s.built().values().forEach(all::addAll);
 		Set<Long> roads = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		BlockPos h = s.heart();
+		Set<Long> keep = new HashSet<>(moatColumns(s));
+		keep.addAll(doorApproaches(level, s));
 		SiteWork.grade(level, h, h.getX() + x0 - 6, h.getZ() + z0 - 6, h.getX() + x1 + 6, h.getZ() + z1 + 6, plan::at, all, roads,
-				moatColumns(s), SiteWork.surface(level, h));
+				keep, SiteWork.surface(level, h));
 	}
 
 	/** The columns of the settlement's moat (empty before gate level 3). */
@@ -461,8 +463,38 @@ public final class Settlements {
 		Set<Long> all = new HashSet<>();
 		s.built().values().forEach(all::addAll);
 		Set<Long> roads = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
+		Set<Long> keep = new HashSet<>(moatColumns(s));
+		keep.addAll(doorApproaches(level, s));
 		SiteWork.smooth(level, s.heart(), Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()),
-				Math.max(a.getZ(), b.getZ()), all, roads, SiteWork.surface(level, s.heart()), moatColumns(s));
+				Math.max(a.getZ(), b.getZ()), all, roads, SiteWork.surface(level, s.heart()), keep);
+	}
+
+	/**
+	 * The ground just outside every door the settlement built (4 blocks straight out, 3 wide; 5 wide for the first
+	 * 2): the step and the way up to it. Site grading and smoothing leave it alone, or a later upgrade of the main
+	 * building would grade away the land in front of a raised house and leave its door hanging (field test).
+	 */
+	static Set<Long> doorApproaches(ServerLevel level, Settlement s) {
+		Set<Long> out = new HashSet<>();
+		for (List<Long> blocks : s.built().values()) {
+			for (long p : blocks) {
+				BlockPos d = BlockPos.of(p);
+				BlockState st = level.getBlockState(d);
+				if (!(st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
+						|| st.getValue(net.minecraft.world.level.block.DoorBlock.HALF) != net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+					continue;
+				}
+				net.minecraft.core.Direction f = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+				for (int k = 1; k <= 4; k++) {
+					int wide = k <= 2 ? 2 : 1;
+					for (int side = -wide; side <= wide; side++) {
+						BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
+						out.add(BlockPos.asLong(q.getX(), 0, q.getZ()));
+					}
+				}
+			}
+		}
+		return out;
 	}
 
 	/** Starts building {@code step} on {@code track}: takes down the track's blocks the new level doesn't use, clears the ground. */
