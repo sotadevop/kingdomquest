@@ -140,7 +140,8 @@ public final class SiteWork {
 				double out = d - flat - (a >= 6 ? wobble(x, z) : 0);
 				// cut: one block up for every two out over the first four blocks, then one for one, like a hill's foot
 				int floor = out <= 0 ? 0 : (int) Math.floor(out <= 4 ? out * 0.5 + 0.5 : out - 1.5);
-				int drop = out <= 0 ? 0 : (int) Math.ceil(out);
+				// made ground falls away the same way: gently at first, then one block per block
+				int drop = out <= 0 ? 0 : (int) Math.ceil(out <= 4 ? out * 0.5 : out - 2);
 				shape.put(e.getKey(), new int[] {e.getValue() == 0 ? 0 : floor, e.getValue() == 0 ? 0 : drop});
 			}
 			List<Column> list = new ArrayList<>();
@@ -263,6 +264,42 @@ public final class SiteWork {
 	 * {@code loose}: built blocks that simply lie on the land (roads, lamps) and are laid again after the land changed.
 	 */
 	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose) {
+		clear(level, heart, c, built, surface, loose, false, Set.of());
+	}
+
+	/** Deepest drop under a pad's rim that is still made up with a natural bank of earth; beyond it the pad gets a stone terrace wall. */
+	public static final int BANK_LIMIT = 9;
+
+	/**
+	 * How far the land lies below a building's pad at the lowest point of its rim (water counts as open): decides
+	 * between a natural bank ({@link #BANK_LIMIT}) and a terrace wall.
+	 */
+	public static int rimDrop(ServerLevel level, BlockPos heart, List<Column> columns) {
+		int worst = 0;
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (Column c : columns) {
+			if (!c.pad() || !c.edge()) {
+				continue;
+			}
+			int depth = 0;
+			for (int y = heart.getY() - 1; depth < PLINTH && y > level.getMinY(); y--, depth++) {
+				BlockState st = level.getBlockState(pos.set(heart.getX() + c.dx(), y, heart.getZ() + c.dz()));
+				if (!(st.isAir() || st.canBeReplaced() || !st.getFluidState().isEmpty() || st.is(BlockTags.LEAVES) || plant(st))) {
+					break;
+				}
+			}
+			worst = Math.max(worst, depth);
+		}
+		return worst;
+	}
+
+	/**
+	 * {@code bank}: the pad lies only a little above the land around it, so it is made up like a natural rise: earth
+	 * instead of masonry, and around it a bank that falls away to the land (also under water: a shore).
+	 * {@code roads}: road blocks, which a bank may cover (they are laid again on top of it).
+	 */
+	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose, boolean bank,
+			Set<Long> roads) {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
 		int floor = heart.getY() + c.floor();
@@ -310,14 +347,16 @@ public final class SiteWork {
 		int fillTop = heart.getY() - 1 - c.drop();
 		int reach = margin ? PLINTH : FOUNDATION;
 		int depth = 0;
+		boolean blocked = false;
 		for (int y = fillTop; y >= fillTop - reach && y > level.getMinY(); y--) {
 			pos.set(x, y, z);
 			if (built.contains(pos.asLong())) {
-				if (y >= fillTop - 1 && !level.getBlockState(pos).isAir()) {
+				if (y >= fillTop - 1 && !level.getBlockState(pos).isAir() || bank && roads.contains(pos.asLong())) {
 					depth++; // a floor or a road already lies here: the foundation goes on below it
 					continue;
 				}
-				break; // a cellar or the moat: never filled
+				blocked = true;
+				break; // a cellar, the moat, a neighbour's roof: never filled
 			}
 			BlockState state = level.getBlockState(pos);
 			if (margin && state.is(BlockTags.LOGS)) {
@@ -329,17 +368,17 @@ public final class SiteWork {
 			}
 			depth++;
 		}
-		if (depth == 0 || !margin && depth > 2) {
+		if (depth == 0 || !margin && depth > 2 && (!bank || blocked)) {
 			return; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
 		}
 		// a pad over lower land is built up solid: earth on top, stone below, and its rim is a masonry wall
 		BlockState wall = wallFor(surface);
 		for (int y = fillTop; y > fillTop - depth; y--) {
 			pos.set(x, y, z);
-			if (built.contains(pos.asLong())) {
+			if (built.contains(pos.asLong()) && !(bank && roads.contains(pos.asLong()))) {
 				continue;
 			}
-			boolean stone = margin && depth > 2 && (c.edge() || y < fillTop - 2);
+			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2);
 			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
@@ -428,6 +467,76 @@ public final class SiteWork {
 		}
 		if (!any && !built.contains(pos.asLong())) {
 			level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS); // stray leaves
+		}
+	}
+
+	/**
+	 * A castle by or in the water makes its own land: every water column inside the ring (x0..x1, z0..z1) is filled
+	 * from the bed up to the water line, a strip of beach runs around the walls, and beyond it the new land slopes
+	 * down under water like a natural shore. Deeper than {@link #PLINTH} nothing is done. Ice counts as water.
+	 */
+	public static void reclaim(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, Set<Long> keep, BlockState surface) {
+		final int berm = 6;
+		final int reach = 16;
+		boolean grass = surface.is(Blocks.GRASS_BLOCK) || surface.is(Blocks.PODZOL) || surface.is(Blocks.MYCELIUM) || surface.is(Blocks.COARSE_DIRT);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0 - reach; x <= x1 + reach; x++) {
+			for (int z = z0 - reach; z <= z1 + reach; z++) {
+				if (keep.contains(BlockPos.asLong(x, 0, z)) || !level.isLoaded(pos.set(x, 0, z))) {
+					continue;
+				}
+				int ox = Math.max(0, Math.max(x0 - x, x - x1));
+				int oz = Math.max(0, Math.max(z0 - z, z - z1));
+				int o = (int) Math.round(Math.sqrt(ox * ox + oz * oz)); // round corners
+				if (o > reach) {
+					continue;
+				}
+				int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
+				BlockState st = level.getBlockState(pos.set(x, top, z));
+				boolean wet = !st.getFluidState().isEmpty() && st.getFluidState().is(net.minecraft.tags.FluidTags.WATER) || st.is(Blocks.ICE);
+				if (!wet || built.contains(pos.asLong())) {
+					continue;
+				}
+				long h = Math.floorMod((long) x * 73856093L ^ (long) z * 19349663L, 12L);
+				// the shore: flat to the edge of the beach, then down one block per block, a little uneven
+				int target = top - Math.max(0, o - berm) - (o > berm && h % 3 == 0 ? 1 : 0);
+				int bottom = top;
+				boolean stop = false;
+				while (bottom > top - PLINTH && bottom > level.getMinY()) {
+					BlockState below = level.getBlockState(pos.set(x, bottom, z));
+					if (built.contains(pos.asLong())) {
+						stop = true;
+						break;
+					}
+					if (!(below.isAir() || below.canBeReplaced() || !below.getFluidState().isEmpty() || below.is(Blocks.ICE) || plant(below))) {
+						break;
+					}
+					bottom--;
+				}
+				if (stop || bottom <= top - PLINTH || target <= bottom) {
+					continue; // something built below, an abyss, or the bed is already high enough
+				}
+				for (int y = bottom + 1; y <= target; y++) {
+					BlockState fill;
+					if (y < target) {
+						fill = subsoil(surface);
+					} else if (target < top) {
+						fill = (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(); // the bed off the shore
+					} else {
+						fill = grass && o >= 3 ? Blocks.SAND.defaultBlockState() : surface; // a beach outside the walls
+					}
+					level.setBlock(pos.set(x, y, z), fill, FLAGS);
+				}
+				if (target == top) {
+					BlockState over = level.getBlockState(pos.set(x, top + 1, z));
+					if (plant(over) || over.is(Blocks.LILY_PAD)) {
+						level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+					}
+					if (o == 0 && surface.is(Blocks.GRASS_BLOCK) && h < 2 && level.getBlockState(pos).isAir()) {
+						level.setBlock(pos, Blocks.SHORT_GRASS.defaultBlockState(), Block.UPDATE_CLIENTS);
+					}
+				}
+			}
 		}
 	}
 
