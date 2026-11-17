@@ -1215,7 +1215,7 @@ public final class FieldTest {
 						best = climb;
 						BlockPos pa = BlockPos.of(a), pb = BlockPos.of(b);
 						where = String.format("climb %.1f from %s to %s (%s under, %s beside)", climb, rel(s, pa), rel(s, pb),
-								name(level.getBlockState(pb.below())), name(level.getBlockState(pb.relative(Direction.fromDelta(-d[0], 0, -d[1])))));
+								name(level.getBlockState(pb.below())), name(level.getBlockState(pb.offset(-d[0], 0, -d[1]))));
 					}
 				}
 			}
