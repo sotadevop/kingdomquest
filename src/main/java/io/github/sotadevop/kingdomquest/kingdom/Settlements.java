@@ -960,6 +960,8 @@ public final class Settlements {
 	}
 
 	/** Per job: columns in front of other buildings' doors that its land shaping leaves alone. */
+	private static final Map<String, Set<Long>> RAMPS = new HashMap<>();
+	/** (RAMPS: per job, the columns straight out from its own doors, shaped as an earth ramp.) */
 	private static final Map<String, Set<Long>> PROTECTED = new HashMap<>();
 
 	/** The side of the wall ring a position outside it faces, in the template's frame: 0 north, 1 south (the gate), 2 west, 3 east. */
@@ -1633,6 +1635,25 @@ public final class Settlements {
 			});
 			return out;
 		}) : Set.of();
+		// straight out from this building's own doors the land is an earth ramp (the bank's slope), never a terrace
+		// step: whatever the rest of the plot does, every door can be walked up to
+		Set<Long> ramps = index < cols ? RAMPS.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
+			Set<Long> out = new HashSet<>();
+			for (Template.Placement p : list) {
+				BlockState st = p.state();
+				if (st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock && st.hasProperty(net.minecraft.world.level.block.DoorBlock.FACING)) {
+					net.minecraft.core.Direction f = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+					BlockPos d = s.heart().offset(p.offset());
+					for (int k = 1; k <= 16; k++) {
+						for (int side = -2; side <= 2; side++) {
+							BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
+							out.add(BlockPos.asLong(q.getX(), 0, q.getZ()));
+						}
+					}
+				}
+			}
+			return out;
+		}) : Set.of();
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
 			SiteWork.Column c = columns.get(index);
 			long colKey = BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz());
@@ -1642,7 +1663,7 @@ public final class Settlements {
 			if (!c.pad() && keepClear.contains(colKey)) {
 				continue;
 			}
-			SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank, roadBlocks);
+			SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank || !c.pad() && ramps.contains(colKey), roadBlocks);
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
