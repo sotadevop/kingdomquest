@@ -372,7 +372,9 @@ public final class SiteWork {
 			BlockState st = level.getBlockState(pos);
 			if (trunk(st) || st.is(BlockTags.LEAVES)) {
 				// any part of a tree in the way takes the whole tree: no half trees or floating crowns
-				if (margin || trunk(st) && y <= floor + 1) {
+				// on the plot every tree goes, roots and all; on the slopes around it only a trunk standing in the way
+				// (mangrove roots there stay: felling whole swamp trees from the slope tore up the land around plots)
+				if (margin || st.is(BlockTags.LOGS) && y <= floor + 1) {
 					removeTreeAt(level, pos.immutable(), built);
 				}
 				continue;

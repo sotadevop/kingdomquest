@@ -77,6 +77,8 @@ public final class FieldTest {
 	private static final Set<String> IMAGE_STAGES = Set.of("tent_1", "hamlet_1", "village_1", "castle_1", "final");
 
 	private static final StringBuilder REPORT = new StringBuilder();
+	/** Whether the untouched land let one walk from the heart out of the inspected area. */
+	private static boolean OUT_BEFORE = true;
 	/** Per door (lower half): the ground 1 and 2 blocks in front of it after each build, when it changed. */
 	private static final Map<Long, List<String>> DOOR_GROUND = new HashMap<>();
 	private static final List<String> SUMMARY = new ArrayList<>();
@@ -165,6 +167,17 @@ public final class FieldTest {
 		String biome = level.getBiome(heart).getRegisteredName();
 		Snapshot base = Snapshot.take(level, heart, Set.of());
 		{
+			// could one walk from the heart out of the area before anything was built? (a mesa top may have no way down)
+			Set<Long> seen = new HashSet<>();
+			ArrayDeque<long[]> q0 = new ArrayDeque<>();
+			for (int dy = -2; dy <= 3; dy++) {
+				if (!Double.isNaN(feet(level, heart.getX(), heart.getY() + dy, heart.getZ(), false)) && seen.add(heart.above(dy).asLong())) {
+					q0.add(new long[] {heart.above(dy).asLong()});
+				}
+			}
+			OUT_BEFORE = spread(level, heart, seen, q0, Set.of(), 400_000);
+		}
+		{
 			// what already hangs in the untouched land (cave ceilings over water, tree branches) is not the mod's doing
 			Settlement probe = new Settlement(UUID.randomUUID(), OWNER, "probe", 0, Identifier.withDefaultNamespace("stone"), "temperate", heart, 0,
 					Map.of(), "", "", 0, Map.of(), Map.of());
@@ -172,7 +185,7 @@ public final class FieldTest {
 		}
 		int relief = Settlements.relief(level, heart);
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
-				.append(", facing ").append(rot).append(", relief ").append(relief).append(", style ")
+				.append(", facing ").append(rot).append(", relief ").append(relief).append(", walkable out before founding: ").append(OUT_BEFORE).append(", style ")
 				.append(Style.forBiome(biome)).append(", ground ").append(SiteWork.surface(level, heart).getBlock().getDescriptionId().replace("block.minecraft.", ""))
 				.append(".\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost |\n|")
 				.append("---|".repeat(21)).append('\n');
@@ -808,7 +821,7 @@ public final class FieldTest {
 			}
 		}
 		for (Map.Entry<String, Integer> e : c.entrySet()) {
-			boolean fail = e.getKey().equals("walk out") ? e.getValue() == 0 : e.getValue() > 0;
+			boolean fail = e.getKey().equals("walk out") ? e.getValue() == 0 && OUT_BEFORE : e.getValue() > 0;
 			if (fail) {
 				any = true;
 				problems.add(stage + ": " + e.getKey() + " " + (e.getKey().equals("walk out") ? "no way out of the settlement" : e.getValue()) + " "

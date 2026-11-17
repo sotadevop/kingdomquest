@@ -470,8 +470,8 @@ public final class Settlements {
 	}
 
 	/**
-	 * The ground just outside every door the settlement built (4 blocks straight out, 3 wide; 5 wide for the first
-	 * 2): the step and the way up to it. Site grading and smoothing leave it alone, or a later upgrade of the main
+	 * The ground just outside every door the settlement built (10 blocks straight out, 3 wide; 5 wide for the first
+	 * 2): the step and the way up or down to it. Site grading and smoothing leave it alone, or a later upgrade of the main
 	 * building would grade away the land in front of a raised house and leave its door hanging (field test).
 	 */
 	static Set<Long> doorApproaches(ServerLevel level, Settlement s) {
@@ -495,7 +495,7 @@ public final class Settlements {
 				// both sides: templates have doors facing in and doors facing out; the inside is the building anyway
 				net.minecraft.core.Direction f0 = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
 				for (net.minecraft.core.Direction f : new net.minecraft.core.Direction[] {f0, f0.getOpposite()}) {
-					for (int k = 1; k <= 4; k++) {
+					for (int k = 1; k <= 10; k++) { // the whole way up or down from the door, not just its step
 						int wide = k <= 2 ? 2 : 1;
 						for (int side = -wide; side <= wide; side++) {
 							BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
