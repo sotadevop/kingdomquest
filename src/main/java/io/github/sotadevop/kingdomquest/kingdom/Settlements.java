@@ -1013,6 +1013,15 @@ public final class Settlements {
 						columns.add(BlockPos.asLong(here.getX(), 0, here.getZ()));
 						// the bottom and the bank are the land's own surface, with bare patches
 						BlockState state = p.state().isAir() || Math.floorMod(here.getX() * 31 + here.getZ() * 17, 4) == 0 ? p.state() : surface;
+						if (!state.isAir()) {
+							// where the land right here lies more than 4 below the bank, it falls away by itself:
+							// no bank is heaped up in the air (the ditch is still dug, so its line stays whole)
+							BlockPos at = s.heart().offset(p.offset().above(g));
+							int land = SiteWork.groundDeep(level, at.getX(), at.getZ(), s.heart().getY(), mine);
+							if (at.getY() - land > 5) {
+								continue;
+							}
+						}
 						Template.Placement mp = new Template.Placement(p.offset().above(g), state, p.segment(), p.anchor());
 						out.add(mp);
 						if (!state.isAir()) {

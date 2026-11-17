@@ -2,6 +2,7 @@ package io.github.sotadevop.kingdomquest.kingdom;
 
 import io.github.sotadevop.kingdomquest.building.Template;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
@@ -398,12 +399,26 @@ public final class SiteWork {
 			if (built.contains(pos.asLong()) && !(bank && roads.contains(pos.asLong()))) {
 				continue;
 			}
-			boolean face = terrace && c.out() % BENCH == 0; // the bench's outer row: its retaining wall
-			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face && depth > 1;
+			// a terrace block whose side is open is part of a retaining wall: masonry. Where the next bench later
+			// covers it, the stone is simply hidden; every face that stays in sight is stone, never bare earth
+			boolean face = terrace && depth > 1 && y < fillTop && openSide(level, pos, built);
+			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face;
 			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
 		}
+	}
+
+	/** Air, water or a plant beside this block on any side (not counting built blocks): it would show. */
+	private static boolean openSide(ServerLevel level, BlockPos pos, Set<Long> built) {
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			BlockPos n = pos.relative(d);
+			BlockState st = level.getBlockState(n);
+			if (!built.contains(n.asLong()) && (st.isAir() || st.canBeReplaced() || !st.getFluidState().isEmpty())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Stone for retaining walls, matching the ground: sandstone in deserts, cobblestone in the snow, stone bricks elsewhere. */
