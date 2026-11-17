@@ -444,8 +444,11 @@ public final class Settlements {
 		FOLLOWED.keySet().removeIf(k -> k.startsWith(s.id() + "|" + job + "|")); // sample the ground again
 		List<Template.Placement> list = placements(s, job);
 		Set<Long> next = new HashSet<>();
+		Map<Long, Integer> nextLow = new HashMap<>(); // column -> lowest block of the new plan
 		for (Template.Placement p : list) {
-			next.add(s.heart().offset(p.offset()).asLong());
+			BlockPos at = s.heart().offset(p.offset());
+			next.add(at.asLong());
+			nextLow.merge(BlockPos.asLong(at.getX(), 0, at.getZ()), at.getY(), Math::min);
 		}
 		// blocks of this track's old level that the new one doesn't use are taken down (they drop nothing)
 		List<Long> kept = new ArrayList<>();
@@ -458,8 +461,12 @@ public final class Settlements {
 			} else {
 				BlockPos old = BlockPos.of(pos);
 				// ground blocks (old paths) become the area's ground again, not holes; the moat stays a moat
-				boolean ground = old.getY() < s.heart().getY() + lift(s, job) && !moat.contains(BlockPos.asLong(old.getX(), 0, old.getZ()));
-				level.setBlock(old, ground ? SiteWork.surface(level, s.heart()) : Blocks.AIR.defaultBlockState(), NO_DROPS);
+				long column = BlockPos.asLong(old.getX(), 0, old.getZ());
+				boolean ground = old.getY() < s.heart().getY() + lift(s, job) && !moat.contains(column);
+				// under a moat that got shallower the old ditch is filled with earth, not left as a hollow
+				boolean under = moat.contains(column) && old.getY() < nextLow.getOrDefault(column, Integer.MIN_VALUE);
+				BlockState surface = SiteWork.surface(level, s.heart());
+				level.setBlock(old, under ? SiteWork.subsoil(surface) : ground ? surface : Blocks.AIR.defaultBlockState(), NO_DROPS);
 			}
 		}
 		sweepDrops(level, lo, hi);
@@ -924,8 +931,8 @@ public final class Settlements {
 					y--;
 				}
 				BlockState st = level.getBlockState(pos.set(x + dx, y, z + dz));
-				if (!st.getFluidState().isEmpty() && st.getFluidState().is(net.minecraft.tags.FluidTags.WATER)) {
-					return true;
+				if (!st.getFluidState().isEmpty() && st.getFluidState().is(net.minecraft.tags.FluidTags.WATER) || st.is(Blocks.ICE)) {
+					return true; // a frozen lake counts: under the ice it is water
 				}
 			}
 		}
