@@ -370,15 +370,16 @@ public final class SiteWork {
 				continue;
 			}
 			BlockState st = level.getBlockState(pos);
-			if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+			if (trunk(st) || st.is(BlockTags.LEAVES)) {
 				// any part of a tree in the way takes the whole tree: no half trees or floating crowns
-				if (margin || st.is(BlockTags.LOGS) && y <= floor + 1) {
+				if (margin || trunk(st) && y <= floor + 1) {
 					removeTreeAt(level, pos.immutable(), built);
 				}
 				continue;
 			}
-			// in the flat margin everything natural goes; further out only the land is shaped
-			if (margin ? natural(st) : terrain(st)) {
+			// in the flat margin everything natural goes; further out only the land is shaped. Old terrace masonry
+			// nobody owns is land too
+			if (margin ? natural(st) || earthwork(st) : terrain(st) || earthwork(st)) {
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
 				if (level.getBlockState(pos.above()).is(BlockTags.LOGS) && !built.contains(pos.above().asLong())) {
 					removeTreeAt(level, pos.above(), built); // the ground under a tree was cut: the tree goes too
@@ -542,9 +543,24 @@ public final class SiteWork {
 	}
 
 	/** A log or leaf block of a tree is in the way: every tree it belongs to goes, whole. */
+	/** Logs, and mangrove roots: they belong to their tree and go with it (cut one by one, the rest would hang). */
+	static boolean trunk(BlockState st) {
+		return st.is(BlockTags.LOGS) || st.is(Blocks.MANGROVE_ROOTS) || st.is(Blocks.MUDDY_MANGROVE_ROOTS);
+	}
+
+	/**
+	 * Masonry the settlement's own land work left (terrace faces, pad rims, dressed faces) where no building owns
+	 * it: a later cut removes it like the land, or it would stand on in a new plot (a door walled in by an old
+	 * terrace face, field test).
+	 */
+	static boolean earthwork(BlockState st) {
+		return st.is(Blocks.STONE_BRICKS) || st.is(Blocks.MOSSY_STONE_BRICKS) || st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE)
+				|| st.is(Blocks.SMOOTH_SANDSTONE) || st.is(Blocks.CUT_RED_SANDSTONE);
+	}
+
 	public static void removeTreeAt(ServerLevel level, BlockPos pos, Set<Long> built) {
 		BlockState st = level.getBlockState(pos);
-		if (st.is(BlockTags.LOGS)) {
+		if (trunk(st)) {
 			fellTree(level, pos, built);
 			return;
 		}
@@ -777,14 +793,14 @@ public final class SiteWork {
 		List<BlockPos> logs = new ArrayList<>();
 		queue.add(start);
 		seen.add(start.asLong());
-		while (!queue.isEmpty() && logs.size() < 400) {
+		while (!queue.isEmpty() && logs.size() < 900) {
 			BlockPos p = queue.poll();
-			if (!level.getBlockState(p).is(BlockTags.LOGS)) {
+			if (!trunk(level.getBlockState(p))) {
 				continue;
 			}
 			logs.add(p);
 			for (BlockPos n : BlockPos.betweenClosed(p.offset(-1, -1, -1), p.offset(1, 1, 1))) {
-				if (!built.contains(n.asLong()) && seen.add(n.asLong()) && level.getBlockState(n).is(BlockTags.LOGS)) {
+				if (!built.contains(n.asLong()) && seen.add(n.asLong()) && trunk(level.getBlockState(n))) {
 					queue.add(n.immutable());
 				}
 			}

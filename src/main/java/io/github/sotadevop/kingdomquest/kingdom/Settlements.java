@@ -1115,11 +1115,17 @@ public final class Settlements {
 						// the bottom and the bank are the land's own surface, with bare patches
 						BlockState state = p.state().isAir() || Math.floorMod(here.getX() * 31 + here.getZ() * 17, 4) == 0 ? p.state() : surface;
 						if (!state.isAir()) {
-							// where the land right here lies more than 4 below the bank, it falls away by itself:
-							// no bank is heaped up in the air (the ditch is still dug, so its line stays whole)
+							// a bank or bottom piece needs something solid within 5 straight below it (old moat blocks
+							// don't count): where the land falls away, at a corner by a tower or on a hillside, none is
+							// heaped up in the air (the ditch is still dug, so its line stays whole)
 							BlockPos at = s.heart().offset(p.offset().above(g));
-							int land = SiteWork.groundDeep(level, at.getX(), at.getZ(), s.heart().getY(), mine);
-							if (at.getY() - land > 5) {
+							boolean held = false;
+							for (int down = 1; down <= 5 && !held; down++) {
+								BlockPos q = at.below(down);
+								BlockState qs = level.getBlockState(q);
+								held = !mine.contains(q.asLong()) && !qs.isAir() && !qs.canBeReplaced() && qs.getFluidState().isEmpty();
+							}
+							if (!held) {
 								continue;
 							}
 						}
