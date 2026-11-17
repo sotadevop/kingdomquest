@@ -1010,6 +1010,13 @@ public final class Settlements {
 						if (Math.abs(g) > 16) {
 							continue; // a cliff: no ditch needed there
 						}
+						// steep ground right here (a mesa edge, a hillside falling away): the slope is the defence, so no
+						// ditch is cut into it and no bank is heaped onto it
+						int local = ground.computeIfAbsent(BlockPos.asLong(here.getX(), -9999, here.getZ()), c -> SiteWork.groundDeep(level, here.getX(),
+								here.getZ(), s.heart().getY(), mine) + 1 - s.heart().getY());
+						if (!level0 && Math.abs(local - g) > 4) {
+							continue;
+						}
 						columns.add(BlockPos.asLong(here.getX(), 0, here.getZ()));
 						// the bottom and the bank are the land's own surface, with bare patches
 						BlockState state = p.state().isAir() || Math.floorMod(here.getX() * 31 + here.getZ() * 17, 4) == 0 ? p.state() : surface;
@@ -1028,7 +1035,7 @@ public final class Settlements {
 				List<Template.Placement> under = new ArrayList<>();
 				BlockPos.MutableBlockPos bp = new BlockPos.MutableBlockPos();
 				for (Template.Placement b : banks) {
-					for (int down = 1; down <= 16; down++) {
+					for (int down = 1; down <= 4; down++) {
 						BlockPos rel = b.offset().below(down);
 						bp.set(s.heart().getX() + rel.getX(), s.heart().getY() + rel.getY(), s.heart().getZ() + rel.getZ());
 						BlockState st = level.getBlockState(bp);
