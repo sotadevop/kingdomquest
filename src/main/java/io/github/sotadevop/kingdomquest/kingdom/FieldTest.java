@@ -417,7 +417,7 @@ public final class FieldTest {
 					colours[i * n + k] = (st.getMapColor(level, pos).col & 0xFFFFFF) | (ty & 0xFF) << 24;
 				}
 			}
-			return new Snapshot(heart, heart.getX() - R, heart.getZ() - R, ground, top, decaying(level, heart), colours);
+			return new Snapshot(heart, heart.getX() - R, heart.getZ() - R, ground, top, FieldTest.decaying(level, heart), colours);
 		}
 	}
 
