@@ -416,8 +416,40 @@ public final class Settlements {
 		// often only 5-8 blocks long, so a building lower or higher than that can't be walked to (field test: houses
 		// at -11 on steep sites sat in pits nobody could climb out of). Steeper land around the plot is cut and
 		// terraced instead.
-		dy = Math.max(-LIFT_LIMIT, Math.min(LIFT_LIMIT, dy));
+		// and never more than a walkable ramp (one block per block) can climb between its doors and the main
+		// building's plot, which stays at the square's level: next to the main plot that is only a few blocks
+		int limit = Math.max(2, Math.min(LIFT_LIMIT, roomToSquare(s, t) - 1));
+		dy = Math.max(-limit, Math.min(limit, dy));
 		return Math.abs(dy) < 2 ? 0 : dy;
+	}
+
+	/** Blocks (walking, along the grid) from the nearest door of {@code t} to the main building's plot; large if unknown. */
+	private static int roomToSquare(Settlement s, Template t) {
+		Progression.Step main = Progression.current(s, Settlement.MAIN);
+		Template m = main == null ? null : Template.get(s.style() + "/" + main.building());
+		if (m == null || m.pads.isEmpty()) {
+			return 99;
+		}
+		Rotation r = Rotation.values()[s.rotation()];
+		List<int[]> boxes = new ArrayList<>();
+		for (int[] pad : m.pads) {
+			BlockPos a = Template.rotate(new BlockPos(pad[0] - m.heart.getX(), 0, pad[1] - m.heart.getZ()), r);
+			BlockPos b = Template.rotate(new BlockPos(pad[2] - m.heart.getX(), 0, pad[3] - m.heart.getZ()), r);
+			boxes.add(new int[] {Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()), Math.max(a.getZ(), b.getZ())});
+		}
+		int best = 99;
+		for (Template.Placement p : t.placements(dye(s.color()), r)) {
+			if (!(p.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock)) {
+				continue;
+			}
+			int x = p.offset().getX(), z = p.offset().getZ();
+			for (int[] b : boxes) {
+				int dx = Math.max(0, Math.max(b[0] - x, x - b[2]));
+				int dz = Math.max(0, Math.max(b[1] - z, z - b[3]));
+				best = Math.min(best, dx + dz);
+			}
+		}
+		return best;
 	}
 
 	/** Before a building goes up, the land around its plot is shaped toward the site plan (see {@link SitePlan}). */
