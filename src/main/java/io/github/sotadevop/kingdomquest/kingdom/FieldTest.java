@@ -77,6 +77,8 @@ public final class FieldTest {
 	private static final Set<String> IMAGE_STAGES = Set.of("tent_1", "hamlet_1", "village_1", "castle_1", "final");
 
 	private static final StringBuilder REPORT = new StringBuilder();
+	/** Per door (lower half): the ground 1 and 2 blocks in front of it after each build, when it changed. */
+	private static final Map<Long, List<String>> DOOR_GROUND = new HashMap<>();
 	private static final List<String> SUMMARY = new ArrayList<>();
 
 	/** Runs the given scenarios (all when empty). Returns the number of sites with problems. */
@@ -179,6 +181,7 @@ public final class FieldTest {
 				Map.of());
 		Settlements.prepareSite(level, heart, Template.get(s.job()), rot);
 		Settlements.put(server, s);
+		DOOR_GROUND.clear();
 		List<String> problems = new ArrayList<>();
 		Map<String, Integer> destroyedBefore = new HashMap<>();
 		long t = System.nanoTime();
@@ -218,6 +221,7 @@ public final class FieldTest {
 				}
 				progressed = true;
 				blame(level, s, track + "_" + step.level(), destroyedBefore, problems);
+				watchDoors(level, s, track + "_" + step.level());
 			}
 			if (progressed) {
 				continue;
@@ -235,6 +239,7 @@ public final class FieldTest {
 				break;
 			}
 			blame(level, s, main.building(), destroyedBefore, problems);
+			watchDoors(level, s, main.building());
 			check(level, s, base, main.building(), (System.nanoTime() - t2) / 1_000_000, problems, dir, sc.name(), destroyedBefore);
 			KingdomQuest.LOG.info("Field test {}: {} built and checked", sc.name(), main.building());
 			write(dir);
@@ -287,6 +292,31 @@ public final class FieldTest {
 		}
 		before.clear();
 		before.putAll(now);
+	}
+
+	/** Notes the ground in front of every door (feet height 1 and 2 blocks out, relative to the door) when it changes. */
+	private static void watchDoors(ServerLevel level, Settlement s, String by) {
+		for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
+			for (long p : e.getValue()) {
+				BlockPos d = BlockPos.of(p);
+				BlockState st = level.getBlockState(d);
+				if (!(st.getBlock() instanceof DoorBlock) || st.getValue(DoorBlock.HALF) != DoubleBlockHalf.LOWER) {
+					continue;
+				}
+				Direction f = st.getValue(DoorBlock.FACING);
+				StringBuilder now = new StringBuilder();
+				for (int k = 1; k <= 3; k++) {
+					BlockPos q = d.relative(f, k);
+					int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, q.getX(), q.getZ());
+					now.append(top - d.getY()).append(k < 3 ? "/" : "");
+				}
+				List<String> hist = DOOR_GROUND.computeIfAbsent(p, k -> new ArrayList<>());
+				String last = hist.isEmpty() ? "" : hist.get(hist.size() - 1);
+				if (!last.endsWith(" " + now)) {
+					hist.add(by + " " + now);
+				}
+			}
+		}
 	}
 
 	/** Per track: blocks its builders placed that are now different in the world. */
@@ -947,7 +977,7 @@ public final class FieldTest {
 				doors++;
 				if (!reach.contains(e.getKey())) {
 					w.doorsMissed++;
-					sample(samples, "doors unreached", e.getValue() + " " + rel(s, p));
+					sample(samples, "doors unreached", e.getValue() + " " + rel(s, p) + " front " + DOOR_GROUND.getOrDefault(e.getKey(), List.of()));
 					marks.add(new Mark(p.getX(), p.getZ(), 0xFF00A0));
 				}
 			}
