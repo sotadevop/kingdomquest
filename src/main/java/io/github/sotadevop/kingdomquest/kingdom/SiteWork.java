@@ -471,6 +471,99 @@ public final class SiteWork {
 	}
 
 	/**
+	 * Shapes the land of a region toward the site plan before something is built in it: earth is added or taken
+	 * away column by column, with the land's own surface on top. Only open natural ground moves: a column with
+	 * anything built on it or beside it stays (except roads, which are taken up and laid again afterwards), and so
+	 * do trees, water (see {@link #reclaim}) and the moat. Toward the edge of the region the change fades out, so
+	 * it never ends in a step; the next building nearby carries it on.
+	 *
+	 * @param plan world column -> planned height of the ground top relative to the block under the heart, or MIN_VALUE
+	 */
+	public static void grade(ServerLevel level, BlockPos heart, int x0, int z0, int x1, int z1, java.util.function.IntBinaryOperator plan,
+			Set<Long> built, Set<Long> roads, Set<Long> keep, BlockState surface) {
+		final int fade = 8;
+		int w = x1 - x0 + 1;
+		int d = z1 - z0 + 1;
+		int[] h = new int[w * d];
+		boolean[] open = new boolean[w * d];
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < w; i++) {
+			for (int k = 0; k < d; k++) {
+				int y = groundDeep(level, x0 + i, z0 + k, heart.getY());
+				h[i * d + k] = y;
+				pos.set(x0 + i, y, z0 + k);
+				BlockState top = level.getBlockState(pos);
+				boolean road = roads.contains(pos.asLong());
+				open[i * d + k] = level.isLoaded(pos) && (road || !built.contains(pos.asLong()) && terrain(top))
+						&& !built.contains(pos.above().asLong()) && !built.contains(pos.above(2).asLong())
+						&& !level.getBlockState(pos.above()).is(BlockTags.LOGS) && !keep.contains(BlockPos.asLong(x0 + i, 0, z0 + k));
+			}
+		}
+		for (int i = 1; i < w - 1; i++) {
+			for (int k = 1; k < d - 1; k++) {
+				int c = i * d + k;
+				boolean free = true;
+				for (int di = -1; di <= 1 && free; di++) {
+					for (int dk = -1; dk <= 1 && free; dk++) {
+						free = open[c + di * d + dk];
+					}
+				}
+				int x = x0 + i;
+				int z = z0 + k;
+				int want = plan.applyAsInt(x, z);
+				if (!free || want == Integer.MIN_VALUE) {
+					continue;
+				}
+				double f = Math.min(1.0, Math.min(Math.min(i, w - 1 - i), Math.min(k, d - 1 - k)) / (double) fade);
+				int cur = h[c];
+				int target = cur + (int) Math.round(f * (heart.getY() - 1 + want - cur));
+				target = Math.max(cur - 10, Math.min(cur + 10, target));
+				if (target > cur) {
+					int reached = cur;
+					for (int y = cur + 1; y <= target; y++) {
+						BlockState there = level.getBlockState(pos.set(x, y, z));
+						if (built.contains(pos.asLong()) || !(there.isAir() || there.canBeReplaced() || plant(there)) || !there.getFluidState().isEmpty()) {
+							break;
+						}
+						level.setBlock(pos, y == target ? surface : subsoil(surface), FLAGS);
+						reached = y;
+					}
+					if (reached > cur) {
+						if (reached < target) {
+							level.setBlock(pos.set(x, reached, z), surface, FLAGS);
+						}
+						pos.set(x, cur, z);
+						if (roads.contains(pos.asLong()) || isTopSoil(level.getBlockState(pos))) {
+							level.setBlock(pos, subsoil(surface), FLAGS); // buried turf and old road become earth
+						}
+					}
+				} else if (target < cur) {
+					BlockState top = level.getBlockState(pos.set(x, cur, z));
+					for (int y = cur + 1; y <= cur + 2; y++) {
+						BlockState above = level.getBlockState(pos.set(x, y, z));
+						if (!built.contains(pos.asLong()) && natural(above) && !terrain(above) && !above.is(BlockTags.LOGS)) {
+							level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+						}
+					}
+					int reached = cur;
+					for (int y = cur; y > target; y--) {
+						pos.set(x, y, z);
+						if (!roads.contains(pos.asLong()) && (built.contains(pos.asLong()) || !terrain(level.getBlockState(pos)))) {
+							break;
+						}
+						level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+						reached = y - 1;
+					}
+					pos.set(x, reached, z);
+					if (reached < cur && !built.contains(pos.asLong()) && exposedInside(level.getBlockState(pos))) {
+						level.setBlock(pos, surfaceLike(top) ? top : surface, FLAGS);
+					}
+				}
+			}
+		}
+	}
+
+	/**
 	 * A castle by or in the water makes its own land: every water column inside the ring (x0..x1, z0..z1) is filled
 	 * from the bed up to the water line, a strip of beach runs around the walls, and beyond it the new land slopes
 	 * down under water like a natural shore. Deeper than {@link #PLINTH} nothing is done. Ice counts as water.

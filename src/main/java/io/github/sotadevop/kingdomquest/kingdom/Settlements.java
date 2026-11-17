@@ -91,6 +91,7 @@ public final class Settlements {
 			server = null;
 			FOLLOWED.clear();
 			MOAT.clear();
+			SitePlan.forgetAll();
 			UNFIXABLE.clear();
 		});
 		// no monsters spawn inside a settlement
@@ -392,6 +393,7 @@ public final class Settlements {
 			}
 		}
 		List<Integer> hs = new ArrayList<>();
+		SitePlan sitePlan = server == null ? null : SitePlan.of(server, s);
 		int n = 0;
 		for (long c : cols) {
 			if (n++ % 3 != 0) {
@@ -399,7 +401,9 @@ public final class Settlements {
 			}
 			int x = s.heart().getX() + BlockPos.getX(c);
 			int z = s.heart().getZ() + BlockPos.getZ(c);
-			hs.add(SiteWork.groundDeep(level, x, z, s.heart().getY()) + 1 - s.heart().getY());
+			// from the site plan where there is one: the terrace then fits the landform the whole site is shaped to
+			int planned = sitePlan == null ? Integer.MIN_VALUE : sitePlan.at(x, z);
+			hs.add(planned != Integer.MIN_VALUE ? planned : SiteWork.groundDeep(level, x, z, s.heart().getY()) + 1 - s.heart().getY());
 		}
 		if (hs.isEmpty()) {
 			return 0;
@@ -410,6 +414,33 @@ public final class Settlements {
 		int dy = Math.min(hs.get(hs.size() / 2), hs.get(0) + 10);
 		dy = Math.max(-12, Math.min(12, dy));
 		return Math.abs(dy) < 2 ? 0 : dy;
+	}
+
+	/** Before a building goes up, the land around its plot is shaped toward the site plan (see {@link SitePlan}). */
+	private static void gradeSite(MinecraftServer server, Settlement s, String job) {
+		Template t = Template.get(job);
+		SitePlan plan = t == null ? null : SitePlan.of(server, s);
+		if (plan == null) {
+			return;
+		}
+		List<SiteWork.Column> columns = SiteWork.columns(job, t, Rotation.values()[s.rotation()]);
+		if (columns.isEmpty()) {
+			return; // roads, lamps, walls: they follow the land as it is
+		}
+		int x0 = Integer.MAX_VALUE, z0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, z1 = Integer.MIN_VALUE;
+		for (SiteWork.Column c : columns) {
+			x0 = Math.min(x0, c.dx());
+			z0 = Math.min(z0, c.dz());
+			x1 = Math.max(x1, c.dx());
+			z1 = Math.max(z1, c.dz());
+		}
+		ServerLevel level = server.overworld();
+		Set<Long> all = new HashSet<>();
+		s.built().values().forEach(all::addAll);
+		Set<Long> roads = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
+		BlockPos h = s.heart();
+		SiteWork.grade(level, h, h.getX() + x0 - 6, h.getZ() + z0 - 6, h.getX() + x1 + 6, h.getZ() + z1 + 6, plan::at, all, roads,
+				moatColumns(s), SiteWork.surface(level, h));
 	}
 
 	/** The columns of the settlement's moat (empty before gate level 3). */
@@ -476,6 +507,7 @@ public final class Settlements {
 			}
 		}
 		sweepDrops(level, lo, hi);
+		gradeSite(server, s, job);
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
 		People.sendWorkers(level, s, list.size(), server.getPlayerList().getPlayer(s.owner()));
 	}
