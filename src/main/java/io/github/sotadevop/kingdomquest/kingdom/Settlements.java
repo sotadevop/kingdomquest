@@ -64,6 +64,8 @@ public final class Settlements {
 	private static final Map<String, List<Template.Placement>> FOLLOWED = new HashMap<>();
 	/** Settlement id -> the columns of its moat (x, 0, z): never filled, levelled or smoothed. */
 	private static final Map<UUID, Set<Long>> MOAT = new HashMap<>();
+	/** Job -> its pad is made up with a natural bank (true) or stands on a terrace wall (false). */
+	private static final Map<String, Boolean> BANKS = new HashMap<>();
 	/** Settlement id -> blocks a repair could not make stay (two plans want the same spot, a block that falls...): not counted again. */
 	private static final Map<UUID, Set<Long>> UNFIXABLE = new HashMap<>();
 	private static MinecraftServer server;
@@ -227,6 +229,10 @@ public final class Settlements {
 			return false;
 		}
 		BlockPos heart = clicked.above();
+		if (!level.getFluidState(heart).isEmpty()) {
+			player.sendOverlayMessage(Component.translatable("kingdomquest.found.water"));
+			return false;
+		}
 		if (!SiteWork.isGround(level.getBlockState(clicked))) {
 			player.sendOverlayMessage(Component.translatable("kingdomquest.found.ground"));
 			return false;
@@ -1285,6 +1291,11 @@ public final class Settlements {
 		int colsPerTick = instant ? cols : fast ? Math.max(1, (int) Math.ceil(cols / (CREATIVE_TICKS * 0.4)))
 				: Math.max(4, (int) Math.ceil(cols / (t.seconds * 8.0)));
 		Set<Long> moat = moatColumns(s);
+		BlockPos base = s.heart().above(lift(s, s.job()));
+		// a pad that stands only a little above the land is made up as a natural rise with a bank around it;
+		// over a real drop it gets a terrace wall. Decided once per job, before the first column is touched.
+		boolean bank = index < cols && BANKS.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> SiteWork.rimDrop(level, base, columns) <= SiteWork.BANK_LIMIT);
+		Set<Long> roadBlocks = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		Set<Long> loose = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
@@ -1292,7 +1303,7 @@ public final class Settlements {
 			if (moat.contains(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()))) {
 				continue; // the moat is nobody's building ground: never levelled, never filled
 			}
-			SiteWork.clear(level, s.heart().above(lift(s, s.job())), c, allBuilt, SiteWork.surface(level, s.heart()), loose);
+			SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank, roadBlocks);
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
@@ -1346,6 +1357,15 @@ public final class Settlements {
 			nowBuilt.addAll(built);
 			if (LIFTED.contains(s.jobTrack()) || Settlement.MAIN.equals(s.jobTrack())) {
 				SiteWork.underpin(level, built, s.heart().getY() + lift(s, s.job()), nowBuilt, SiteWork.surface(level, s.heart()));
+			}
+			BANKS.remove(s.id() + "|" + s.job());
+			if (done.level(Progression.WALLS) >= 1) {
+				// inside the walls there is no water: by a lake or the sea the castle stands on land of its own
+				Rotation turn = Rotation.values()[s.rotation()];
+				BlockPos ringA = s.heart().offset(Template.rotate(new BlockPos(-63, 0, -56), turn));
+				BlockPos ringB = s.heart().offset(Template.rotate(new BlockPos(69, 0, 40), turn));
+				SiteWork.reclaim(level, Math.min(ringA.getX(), ringB.getX()), Math.min(ringA.getZ(), ringB.getZ()),
+						Math.max(ringA.getX(), ringB.getX()), Math.max(ringA.getZ(), ringB.getZ()), nowBuilt, moatColumns(done), SiteWork.surface(level, s.heart()));
 			}
 			smoothGround(level, done);
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
