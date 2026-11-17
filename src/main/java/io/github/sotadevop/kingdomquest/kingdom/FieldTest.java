@@ -162,6 +162,12 @@ public final class FieldTest {
 		KingdomQuest.LOG.info("Field test {}: chunks loaded", sc.name());
 		String biome = level.getBiome(heart).getRegisteredName();
 		Snapshot base = Snapshot.take(level, heart, Set.of());
+		{
+			// what already hangs in the untouched land (cave ceilings over water, tree branches) is not the mod's doing
+			Settlement probe = new Settlement(UUID.randomUUID(), OWNER, "probe", 0, Identifier.withDefaultNamespace("stone"), "temperate", heart, 0,
+					Map.of(), "", "", 0, Map.of(), Map.of());
+			floating(level, probe, Map.of(), new HashMap<>(), new ArrayList<>(), base.floatingLand(), null);
+		}
 		int relief = Settlements.relief(level, heart);
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
 				.append(", facing ").append(rot).append(", relief ").append(relief).append(", style ")
@@ -403,7 +409,7 @@ public final class FieldTest {
 	// ---- measuring ----
 
 	/** The land around a heart before anything was built: ground height and top block per column, leaves about to decay, map colours. */
-	record Snapshot(BlockPos heart, int x0, int z0, int[] ground, String[] top, int decaying, int[] colours) {
+	record Snapshot(BlockPos heart, int x0, int z0, int[] ground, String[] top, int decaying, int[] colours, Set<Long> floatingLand) {
 		static Snapshot take(ServerLevel level, BlockPos heart, Set<Long> built) {
 			int n = 2 * R + 1;
 			int[] ground = new int[n * n];
@@ -422,7 +428,7 @@ public final class FieldTest {
 					colours[i * n + k] = (st.getMapColor(level, pos).col & 0xFFFFFF) | (ty & 0xFF) << 24;
 				}
 			}
-			return new Snapshot(heart, heart.getX() - R, heart.getZ() - R, ground, top, FieldTest.decaying(level, heart), colours);
+			return new Snapshot(heart, heart.getX() - R, heart.getZ() - R, ground, top, FieldTest.decaying(level, heart), colours, new HashSet<>());
 		}
 	}
 
@@ -476,7 +482,7 @@ public final class FieldTest {
 		Map<String, Integer> c = new LinkedHashMap<>();
 
 		// 1 floating: solid blocks not connected to the ground; buildings whose ground course has nothing under it
-		int[] fl = floating(level, s, owner, samples, marks);
+		int[] fl = floating(level, s, owner, samples, marks, null, base.floatingLand());
 		c.put("float built", fl[0]);
 		c.put("float land", fl[1]);
 		int feet = 0;
@@ -492,6 +498,11 @@ public final class FieldTest {
 		for (BlockPos b : lowest.values()) {
 			BlockState st = level.getBlockState(b);
 			BlockState below = level.getBlockState(b.below());
+			String tr = owner.get(b.asLong());
+			int baseY = h.getY() + Settlements.lift(s, s.style() + "/" + tr + "_1");
+			if (b.getY() > baseY || !st.isCollisionShapeFullBlock(level, b)) {
+				continue; // eaves, porches and roofs overhang by design; only the ground course must stand on something
+			}
 			if (!st.isAir() && !owner.containsKey(b.below().asLong()) && (below.isAir() || !below.getFluidState().isEmpty() || below.canBeReplaced())) {
 				feet++;
 				sample(samples, "floating feet", owner.get(b.asLong()) + " " + rel(s, b) + " " + name(st) + " over " + name(below));
@@ -657,13 +668,18 @@ public final class FieldTest {
 		c.put("road steps", roadSteps);
 		int wallGaps = 0;
 		Map<Long, BlockPos> wallLow = new HashMap<>();
+		Map<Long, Integer> wallCount = new HashMap<>();
 		for (long p : s.built().getOrDefault(Progression.WALLS, List.of())) {
 			BlockPos b = BlockPos.of(p);
 			if (!level.getBlockState(b).isAir()) {
 				wallLow.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b, (a, x) -> a.getY() <= x.getY() ? a : x);
+				wallCount.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), 1, Integer::sum);
 			}
 		}
 		for (BlockPos b : wallLow.values()) {
+			if (wallCount.getOrDefault(BlockPos.asLong(b.getX(), 0, b.getZ()), 0) < 3) {
+				continue; // a walkway board on brackets, not a wall body
+			}
 			BlockState below = level.getBlockState(b.below());
 			if ((below.isAir() || !below.getFluidState().isEmpty() || below.canBeReplaced()) && !owner.containsKey(b.below().asLong())) {
 				wallGaps++;
@@ -717,6 +733,9 @@ public final class FieldTest {
 		if (IMAGE_STAGES.contains(stage) || any && "final".equals(stage)) {
 			image(level, s, base, marks, dir.resolve(site + "_" + stage + ".png"));
 		}
+		if ("final".equals(stage)) {
+			views(level, s, samples, dir, site);
+		}
 	}
 
 	private static void sample(Map<String, List<String>> samples, String key, String text) {
@@ -727,7 +746,8 @@ public final class FieldTest {
 	}
 
 	/** Solid blocks in the inspected box that hang in the air (not connected to the bottom or the sides). [built, land] */
-	private static int[] floating(ServerLevel level, Settlement s, Map<Long, String> owner, Map<String, List<String>> samples, List<Mark> marks) {
+	private static int[] floating(ServerLevel level, Settlement s, Map<Long, String> owner, Map<String, List<String>> samples, List<Mark> marks,
+			Set<Long> record, Set<Long> ignore) {
 		BlockPos h = s.heart();
 		int x0 = h.getX() - R, z0 = h.getZ() - R, n = 2 * R + 1;
 		int ylo = Integer.MAX_VALUE, yhi = Integer.MIN_VALUE;
@@ -772,8 +792,10 @@ public final class FieldTest {
 			int y = idx % hgt;
 			int col = idx / hgt;
 			int i = col / n, k = col % n;
-			int[][] nb = {{i + 1, k, y}, {i - 1, k, y}, {i, k + 1, y}, {i, k - 1, y}, {i, k, y + 1}, {i, k, y - 1}};
-			for (int[] q : nb) {
+			// faces and edges: stairs of a stepped roof only touch along an edge, and that holds in game
+			for (int[] q : new int[][] {{i + 1, k, y}, {i - 1, k, y}, {i, k + 1, y}, {i, k - 1, y}, {i, k, y + 1}, {i, k, y - 1},
+					{i + 1, k, y + 1}, {i - 1, k, y + 1}, {i, k + 1, y + 1}, {i, k - 1, y + 1}, {i + 1, k, y - 1}, {i - 1, k, y - 1},
+					{i, k + 1, y - 1}, {i, k - 1, y - 1}, {i + 1, k + 1, y}, {i + 1, k - 1, y}, {i - 1, k + 1, y}, {i - 1, k - 1, y}}) {
 				if (q[0] < 0 || q[1] < 0 || q[0] >= n || q[1] >= n || q[2] < 0 || q[2] >= hgt) {
 					continue;
 				}
@@ -798,6 +820,13 @@ public final class FieldTest {
 				sample(samples, "float built", owner.get(p.asLong()) + " " + rel(s, p) + " " + name(st));
 				marks.add(new Mark(p.getX(), p.getZ(), 0xFF0000));
 			} else if (SiteWork.terrain(st) || st.is(BlockTags.LOGS)) {
+				if (record != null) {
+					record.add(p.asLong());
+					continue;
+				}
+				if (ignore != null && ignore.contains(p.asLong())) {
+					continue;
+				}
 				land++;
 				sample(samples, "float land", rel(s, p) + " " + name(st));
 				marks.add(new Mark(p.getX(), p.getZ(), 0xC00000));
@@ -953,14 +982,93 @@ public final class FieldTest {
 		return edge;
 	}
 
+	// ---- 3D views (rendered with tools/render.py) ----
+
+	/** Boxes of blocks around the gate, a corner of the ring and the first finding of each kind, as JSON for the renderer. */
+	private static void views(ServerLevel level, Settlement s, Map<String, List<String>> samples, Path dir, String site) {
+		BlockPos h = s.heart();
+		Rotation r = Rotation.values()[s.rotation()];
+		Map<String, BlockPos> centres = new LinkedHashMap<>();
+		centres.put("gate", h.offset(Template.rotate(new BlockPos(7, 0, 44), r)));
+		centres.put("corner", h.offset(Template.rotate(new BlockPos(-50, 0, -40), r)));
+		centres.put("square", h);
+		java.util.regex.Pattern rel = java.util.regex.Pattern.compile("\\((-?\\d+),(-?\\d+),(-?\\d+)\\)");
+		for (Map.Entry<String, List<String>> e : samples.entrySet()) {
+			for (String text : e.getValue()) {
+				java.util.regex.Matcher m = rel.matcher(text);
+				if (m.find()) {
+					centres.putIfAbsent(e.getKey().replace(' ', '_'), h.offset(Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), Integer.parseInt(m.group(3))));
+					break;
+				}
+			}
+		}
+		for (Map.Entry<String, BlockPos> e : centres.entrySet()) {
+			BlockPos c = e.getValue();
+			int half = 16;
+			int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+			for (int x = c.getX() - half; x <= c.getX() + half; x += 2) {
+				for (int z = c.getZ() - half; z <= c.getZ() + half; z += 2) {
+					int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+					lo = Math.min(lo, level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z) - 3);
+					hi = Math.max(hi, top + 1);
+				}
+			}
+			lo = Math.max(lo, c.getY() - 24);
+			hi = Math.min(hi, c.getY() + 30);
+			StringBuilder b = new StringBuilder("{\"size\":[").append(2 * half + 1).append(',').append(hi - lo + 1).append(',').append(2 * half + 1)
+					.append("],\"centre\":\"").append(rel(s, c)).append("\",\"palette\":[");
+			Map<BlockState, Integer> pal = new LinkedHashMap<>();
+			StringBuilder blocks = new StringBuilder();
+			BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+			for (int x = -half; x <= half; x++) {
+				for (int z = -half; z <= half; z++) {
+					for (int y = lo; y <= hi; y++) {
+						BlockState st = level.getBlockState(p.set(c.getX() + x, y, c.getZ() + z));
+						if (st.isAir() || hidden(level, p)) {
+							continue;
+						}
+						int idx = pal.computeIfAbsent(st, k -> pal.size());
+						if (!blocks.isEmpty()) {
+							blocks.append(',');
+						}
+						blocks.append('[').append(x + half).append(',').append(y - lo).append(',').append(z + half).append(',').append(idx).append(']');
+					}
+				}
+			}
+			boolean first = true;
+			for (BlockState st : pal.keySet()) {
+				b.append(first ? "" : ",").append('"').append(st.toString().replace("\"", "")).append('"');
+				first = false;
+			}
+			b.append("],\"blocks\":[").append(blocks).append("]}");
+			try {
+				Files.writeString(dir.resolve(site + "_view_" + e.getKey() + ".json"), b.toString());
+			} catch (IOException ex) {
+				KingdomQuest.LOG.error("Field test: view not written", ex);
+			}
+		}
+	}
+
+	/** A block nobody can see: all six neighbours are full opaque blocks. */
+	private static boolean hidden(ServerLevel level, BlockPos p) {
+		for (Direction d : Direction.values()) {
+			BlockPos q = p.relative(d);
+			BlockState st = level.getBlockState(q);
+			if (!st.canOcclude() || !st.isCollisionShapeFullBlock(level, q)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	// ---- map ----
 
 	private static void image(ServerLevel level, Settlement s, Snapshot base, List<Mark> marks, Path file) {
 		int n = 2 * R + 1;
 		int scale = 3;
-		BufferedImage img = new BufferedImage(n * 2 * scale + 8, n * scale, BufferedImage.TYPE_INT_RGB);
+		BufferedImage img = new BufferedImage(n * 3 * scale + 16, n * scale, BufferedImage.TYPE_INT_RGB);
 		Snapshot now = Snapshot.take(level, s.heart(), Set.of());
-		for (int half = 0; half < 2; half++) {
+		for (int half = 0; half < 3; half++) {
 			int[] col = half == 0 ? base.colours() : now.colours();
 			for (int i = 0; i < n; i++) {
 				for (int k = 0; k < n; k++) {
@@ -972,6 +1080,10 @@ public final class FieldTest {
 					int rr = Math.min(255, (int) (((rgb >> 16) & 255) * shade));
 					int gg = Math.min(255, (int) (((rgb >> 8) & 255) * shade));
 					int bb = Math.min(255, (int) ((rgb & 255) * shade));
+					if (half == 2) { // the third panel: grey map with the findings on it
+						int grey = (rr * 3 + gg * 5 + bb * 2) / 10 / 2 + 60;
+						rr = gg = bb = grey;
+					}
 					for (int a = 0; a < scale; a++) {
 						for (int b = 0; b < scale; b++) {
 							img.setRGB(half * (n * scale + 8) + i * scale + a, k * scale + b, rr << 16 | gg << 8 | bb);
@@ -988,7 +1100,7 @@ public final class FieldTest {
 			for (int a = 0; a < scale; a++) {
 				for (int b = 0; b < scale; b++) {
 					if (a == 1 || b == 1) {
-						img.setRGB(n * scale + 8 + i * scale + a, k * scale + b, m.rgb());
+						img.setRGB(2 * (n * scale + 8) + i * scale + a, k * scale + b, m.rgb());
 					}
 				}
 			}
