@@ -602,6 +602,7 @@ def hamlet(style, level):
         house(b, style, 28, 22, facing_north=True)
         b.put(hx + 1, 0, hz - 2, "bell", attachment="floor", facing="south", powered="false")
         for x, z in ((9, 15), (5, 15)):
+            b.put(x, -1, z, "grass_block", snowy="false")  # the bed's own soil: a road or regrade next to it can't take it away
             b.put(x, 0, z, "sweet_berry_bush" if style == "frozen" else "rose_bush", **({"age": "3"} if style == "frozen" else {"half": "lower"}))
             if style != "frozen":
                 b.put(x, 1, z, "rose_bush", half="upper")
@@ -2601,9 +2602,10 @@ def donjon(b, style):
                 b.put(x, base + height + 1, z, top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
     for y in (base, base + 1):
         b.put(cx, y, cz + 3, "air")  # doorway from the keep's roof
+    # beside the window column: a ladder can't hold on to iron bars
     for y in range(base, base + height):
-        b.put(cx + 2, y, cz, "ladder", facing="west", waterlogged="false")
-    b.put(cx + 2, base + height, cz, "air")
+        b.put(cx + 2, y, cz - 1, "ladder", facing="west", waterlogged="false")
+    b.put(cx + 2, base + height, cz - 1, "air")
     for x in range(cx - 1, cx + 2):
         for z in range(cz - 1, cz + 2):
             b.put(x, base + height + 1, z, "iron_block")

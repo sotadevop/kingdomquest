@@ -172,8 +172,8 @@ public final class FieldTest {
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
 				.append(", facing ").append(rot).append(", relief ").append(relief).append(", style ")
 				.append(Style.forBiome(biome)).append(", ground ").append(SiteWork.surface(level, heart).getBlock().getDescriptionId().replace("block.minecraft.", ""))
-				.append(".\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | pits | road gaps | road steps | wall gaps | cut trees | foreign ground |\n|")
-				.append("---|".repeat(19)).append('\n');
+				.append(".\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost |\n|")
+				.append("---|".repeat(20)).append('\n');
 		Settlement s = new Settlement(UUID.randomUUID(), OWNER, "FT " + sc.name(), 11, Identifier.withDefaultNamespace("stone_bricks"),
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
@@ -409,12 +409,13 @@ public final class FieldTest {
 	// ---- measuring ----
 
 	/** The land around a heart before anything was built: ground height and top block per column, leaves about to decay, map colours. */
-	record Snapshot(BlockPos heart, int x0, int z0, int[] ground, String[] top, int decaying, int[] colours, Set<Long> floatingLand) {
+	record Snapshot(BlockPos heart, int x0, int z0, int[] ground, String[] top, int decaying, int[] colours, Set<Long> floatingLand, BitSet snow) {
 		static Snapshot take(ServerLevel level, BlockPos heart, Set<Long> built) {
 			int n = 2 * R + 1;
 			int[] ground = new int[n * n];
 			String[] top = new String[n * n];
 			int[] colours = new int[n * n];
+			BitSet snow = new BitSet(n * n);
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 			for (int i = 0; i < n; i++) {
 				for (int k = 0; k < n; k++) {
@@ -423,12 +424,16 @@ public final class FieldTest {
 					int g = SiteWork.groundDeep(level, x, z, heart.getY(), built);
 					ground[i * n + k] = g;
 					top[i * n + k] = name(level.getBlockState(pos.set(x, g, z)));
+					BlockState over = level.getBlockState(pos.set(x, g + 1, z));
+					if (over.is(Blocks.SNOW) || level.getBlockState(pos.set(x, g, z)).is(Blocks.SNOW_BLOCK)) {
+						snow.set(i * n + k);
+					}
 					int ty = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
 					BlockState st = level.getBlockState(pos.set(x, ty, z));
 					colours[i * n + k] = (st.getMapColor(level, pos).col & 0xFFFFFF) | (ty & 0xFF) << 24;
 				}
 			}
-			return new Snapshot(heart, heart.getX() - R, heart.getZ() - R, ground, top, FieldTest.decaying(level, heart), colours, new HashSet<>());
+			return new Snapshot(heart, heart.getX() - R, heart.getZ() - R, ground, top, FieldTest.decaying(level, heart), colours, new HashSet<>(), snow);
 		}
 	}
 
@@ -545,8 +550,9 @@ public final class FieldTest {
 
 		// 4 water
 		Rotation r = Rotation.values()[s.rotation()];
-		BlockPos ra = h.offset(Template.rotate(new BlockPos(-56, 0, -46), r));
-		BlockPos rb = h.offset(Template.rotate(new BlockPos(76, 0, 50), r));
+		// the wall ring relative to the heart (tools/buildings.py WALL, as SitePlan uses it)
+		BlockPos ra = h.offset(Template.rotate(new BlockPos(-63, 0, -56), r));
+		BlockPos rb = h.offset(Template.rotate(new BlockPos(69, 0, 40), r));
 		int wet = 0;
 		int wetMoat = 0;
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -715,6 +721,21 @@ public final class FieldTest {
 			}
 		}
 		c.put("foreign ground", foreign);
+		// snow: open columns that were white before and are bare now (frozen biomes)
+		int bare = 0;
+		Snapshot now2 = Snapshot.take(level, h, builtAll);
+		for (int i = 0; i < n; i++) {
+			for (int k = 0; k < n; k++) {
+				int x = base.x0() + i, z = base.z0() + k;
+				if (Math.abs(x - h.getX()) <= 70 && Math.abs(z - h.getZ()) <= 70 && open[i * n + k] && base.snow().get(i * n + k) && !now2.snow().get(i * n + k)) {
+					bare++;
+					if (bare % 50 == 1) {
+						marks.add(new Mark(x, z, 0xFFFFFF));
+					}
+				}
+			}
+		}
+		c.put("snow lost", bare);
 
 		StringBuilder row = new StringBuilder("| ").append(stage).append(" | ").append(ms);
 		for (int v : c.values()) {
@@ -989,8 +1010,8 @@ public final class FieldTest {
 		BlockPos h = s.heart();
 		Rotation r = Rotation.values()[s.rotation()];
 		Map<String, BlockPos> centres = new LinkedHashMap<>();
-		centres.put("gate", h.offset(Template.rotate(new BlockPos(7, 0, 44), r)));
-		centres.put("corner", h.offset(Template.rotate(new BlockPos(-50, 0, -40), r)));
+		centres.put("gate", h.offset(Template.rotate(new BlockPos(0, 0, 40), r)));
+		centres.put("corner", h.offset(Template.rotate(new BlockPos(-60, 0, -52), r)));
 		centres.put("square", h);
 		java.util.regex.Pattern rel = java.util.regex.Pattern.compile("\\((-?\\d+),(-?\\d+),(-?\\d+)\\)");
 		for (Map.Entry<String, List<String>> e : samples.entrySet()) {

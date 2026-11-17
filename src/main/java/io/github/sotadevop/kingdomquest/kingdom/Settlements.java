@@ -1047,6 +1047,9 @@ public final class Settlements {
 				minY = Math.min(minY, p.offset().getY());
 			}
 			Set<Long> placed = new HashSet<>();
+			if (track.equals(Progression.ROADS)) {
+				ground.putAll(evenRoad(level, s, base, others));
+			}
 			// a wall that stands (after a restart, for repairs, for a rebuild) is found where it is: the top of
 			// what was built in an anchor column against the top of the plan there gives its height exactly
 			Progression.Step standing = Progression.current(s, track);
@@ -1116,6 +1119,8 @@ public final class Settlements {
 					}
 				}
 				out.addAll(steps);
+				// cut and fill: where the road was evened out it gets earth under it, or the land above it is opened
+				out.addAll(0, roadEarthwork(level, s, out, others, placed));
 				// over water a road is a causeway: stone under it down to the bed, so it is no floating strip
 				// (a castle founded in a lake gets real streets between its islands)
 				List<Template.Placement> piers = new ArrayList<>();
@@ -1166,6 +1171,132 @@ public final class Settlements {
 	}
 
 	/**
+	 * The height of every road column (offset from the heart's level, as the road follows the land) after cut and
+	 * fill: neighbouring road columns never differ by more than one block, so every step can be walked (and gets a
+	 * slab). Columns next to anything built (doors, the gatehouse, terraces) keep the height of their land; between
+	 * them the road is the middle of the land pulled down to a walkable slope and pulled up to one, which spreads a
+	 * big step evenly over cut on the high side and fill on the low side, as a road builder would.
+	 */
+	private static Map<Long, Integer> evenRoad(ServerLevel level, Settlement s, List<Template.Placement> base, Set<Long> others) {
+		int heartY = s.heart().getY();
+		Map<Long, Integer> g = new HashMap<>();
+		for (Template.Placement p : base) {
+			BlockPos col = s.heart().offset(p.anchor());
+			g.computeIfAbsent(BlockPos.asLong(col.getX(), 0, col.getZ()), c -> Math.max(-40, Math.min(30,
+					SiteWork.groundDeep(level, col.getX(), col.getZ(), heartY, others) + 1 - heartY)));
+		}
+		Set<Long> builtCols = new HashSet<>();
+		for (long o : others) {
+			BlockPos b = BlockPos.of(o);
+			if (b.getY() >= heartY - 45) {
+				builtCols.add(BlockPos.asLong(b.getX(), 0, b.getZ()));
+			}
+		}
+		Set<Long> fixed = new HashSet<>();
+		for (long c : g.keySet()) {
+			int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+			for (int dx = -1; dx <= 1 && !fixed.contains(c); dx++) {
+				for (int dz = -1; dz <= 1; dz++) {
+					if (builtCols.contains(BlockPos.asLong(x + dx, 0, z + dz))) {
+						fixed.add(c);
+						break;
+					}
+				}
+			}
+		}
+		Map<Long, Integer> low = new HashMap<>(g);
+		Map<Long, Integer> high = new HashMap<>(g);
+		int[][] four = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+		for (boolean changed = true; changed; ) {
+			changed = false;
+			for (long c : g.keySet()) {
+				if (fixed.contains(c)) {
+					continue;
+				}
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				for (int[] d : four) {
+					long n = BlockPos.asLong(x + d[0], 0, z + d[1]);
+					Integer ln = low.get(n);
+					if (ln != null && ln + 1 < low.get(c)) {
+						low.put(c, ln + 1);
+						changed = true;
+					}
+					Integer hn = high.get(n);
+					if (hn != null && hn - 1 > high.get(c)) {
+						high.put(c, hn - 1);
+						changed = true;
+					}
+				}
+			}
+		}
+		Map<Long, Integer> h = new HashMap<>();
+		for (long c : g.keySet()) {
+			h.put(c, fixed.contains(c) ? g.get(c) : Math.floorDiv(low.get(c) + high.get(c), 2));
+		}
+		for (int pass = 0; pass < 12; pass++) { // where two fixed ends disagree, the free columns between still close up
+			for (long c : g.keySet()) {
+				if (fixed.contains(c)) {
+					continue;
+				}
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				int lo = Integer.MIN_VALUE, hi = Integer.MAX_VALUE;
+				for (int[] d : four) {
+					Integer n = h.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
+					if (n != null) {
+						lo = Math.max(lo, n - 1);
+						hi = Math.min(hi, n + 1);
+					}
+				}
+				if (lo <= hi) {
+					h.put(c, Math.max(lo, Math.min(hi, h.get(c))));
+				}
+			}
+		}
+		Map<Long, Integer> out = new HashMap<>();
+		for (Template.Placement p : base) {
+			BlockPos col = s.heart().offset(p.anchor());
+			out.put(col.asLong(), h.get(BlockPos.asLong(col.getX(), 0, col.getZ())));
+		}
+		return out;
+	}
+
+	/** Earth under a road that was raised above its land, air over one that was cut into it (natural blocks only). */
+	private static List<Template.Placement> roadEarthwork(ServerLevel level, Settlement s, List<Template.Placement> road, Set<Long> others, Set<Long> placed) {
+		int heartY = s.heart().getY();
+		Map<Long, int[]> span = new HashMap<>(); // column -> lowest, highest road block (relative)
+		Map<Long, Template.Placement> any = new HashMap<>();
+		for (Template.Placement p : road) {
+			long c = BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ());
+			span.merge(c, new int[] {p.offset().getY(), p.offset().getY()}, (a, b) -> new int[] {Math.min(a[0], b[0]), Math.max(a[1], b[1])});
+			any.putIfAbsent(c, p);
+		}
+		BlockState fill = SiteWork.subsoil(SiteWork.surface(level, s.heart()));
+		List<Template.Placement> out = new ArrayList<>();
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (Map.Entry<Long, int[]> e : span.entrySet()) {
+			int rx = BlockPos.getX(e.getKey()), rz = BlockPos.getZ(e.getKey());
+			int x = s.heart().getX() + rx, z = s.heart().getZ() + rz;
+			Template.Placement p = any.get(e.getKey());
+			int ground = SiteWork.groundDeep(level, x, z, heartY, others) - heartY; // relative top of the land
+			for (int y = ground + 1; y < e.getValue()[0]; y++) { // raised: earth under it
+				pos.set(x, heartY + y, z);
+				BlockState st = level.getBlockState(pos);
+				if (!others.contains(pos.asLong()) && (st.isAir() || st.canBeReplaced()) && st.getFluidState().isEmpty() && placed.add(BlockPos.asLong(rx, y, rz))) {
+					out.add(new Template.Placement(new BlockPos(rx, y, rz), fill, p.segment(), p.anchor()));
+				}
+			}
+			for (int y = e.getValue()[1] + 1; y <= Math.max(ground, e.getValue()[1]) + 2; y++) { // cut: open sky over it
+				pos.set(x, heartY + y, z);
+				BlockState st = level.getBlockState(pos);
+				if (!others.contains(pos.asLong()) && !st.isAir() && SiteWork.natural(st) && st.getFluidState().isEmpty() && placed.add(BlockPos.asLong(rx, y, rz))) {
+					out.add(new Template.Placement(new BlockPos(rx, y, rz), Blocks.AIR.defaultBlockState(), p.segment(), p.anchor()));
+				}
+			}
+		}
+		return out;
+	}
+
+	/**
 	 * After a building is finished, roads and lamps that already exist grow to it: their new segments are
 	 * placed at once at the current road/lamp level.
 	 */
@@ -1201,15 +1332,29 @@ public final class Settlements {
 			Set<Long> have = new HashSet<>(built);
 			Set<Long> all = new HashSet<>();
 			s.built().values().forEach(all::addAll);
+			Set<Long> otherTracks = new HashSet<>();
+			s.built().forEach((k2, v) -> {
+				if (!k2.equals(track)) {
+					otherTracks.addAll(v);
+				}
+			});
 			for (Template.Placement p : list) {
 				BlockPos pos = s.heart().offset(p.offset());
+				if (otherTracks.contains(pos.asLong())) {
+					continue; // never over another building's block (a lamp in the cellar wall, a road through a gate pier)
+				}
 				if (have.contains(pos.asLong())) {
-					continue;
+					// laid before, but a later build may have covered it (a bank, a regrade): laid again
+					BlockState now = level.getBlockState(pos);
+					if (now.getBlock() == p.state().getBlock() || p.state().isAir() && !SiteWork.natural(now)) {
+						continue;
+					}
 				}
 				level.setBlock(pos, neighbourShaped(p.state(), level, pos), NO_DROPS);
 				SiteWork.clearAbove(level, pos, all);
-				built.add(pos.asLong());
-				have.add(pos.asLong());
+				if (have.add(pos.asLong())) {
+					built.add(pos.asLong());
+				}
 			}
 			s = s.withBuilt(track, built);
 		}
