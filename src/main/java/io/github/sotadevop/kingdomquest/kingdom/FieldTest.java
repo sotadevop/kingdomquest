@@ -715,6 +715,9 @@ public final class FieldTest {
 		int foreign = 0;
 		for (Map.Entry<String, Integer> e : after.entrySet()) {
 			int was = before.getOrDefault(e.getKey(), 0);
+			if (Set.of("stone_bricks", "mossy_stone_bricks", "cobblestone", "mossy_cobblestone", "smooth_sandstone", "cut_red_sandstone").contains(e.getKey())) {
+				continue; // the stone terrace walls over a real drop: built that way on purpose
+			}
 			if (cols > 0 && e.getValue() * 50 > cols && was * 200 < cols) {
 				foreign += e.getValue();
 				sample(samples, "foreign ground", e.getKey() + " " + e.getValue() + " of " + cols + " columns (was " + was + ")");

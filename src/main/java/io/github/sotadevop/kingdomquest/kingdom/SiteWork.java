@@ -254,8 +254,8 @@ public final class SiteWork {
 
 	/** Dirt or stone that only shows because a hill was cut away; it gets the surface block on top. */
 	private static boolean exposedInside(BlockState st) {
-		return st.is(Blocks.DIRT) || st.is(BlockTags.BASE_STONE_OVERWORLD) || st.is(Blocks.GRAVEL)
-				|| BuiltInRegistries.BLOCK.getKey(st.getBlock()).getPath().endsWith("_ore");
+		return st.is(Blocks.DIRT) || st.is(BlockTags.BASE_STONE_OVERWORLD) || st.is(Blocks.GRAVEL) || st.is(Blocks.SANDSTONE)
+				|| st.is(Blocks.RED_SANDSTONE) || BuiltInRegistries.BLOCK.getKey(st.getBlock()).getPath().endsWith("_ore");
 	}
 
 	/**
@@ -902,6 +902,32 @@ public final class SiteWork {
 	 * Makes cleared but unused ground look natural: grass tufts and flowers on some of the grass blocks of the area.
 	 * They are natural blocks, so a later building simply clears them again.
 	 */
+	/**
+	 * Where it snows, open ground the builders touched gets its snow back (cut, filled and regraded land would stay
+	 * green in a white land until the next snowfall). Built columns, roads included, stay clear.
+	 */
+	public static void snowCover(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0; x <= x1; x++) {
+			for (int z = z0; z <= z1; z++) {
+				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+				pos.set(x, y - 1, z);
+				BlockState ground = level.getBlockState(pos);
+				if (built.contains(pos.asLong()) || !terrain(ground) || !ground.isCollisionShapeFullBlock(level, pos)) {
+					continue;
+				}
+				pos.set(x, y, z);
+				BlockState at = level.getBlockState(pos);
+				if (built.contains(pos.asLong()) || !(at.isAir() || plant(at) && at.canBeReplaced()) || at.is(Blocks.SNOW)) {
+					continue;
+				}
+				if (level.getBiome(pos).value().shouldSnow(level, pos)) {
+					level.setBlock(pos, Blocks.SNOW.defaultBlockState(), Block.UPDATE_ALL);
+				}
+			}
+		}
+	}
+
 	public static void decorate(ServerLevel level, BlockPos heart, List<Column> columns, Set<Long> built) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (Column c : columns) {
