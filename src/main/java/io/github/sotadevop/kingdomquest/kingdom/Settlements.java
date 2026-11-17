@@ -164,7 +164,7 @@ public final class Settlements {
 		put(server, s);
 	}
 
-	private static void put(MinecraftServer server, Settlement s) {
+	static void put(MinecraftServer server, Settlement s) {
 		List<Settlement> list = new ArrayList<>(all(server));
 		list.removeIf(o -> o.id().equals(s.id()));
 		list.add(s);
@@ -466,7 +466,7 @@ public final class Settlements {
 	}
 
 	/** Starts building {@code step} on {@code track}: takes down the track's blocks the new level doesn't use, clears the ground. */
-	private static void start(MinecraftServer server, Settlement first, String track, Progression.Step step) {
+	static void start(MinecraftServer server, Settlement first, String track, Progression.Step step) {
 		Settlement s0 = first;
 		String job = s0.style() + "/" + step.building();
 		String track0 = track;
@@ -978,7 +978,7 @@ public final class Settlements {
 	}
 
 	/** The job's blocks for this settlement; terrain-following templates sit on the ground at each anchor column. */
-	private static List<Template.Placement> placements(Settlement s, String job) {
+	static List<Template.Placement> placements(Settlement s, String job) {
 		List<Template.Placement> base = basePlacements(s, job);
 		Template t = Template.get(job);
 		if (t != null && !t.follow && server != null && trackOf(job).equals("gate") && s.level(Progression.GATE) >= 3) {
@@ -1301,7 +1301,7 @@ public final class Settlements {
 		return t == null ? 0 : SiteWork.columns(job, t, Rotation.values()[s.rotation()]).size() + placements(s, job).size();
 	}
 
-	private static void step(MinecraftServer server, Settlement s, boolean instant) {
+	static void step(MinecraftServer server, Settlement s, boolean instant) {
 		ServerLevel level = server.overworld();
 		if (!level.isLoaded(s.heart())) {
 			return; // paused while nobody is near
