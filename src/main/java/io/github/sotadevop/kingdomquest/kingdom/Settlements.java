@@ -1333,9 +1333,38 @@ public final class Settlements {
 				}
 			}
 		}
+		// how far the fixed ends allow a column to be from them: one block up or down per block along the road.
+		// The middle of the land's own envelopes is kept inside these bounds, so the road also meets every door
+		// step by step (max and min of walkable slopes are walkable slopes)
+		Map<Long, Integer> capHigh = new HashMap<>();
+		Map<Long, Integer> capLow = new HashMap<>();
+		for (long c : g.keySet()) {
+			capHigh.put(c, fixed.contains(c) ? g.get(c) : Integer.MAX_VALUE / 2);
+			capLow.put(c, fixed.contains(c) ? g.get(c) : Integer.MIN_VALUE / 2);
+		}
+		for (boolean changed = !fixed.isEmpty(); changed; ) {
+			changed = false;
+			for (long c : g.keySet()) {
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				for (int[] d : four) {
+					long n = BlockPos.asLong(x + d[0], 0, z + d[1]);
+					Integer hn = capHigh.get(n);
+					if (hn != null && hn + 1 < capHigh.get(c)) {
+						capHigh.put(c, hn + 1);
+						changed = true;
+					}
+					Integer ln = capLow.get(n);
+					if (ln != null && ln - 1 > capLow.get(c)) {
+						capLow.put(c, ln - 1);
+						changed = true;
+					}
+				}
+			}
+		}
 		Map<Long, Integer> h = new HashMap<>();
 		for (long c : g.keySet()) {
-			h.put(c, fixed.contains(c) ? g.get(c) : Math.floorDiv(low.get(c) + high.get(c), 2));
+			int mid = Math.floorDiv(low.get(c) + high.get(c), 2);
+			h.put(c, fixed.contains(c) ? g.get(c) : Math.min(capHigh.get(c), Math.max(capLow.get(c), mid)));
 		}
 		for (int pass = 0; pass < 12; pass++) { // where two fixed ends disagree, the free columns between still close up
 			for (long c : g.keySet()) {
