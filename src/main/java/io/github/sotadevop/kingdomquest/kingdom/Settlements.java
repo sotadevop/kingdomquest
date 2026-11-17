@@ -959,6 +959,9 @@ public final class Settlements {
 		});
 	}
 
+	/** Per job: columns next to other buildings that its land shaping leaves alone. */
+	private static final Map<String, Set<Long>> PROTECTED = new HashMap<>();
+
 	/** The side of the wall ring a position outside it faces, in the template's frame: 0 north, 1 south (the gate), 2 west, 3 east. */
 	private static final int SOUTH = 1;
 
@@ -1609,10 +1612,36 @@ public final class Settlements {
 		Set<Long> roadBlocks = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		Set<Long> loose = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
+		// the ground around buildings that already stand (2 blocks out: door steps, porches, the strip by the wall)
+		// is theirs: this job's slopes and terraces never cut it away or heap earth onto it
+		Set<Long> keepClear = index < cols ? PROTECTED.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
+			Set<Long> out = new HashSet<>();
+			s.built().forEach((track, list) -> {
+				if (track.equals(s.jobTrack()) || track.equals(Progression.ROADS) || track.equals(Progression.LAMPS)) {
+					return;
+				}
+				Set<Long> cols0 = new HashSet<>();
+				for (long p : list) {
+					cols0.add(BlockPos.asLong(BlockPos.getX(p), 0, BlockPos.getZ(p)));
+				}
+				for (long c0 : cols0) {
+					for (int dx = -2; dx <= 2; dx++) {
+						for (int dz = -2; dz <= 2; dz++) {
+							out.add(BlockPos.asLong(BlockPos.getX(c0) + dx, 0, BlockPos.getZ(c0) + dz));
+						}
+					}
+				}
+			});
+			return out;
+		}) : Set.of();
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
 			SiteWork.Column c = columns.get(index);
-			if (moat.contains(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()))) {
+			long colKey = BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz());
+			if (moat.contains(colKey)) {
 				continue; // the moat is nobody's building ground: never levelled, never filled
+			}
+			if (!c.pad() && keepClear.contains(colKey)) {
+				continue;
 			}
 			SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank, roadBlocks);
 		}
