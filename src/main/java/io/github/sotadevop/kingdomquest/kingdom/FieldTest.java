@@ -305,10 +305,12 @@ public final class FieldTest {
 				}
 				Direction f = st.getValue(DoorBlock.FACING);
 				StringBuilder now = new StringBuilder();
-				for (int k = 1; k <= 3; k++) {
-					BlockPos q = d.relative(f, k);
-					int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, q.getX(), q.getZ());
-					now.append(top - d.getY()).append(k < 3 ? "/" : "");
+				for (Direction g : new Direction[] {f, f.getOpposite()}) { // doors face in or out: both sides
+					for (int k = 1; k <= 3; k++) {
+						BlockPos q = d.relative(g, k);
+						int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, q.getX(), q.getZ());
+						now.append(top - d.getY()).append(k < 3 ? "/" : g == f ? " | " : "");
+					}
 				}
 				List<String> hist = DOOR_GROUND.computeIfAbsent(p, k -> new ArrayList<>());
 				String last = hist.isEmpty() ? "" : hist.get(hist.size() - 1);

@@ -492,12 +492,15 @@ public final class Settlements {
 						|| st.getValue(net.minecraft.world.level.block.DoorBlock.HALF) != net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
 					continue;
 				}
-				net.minecraft.core.Direction f = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
-				for (int k = 1; k <= 4; k++) {
-					int wide = k <= 2 ? 2 : 1;
-					for (int side = -wide; side <= wide; side++) {
-						BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
-						out.add(BlockPos.asLong(q.getX(), 0, q.getZ()));
+				// both sides: templates have doors facing in and doors facing out; the inside is the building anyway
+				net.minecraft.core.Direction f0 = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+				for (net.minecraft.core.Direction f : new net.minecraft.core.Direction[] {f0, f0.getOpposite()}) {
+					for (int k = 1; k <= 4; k++) {
+						int wide = k <= 2 ? 2 : 1;
+						for (int side = -wide; side <= wide; side++) {
+							BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
+							out.add(BlockPos.asLong(q.getX(), 0, q.getZ()));
+						}
 					}
 				}
 			}
@@ -1306,11 +1309,19 @@ public final class Settlements {
 	private static Map<Long, Integer> evenRoad(ServerLevel level, Settlement s, List<Template.Placement> base, Set<Long> others, Set<Long> own,
 			Set<Long> through) {
 		int heartY = s.heart().getY();
+		// the road's own step slabs lie on top of it: measured as ground, the road would climb a block every time it is
+		// worked out again (field test: the ground in front of a door rose by one with every later build)
+		Set<Long> skip = new HashSet<>(others);
+		for (long o : own) {
+			if (level.getBlockState(BlockPos.of(o)).getBlock() instanceof net.minecraft.world.level.block.SlabBlock) {
+				skip.add(o);
+			}
+		}
 		Map<Long, Integer> g = new HashMap<>();
 		for (Template.Placement p : base) {
 			BlockPos col = s.heart().offset(p.anchor());
 			g.computeIfAbsent(BlockPos.asLong(col.getX(), 0, col.getZ()), c -> {
-				int y = SiteWork.groundDeep(level, col.getX(), col.getZ(), heartY, others);
+				int y = SiteWork.groundDeep(level, col.getX(), col.getZ(), heartY, skip);
 				BlockPos top = new BlockPos(col.getX(), y, col.getZ());
 				BlockState under = level.getBlockState(top.below());
 				if (own.contains(top.asLong()) && (under.isAir() || under.canBeReplaced() && under.getFluidState().isEmpty())) {
@@ -1672,12 +1683,14 @@ public final class Settlements {
 			for (Template.Placement p : list) {
 				BlockState st = p.state();
 				if (st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock && st.hasProperty(net.minecraft.world.level.block.DoorBlock.FACING)) {
-					net.minecraft.core.Direction f = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+					net.minecraft.core.Direction f0 = st.getValue(net.minecraft.world.level.block.DoorBlock.FACING);
 					BlockPos d = s.heart().offset(p.offset());
-					for (int k = 1; k <= 16; k++) {
-						for (int side = -2; side <= 2; side++) {
-							BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
-							out.add(BlockPos.asLong(q.getX(), 0, q.getZ()));
+					for (net.minecraft.core.Direction f : new net.minecraft.core.Direction[] {f0, f0.getOpposite()}) { // in or out
+						for (int k = 1; k <= 16; k++) {
+							for (int side = -2; side <= 2; side++) {
+								BlockPos q = d.relative(f, k).relative(f.getClockWise(), side);
+								out.add(BlockPos.asLong(q.getX(), 0, q.getZ()));
+							}
 						}
 					}
 				}
