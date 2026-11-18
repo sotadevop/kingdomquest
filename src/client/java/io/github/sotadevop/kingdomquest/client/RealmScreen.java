@@ -351,6 +351,7 @@ public class RealmScreen extends Screen {
 				return null;
 			}
 			KingdomNpc n = new KingdomNpc(KingdomNpc.TYPE, mc.level);
+			n.setId(-1_000_000 - this.models.size()); // the renderer reads the id (held items); never one of the world's
 			n.setSkin(k);
 			return n;
 		});
