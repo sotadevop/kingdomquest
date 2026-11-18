@@ -1725,7 +1725,7 @@ def window_cells(posts, skip=None):
     return cells
 
 
-def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=None, chimney=None, windows_back=True):
+def hall_basic(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=None, chimney=None, windows_back=True):
     """A building of the village in its style, used for every workshop, shop and hall: a stone foundation, timber
     posts with fill between them (kind 'timber') or a masonry ground floor (kind 'stone'), windows in every bay with
     shutters on the door side, a door with steps, and a roof with eaves on all sides (flat with a parapet in the
@@ -1865,6 +1865,342 @@ def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=No
     return peak
 
 
+HALL = {
+    # how each region dresses the shared hall shell (see hall)
+    "temperate": dict(post="stripped_dark_oak_log", brace="dark_oak_stairs", infill=("calcite",), rises=(1, 1, 2, 1, 2, 1, 2, 1, 2, 1),
+                      roof=("bricks", "brick_stairs", "brick_slab"), shutter="spruce_trapdoor", sign="spruce_hanging_sign"),
+    "frozen": dict(post="stripped_dark_oak_log", infill=("stripped_spruce_log",), rises=(1,) * 9,
+                   roof=("spruce_planks", "spruce_stairs", "dark_oak_slab"), shutter="dark_oak_trapdoor", sign="spruce_hanging_sign"),
+    "arid": dict(rises=None, shutter="acacia_trapdoor", sign="acacia_hanging_sign"),
+    "highland": dict(infill=("calcite", "diorite", "calcite", "calcite"), rises=(1, 1, 2, 1, 2, 1, 2, 1, 2, 1),
+                     roof=("deepslate_tiles", "deepslate_tile_stairs", "deepslate_tile_slab"), shutter="spruce_trapdoor",
+                     sign="dark_oak_hanging_sign"),
+    "wild": dict(post="stripped_jungle_log", infill=("bamboo_mosaic", "bamboo_planks", "bamboo_mosaic"), rises=(1, 1, 1, 2, 2, 2, 2, 2),
+                 roof=("spruce_planks", "spruce_stairs", "spruce_slab"), shutter="bamboo_trapdoor", sign="bamboo_hanging_sign"),
+}
+ZELLIGE = ("cyan_glazed_terracotta", "light_blue_glazed_terracotta", "white_glazed_terracotta", "blue_glazed_terracotta")
+QUOIN = ("stone_bricks", "polished_andesite")
+
+
+def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=None, chimney=None, windows_back=True, sign=False):
+    """A building of the village in its region's style, used for every workshop, shop and hall. Same footprint, door,
+    storeys and tie beams in every region; the shell follows the region's tradition:
+    - temperate: German half-timbering (dark frame, white infill, 'Mann' braces at the corners, window boxes, framed
+      gables, steep tiled roof); stone buildings get a masonry ground floor under a framed upper storey.
+    - frozen: Norwegian log walls crossing at the corners, upright-board upper storey and gables, a shingle roof with
+      dark bargeboards crossing over the ridge.
+    - arid: Moorish limewashed walls with a zellige dado and frieze, carved lattice windows under pointed arches, a
+      horseshoe door in a tile frame, a flat roof behind merlons.
+    - highland: Scottish harled walls with stone quoins and window margins, a door with a keystone, crow-stepped gables
+      and a steep slate roof.
+    - wild: Southeast Asian frame of jungle posts with woven bamboo, a red carved band, bamboo blinds, a flared roof
+      with carved gables and upturned ridge ends.
+    With base_h the building has two storeys: the upper floor's beams lie at base_h + 1. The roof reaches one block
+    past the walls on every side (crossing log ends of the frozen walls too), the door's steps, shutters and sign stand
+    in front of the door wall. Returns the height of the roof's top."""
+    if kind == "nether":
+        return hall_basic(b, style, x0, z0, x1, z1, h, door, kind, floor, base_h, chimney, windows_back)
+    k, m, R = KIT[style], MAT[style], HALL[style]
+    cx = (x0 + x1) // 2
+    dz = z0 if door == "n" else z1
+    out = -1 if door == "n" else 1
+    facing = "north" if door == "n" else "south"
+    stone_kind = kind == "stone"
+    frame = R.get("post", m["frame"])
+    log = "log" in frame
+    px = posts_along(x0, x1, cx)
+    pz = posts_along(z0, z1)
+    rows = [2, 3] if (base_h or h) >= 5 else [2]
+    if base_h is not None:
+        rows += [base_h + 3]
+    plates = {h} | ({base_h + 1} if base_h is not None else set())
+    storeys = [(1, base_h if base_h is not None else h)] + ([(base_h + 2, h)] if base_h is not None else [])
+
+    def beam(x, y, z, axis):
+        b.put(x, y, z, frame, **({"axis": axis} if log else {}))
+
+    def upper(y):
+        return base_h is not None and y > base_h
+
+    def tile(x, y, z):
+        b.put(x, y, z, pick(ZELLIGE, x, y, z), facing=pick(("north", "east", "south", "west"), z, x, y))
+
+    # foundation and floor
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            b.put(x, 0, z, pick(k["base"], x, 0, z) if edge else (floor or k["plank"]))
+    # walls
+    cells = [(x, z, "x", x, px) for x in range(x0, x1 + 1) for z in (z0, z1)] + \
+            [(x, z, "z", z, pz) for z in range(z0 + 1, z1) for x in (x0, x1)]
+    for (x, z, along, u, posts) in cells:
+        corner = x in (x0, x1) and z in (z0, z1)
+        for y in range(1, h + 1):
+            masonry = stone_kind and not upper(y)
+            if style == "arid":
+                if y == 1:
+                    tile(x, y, z)
+                else:
+                    b.put(x, y, z, pick(("smooth_sandstone", "smooth_sandstone", "smooth_sandstone", "sandstone"), x, y, z))
+            elif style == "highland":
+                if corner:
+                    b.put(x, y, z, QUOIN[y % 2])
+                elif base_h is not None and y == base_h + 1:
+                    b.put(x, y, z, "stone_bricks")             # a string course between the storeys
+                elif masonry:
+                    b.put(x, y, z, pick(("cobblestone", "andesite", "stone", "cobblestone", "tuff"), x, y, z))
+                else:
+                    b.put(x, y, z, pick(R["infill"], x, y, z))
+            elif style == "frozen" and not upper(y) and not masonry:
+                ax = along if not corner else ("x" if y % 2 else "z")
+                b.put(x, y, z, "spruce_log" if y % 2 else "stripped_spruce_log", axis=ax)
+            elif masonry and style != "wild":
+                b.put(x, y, z, QUOIN[y % 2] if corner else pick(k["stone"], x, y, z))
+            elif u in posts:
+                beam(x, y, z, "y")
+            elif y in plates:
+                beam(x, y, z, along)
+            elif style == "frozen":
+                b.put(x, y, z, "stripped_spruce_log", axis="y")   # upright boards
+            elif style == "wild" and masonry:
+                b.put(x, y, z, pick(k["stone"], x, y, z))
+            elif style == "wild" and y + 1 in plates:
+                b.put(x, y, z, "mangrove_planks")                  # the red carved band under the plate
+            else:
+                b.put(x, y, z, pick(R["infill"], x, y, z))
+    if style == "frozen":                   # log ends crossing at the corners
+        for y in range(1, (base_h or h) + 1):
+            if stone_kind:
+                break
+            for x, z in ((x0, z0), (x1, z0), (x0, z1), (x1, z1)):
+                if y % 2:
+                    b.put(x + (-1 if x == x0 else 1), y, z, "spruce_log", axis="x")
+                else:
+                    b.put(x, y, z + (-1 if z == z0 else 1), "stripped_spruce_log", axis="z")
+    if style == "temperate":                # the 'Mann' braces beside the corner posts, in each framed storey
+        for (lo, hi) in storeys:
+            if stone_kind and lo == 1:
+                continue
+            for (x, z, along, u, posts) in cells:
+                lo_dir, hi_dir = ("west", "east") if along == "x" else ("north", "south")
+                ends = {posts[0] + 1: lo_dir, posts[-1] - 1: hi_dir}
+                if u in ends and u not in posts and (x, z) != (cx, dz):
+                    b.put(x, hi - 1, z, R["brace"], facing=ends[u], half="top", shape="straight", waterlogged="false")
+                    b.put(x, lo, z, R["brace"], facing=ends[u], **ST)
+    # windows
+    groups_x = window_cells(px, cx)
+    groups_z = window_cells(pz)
+    sides = [(z, "x", g) for z in (z0, z1) if z == dz or windows_back for g in groups_x] + \
+            [(x, "z", g) for x in (x0, x1) for g in groups_z]
+    for (w, along, group) in sides:
+        pane = PANE_X if along == "x" else PANE_Z
+        for v in group:
+            x, z = (v, w) if along == "x" else (w, v)
+            outward = ("south" if z == z1 else "north") if along == "x" else ("east" if x == x1 else "west")
+            for y in rows:
+                if style == "arid":
+                    b.put(x, y, z, "acacia_trapdoor", facing=outward, half="bottom", open="true", powered="false", waterlogged="false")
+                elif style == "frozen" and y == 3:
+                    continue                                   # small windows in the log walls
+                else:
+                    b.put(x, y, z, "glass_pane", **pane)
+            if style == "arid" and along == "x" and w == dz and max(rows) + 1 <= h:     # pointed arches on the street side
+                b.put(x, max(rows) + 1, z, "smooth_sandstone_stairs", facing=outward, half="top", shape="straight", waterlogged="false")
+            if style == "highland":                            # stone margins: sill and lintel
+                for y in (min(rows) - 1, max(rows) + 1):
+                    if y <= h:
+                        b.put(x, y, z, "polished_andesite")
+            if style == "wild":
+                b.put(x, max(rows), z, R["shutter"], facing=outward, half="top", open="true", powered="false", waterlogged="false")
+        if along == "x" and w == dz:
+            if style in ("temperate", "frozen", "highland"):
+                for y in [2] + ([base_h + 3] if base_h is not None else []):
+                    for x in (group[0] - 1, group[-1] + 1):
+                        if x != cx and x0 <= x <= x1:
+                            b.put(x, y, dz + out, R["shutter"], facing=facing, half="bottom", open="true", powered="false", waterlogged="false")
+            if style == "temperate":                           # window boxes
+                for x in group:
+                    b.put(x, 1, dz + out, "spruce_trapdoor", facing=facing, half="top", open="false", powered="false", waterlogged="false")
+                    b.put(x, 2, dz + out, pick(("potted_red_tulip", "potted_poppy", "potted_cornflower", "potted_azure_bluet"), x, 0, z0))
+            if k["bush"] and style == "wild":
+                for x in group:
+                    b.put(x, 0, dz + out, k["bush"], distance="7", persistent="true", waterlogged="false")
+            if style == "temperate":
+                for x in group:
+                    b.put(x, 0, dz + out, "flowering_azalea_leaves", distance="7", persistent="true", waterlogged="false")
+    # door, steps; its frame in the region's way
+    porch(b, cx, dz + out, k["plank"].replace("_planks", ""), facing="south" if door == "n" else "north")
+    for half_, y in (("lower", 1), ("upper", 2)):
+        b.put(cx, y, dz, k["door"], facing=facing, half=half_, hinge="left", open="false", powered="false")
+    if style == "arid":
+        for x in (cx - 1, cx + 1):
+            tile(x, 1, dz)
+            tile(x, 2, dz)
+        if h >= 4:
+            b.put(cx - 1, 3, dz, "smooth_sandstone_stairs", facing="east", half="top", shape="straight", waterlogged="false")
+            b.put(cx + 1, 3, dz, "smooth_sandstone_stairs", facing="west", half="top", shape="straight", waterlogged="false")
+            b.put(cx, 3, dz, "chiseled_sandstone")
+    elif style == "highland":
+        for x in (cx - 1, cx + 1):
+            for y in (1, 2, 3):
+                b.put(x, y, dz, "polished_andesite")
+        b.put(cx, 3, dz, "chiseled_stone_bricks")
+    elif style == "frozen":
+        for x in (cx - 1, cx + 1):
+            for y in (1, 2):
+                b.put(x, y, dz, "stripped_dark_oak_log", axis="y")
+        b.put(cx, 3, dz, "dark_oak_log", axis="x")
+    elif h >= 4 and 3 not in plates:
+        beam(cx, 3, dz, "x")
+    # roof
+    if k["flat"]:
+        top = h + 1
+        for x in range(x0, x1 + 1):
+            for z in range(z0, z1 + 1):
+                edge = x in (x0, x1) or z in (z0, z1)
+                if not edge:
+                    b.put(x, top, z, "smooth_sandstone")
+                elif (x + z) % 2 == 0 or (x in (x0, x1) and z in (z0, z1)):
+                    b.put(x, top, z, "cut_sandstone")
+                    b.put(x, top + 1, z, "sandstone_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+                else:
+                    b.put(x, top, z, "cut_sandstone")
+        for x in range(x0, x1 + 1):             # a zellige frieze under the parapet on the door side
+            if abs(x - cx) > 1:
+                tile(x, h, dz)
+        for x in px[1:-1]:  # roof beams poke out of the long walls
+            for z, o in ((z0, -1), (z1, 1)):
+                b.put(x, h, z + o, m["frame"], axis="z")
+        for x in (cx - 1, cx, cx + 1):  # awning over the door
+            b.put(x, 3, dz + out, m["frame"].replace("stripped_", "").replace("_log", "_slab"), type="top", waterlogged="false")
+        for x in (cx - 2, cx + 2):
+            b.put(x, 0, dz + out, "decorated_pot", facing=facing, cracked="false", waterlogged="false")
+        return top
+    blk, st, cap = R["roof"]
+    xl, xr = (x0 + 1, x1 - 1) if style == "highland" else (x0 - 1, x1 + 1)
+    if style == "frozen":                       # shingles: rows alternate spruce and dark oak
+        bf = lambda x, y, z, i: "dark_oak_planks" if i % 2 else "spruce_planks"
+        sf = lambda x, y, z, i: "dark_oak_stairs" if i % 2 else "spruce_stairs"
+    else:
+        bf = lambda x, y, z, i: blk
+        sf = lambda x, y, z, i: st
+    top, low, zc, ridge = gable_roof(b, xl, xr, z1 + 1, z0 - 1, h, R["rises"], bf, sf, cap)
+    peak = ridge
+    # gables
+    for xx in (x0, x1):
+        for z in range(z0, z1 + 1):
+            if style == "highland":             # crow steps, each capped, above the roof
+                for y in range(h + 1, top[z] + 2):
+                    if z == zc and y in (h + 2, h + 3):
+                        b.put(xx, y, z, "glass_pane", **PANE_Z)
+                    else:
+                        b.put(xx, y, z, QUOIN[y % 2] if z in (z0, z1) else pick(R["infill"], xx, y, z))
+                b.put(xx, top[z] + 2, z, "stone_brick_slab", type="bottom", waterlogged="false")
+                continue
+            for y in range(h + 1, low[z]):
+                if style == "temperate":
+                    if z == zc or y == h + 1:
+                        beam(xx, y, z, "y" if z == zc else "z")
+                    elif abs(z - zc) == 1 and y in (h + 2, h + 3) and low[zc] > h + 4:
+                        b.put(xx, y, z, "glass_pane", **PANE_Z)
+                    else:
+                        b.put(xx, y, z, pick(R["infill"], xx, y, z))
+                elif style == "frozen":
+                    b.put(xx, y, z, "glass_pane", **PANE_Z) if z == zc and y == h + 2 else b.put(xx, y, z, "stripped_spruce_log", axis="y")
+                else:   # wild: carved boards
+                    b.put(xx, y, z, "mangrove_planks" if (y - z) % 3 == 0 else "dark_oak_planks" if z != zc else "stripped_jungle_log",
+                          **({"axis": "y"} if z == zc and (y - z) % 3 else {}))
+    if style == "highland":
+        peak = max(top.values()) + 2
+    if style == "frozen":                       # dark bargeboards, crossing over the ridge
+        for xv in (x0 - 1, x1 + 1):
+            for z, y in top.items():
+                if z != zc:
+                    b.put(xv, y, z, "dark_oak_stairs", facing="north" if z > zc else "south", **ST)
+            for d in (-1, 1):
+                b.put(xv, ridge, zc + d, "dark_oak_planks")
+                b.put(xv, ridge + 1, zc + 2 * d, "dark_oak_stairs", facing="north" if d > 0 else "south", **ST)
+        peak = ridge + 1
+    if style == "wild":                         # the ridge turns up at both ends
+        b.put(x0 - 1, ridge, zc, "spruce_stairs", facing="west", **ST)
+        b.put(x1 + 1, ridge, zc, "spruce_stairs", facing="east", **ST)
+    # tie beams across the hall at every post: the lanterns hang on them
+    for x in px[1:-1]:
+        for z in range(z0 + 1, z1):
+            beam(x, h, z, "z") if style != "highland" else b.put(x, h, z, "dark_oak_log", axis="z")
+    if style != "arid":                         # a lantern under the eave by the door; a shop's sign hangs there too
+        b.put(cx - 2, h - 1, dz + out, "lantern", hanging="true", waterlogged="false")
+        if sign:
+            b.put(cx + 2, h - 1, dz + out, R["sign"], rotation="4", attached="false", waterlogged="false")
+        else:
+            b.put(cx + 2, h - 1, dz + out, "lantern", hanging="true", waterlogged="false")
+    if chimney:
+        chx, chz = chimney
+        for y in range(1, peak + 2):
+            b.put(chx, y, chz, k["chimney"])
+        b.put(chx, peak + 2, chz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    return peak
+
+
+SHELF_WOOD = {"temperate": "spruce", "frozen": "spruce", "arid": "acacia", "highland": "dark_oak", "wild": "jungle"}
+RUG = {"temperate": ("brown_carpet", "red_carpet"), "frozen": ("white_carpet", "light_gray_carpet"), "arid": ("red_carpet", "orange_carpet"),
+       "highland": ("green_carpet", "red_carpet"), "wild": ("lime_carpet", "yellow_carpet")}
+TRADE_DECOR = {
+    # what stands in the corners of each trade's room (blocks without properties take their defaults)
+    "market": ("barrel", "hay_block", "decorated_pot", "barrel"),
+    "cartographer": ("chiseled_bookshelf", "bookshelf", "barrel", "decorated_pot"),
+    "music": ("note_block", "bookshelf", "barrel", "note_block"),
+    "workshop": ("copper_golem_statue", "copper_chest", "copper_bulb", "copper_grate"),
+    "armorer": ("grindstone", "barrel", "anvil", "barrel"),
+    "tannery": ("hay_block", "composter", "barrel", "barrel"),
+    "archaeology": ("decorated_pot", "suspicious_gravel", "decorated_pot", "barrel"),
+    "mine": ("barrel", "barrel", "iron_ore", "coal_ore"),
+    "nether": ("gilded_blackstone", "barrel", "crying_obsidian", "barrel"),
+    "library": ("chiseled_bookshelf", "bookshelf", "barrel", "chiseled_bookshelf"),
+    "brewery": ("barrel", "decorated_pot", "barrel", "hay_block"),
+    "barracks": ("barrel", "barrel", "grindstone", "barrel"),
+    "guild": ("barrel", "bookshelf", "barrel", "decorated_pot"),
+}
+OPEN = ("pane", "trapdoor", "door", "air", "bars", "ladder")
+
+
+def wall_banner(b, x, y, z, facing):
+    """A wall banner in the kingdom's colour, only where a solid wall block is behind it."""
+    dx, dz = {"north": (0, 1), "south": (0, -1), "east": (-1, 0), "west": (1, 0)}[facing]
+    behind = b.b.get((x + dx, y, z + dz), ("air",))[0]
+    if not any(o in behind for o in OPEN + ("stairs", "slab", "wall_banner")):
+        b.put(x, y, z, "{color}_wall_banner", facing=facing)
+
+
+def furnish(b, style, trade, x0, z0, x1, z1, y=1):
+    """Dresses a room once its trade's own blocks are in: a shelf on the wall over every piece of furniture that
+    stands against a solid wall, the trade's things in free corners (a candle on a barrel), and a rug in the middle.
+    Never covers a window, a door, a ladder, a hatch or anything already placed; the middle line stays walkable."""
+    wood = SHELF_WOOD[style]
+    nm = lambda p: b.b[p][0].split(":")[-1] if p in b.b else "air"
+    ring = [(x, z0 + 1, (x, z0), "south") for x in range(x0 + 2, x1 - 1)] + [(x, z1 - 1, (x, z1), "north") for x in range(x0 + 2, x1 - 1)] + \
+           [(x0 + 1, z, (x0, z), "east") for z in range(z0 + 2, z1 - 1)] + [(x1 - 1, z, (x1, z), "west") for z in range(z0 + 2, z1 - 1)]
+    for (x, z, (wx, wz), f) in ring:
+        wall = nm((wx, y + 1, wz))
+        if (x, y, z) in b.b and (x, y + 1, z) not in b.b and not any(o in wall for o in OPEN) and not any(o in nm((x, y, z)) for o in OPEN):
+            b.put(x, y + 1, z, f"{wood}_shelf", facing=f)
+    decor = TRADE_DECOR.get(trade, ("barrel",) * 4)
+    for i, (x, z) in enumerate(((x0 + 1, z0 + 1), (x1 - 1, z0 + 1), (x0 + 1, z1 - 1), (x1 - 1, z1 - 1))):
+        if (x, y, z) in b.b or (x, y + 1, z) in b.b or nm((x, y - 1, z)) in ("air",) or "trapdoor" in nm((x, y - 1, z)):
+            continue
+        d = decor[i]
+        b.put(x, y, z, d, **({"facing": "up", "open": "false"} if d == "barrel" else {"axis": "y"} if d == "hay_block" else {}))
+        if d == "barrel":
+            b.put(x, y + 1, z, "candle", candles="3", lit="true", waterlogged="false")
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
+    rug = RUG[style]
+    for x in range(cx - 1, cx + 2):
+        for z in range(cz - 1, cz + 2):
+            under = nm((x, y - 1, z))
+            if (x, y, z) not in b.b and under.endswith(("_planks", "packed_mud", "polished_andesite", "stone_bricks", "blackstone")) and "trapdoor" not in under:
+                b.put(x, y, z, rug[(x + z) % 2])
+
+
 def hang_lanterns(blocks):
     """A hanging lantern with nothing above it gets a chain up to the next beam or roof block."""
     for (x, y, z), (name, p) in list(blocks.items()):
@@ -1920,6 +2256,7 @@ def library(style, level):
             b.put(x, 4, cz, "lantern", hanging="true", waterlogged="false")
         b.put(cx, 1, z1 - 1, "{color}_carpet")
     b.put(cx, 4, cz, "lantern", hanging="true", waterlogged="false")
+    furnish(b, style, "library", x0, z0, x1, z1)
     return b.b
 
 
@@ -1947,6 +2284,7 @@ def brewery(style, level):
             b.put(x, 0, z1 - 2, "barrel", facing="up", open="false") if x % 2 else None
         for x in (x0 + 2, x1 - 2):
             b.put(x, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    furnish(b, style, "brewery", x0, z0, x1, z1)
     return b.b
 
 
@@ -2341,8 +2679,9 @@ def barracks(style, level):
         b.put(x1 - 1, 1, z0 + 3, "chest", facing="west", type="single", waterlogged="false")
         b.put(x0 + 1, 1, z0 + 2, "chest", facing="east", type="single", waterlogged="false")
         b.put(x0 + 1, 1, z0 + 3, "chest", facing="east", type="single", waterlogged="false")
-        for x in (x0 + 3, x1 - 3):
-            b.put(x, 4, z0 - 1, "{color}_wall_banner", facing="north")
+        for x in (x0 + 2, x1 - 2):          # under the eave, clear of the lanterns
+            wall_banner(b, x, 3, z0 - 1, "north")
+    furnish(b, style, "barracks", x0, z0, x1, z1)
     return b.b
 
 
@@ -2360,7 +2699,7 @@ def guild_level(style, level):
     for i in range(level - 3):
         block, props = marks[i]
         b.put(x0 + 2 + i * 3, 1, z0 + 1, block, **props)
-    b.put(cx, 4, z0 - 1, "{color}_wall_banner", facing="north")
+    wall_banner(b, cx, 3, z0 - 1, "north")
     return b.b
 
 
@@ -2375,7 +2714,7 @@ def guild_hall(style, level):
     b.put(*GUILD_STORE, "barrel", facing="up", open="false")
     b.put(cx, 3, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     for x in (x0 + 2, x1 - 2):
-        b.put(x, 4, z1 + 1, "{color}_wall_banner", facing="south")
+        wall_banner(b, x, 3, z1 + 1, "south")
     # training yard west of the hall: straw dummies (fence + hay + carved pumpkin)
     for i, z in enumerate((z0 + 1, z0 + 4, z0 + 7)):
         dx = x0 - 4
@@ -2395,6 +2734,7 @@ def guild_hall(style, level):
         b.put(x0 + 3, 1, z0 + 1, "bookshelf")
         b.put(x0 + 1, 1, z0 + 2, "amethyst_cluster", facing="up", waterlogged="false")
         b.put(x0 + 1, 3, z0 + 3, "{color}_wall_banner", facing="east")
+    furnish(b, style, "guild", x0, z0, x1, z1)
     return b.b
 
 
@@ -2602,6 +2942,9 @@ def royal_house(style, level):
         b.put(x1 - 1, 6, z, "chest", facing="west", type="single", waterlogged="false")
     b.put(x1 - 1, 6, z0 + 2, "lectern", facing="west", has_book="false", powered="false")
     b.put(x1 - 1, 6, z0 + 1, "bookshelf")
+    for x in range(x0 + 1, x1):             # a collar beam under the roof carries the chamber's lanterns
+        if (x, 10, (z0 + z1) // 2) not in b.b:
+            b.put(x, 10, (z0 + z1) // 2, "dark_oak_log", axis="x")
     b.put(cx, 9, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
     if level >= 2:
         for x in range(x0 + 4, cx - 1):
@@ -3602,7 +3945,7 @@ def shop(style, name, level):
     if level >= 3:
         h += 4  # upper floor
     kind = "nether" if name == "nether" else "stone" if name in ("mine", "armorer", "workshop") else "timber"
-    hall(b, style, x0, z0, x1, z1, h, door, kind=kind, base_h=base_h if level >= 3 else None,
+    hall(b, style, x0, z0, x1, z1, h, door, kind=kind, base_h=base_h if level >= 3 else None, sign=True,
          chimney=(x1 - 1, z0 if door == "s" else z1) if name in ("tavern", "armorer", "tannery") else None)
     back = z0 + 1 if door == "s" else z1 - 1
     front = z1 - 1 if door == "s" else z0 + 1
@@ -3676,6 +4019,7 @@ def shop(style, name, level):
                 b.put(x, fy + 1, back, "barrel", facing="up", open="false")
                 b.put(x, fy + 2, back, "barrel", facing="up", open="false")
                 b.put(x, fy + 1, front, "chest", facing=bf, type="single", waterlogged="false")
+    furnish(b, style, name, x0, z0, x1, z1)
     return b.b
 
 
