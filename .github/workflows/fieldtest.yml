@@ -23,16 +23,23 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       sites: ${{ steps.pick.outputs.sites }}
+      seed: ${{ steps.pick.outputs.seed }}
     steps:
       - id: pick
         env:
           INPUT: ${{ github.event.inputs.sites }}
           MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          all="plains forest dark_forest high_meadow snowy_plains snowy_slopes taiga windswept_hills stony_peaks desert badlands savanna_plateau jungle swamp mangrove beach river_bank"
+          all="plains forest dark_forest high_meadow snowy_plains snowy_slopes taiga windswept_hills stony_peaks desert badlands savanna_plateau jungle swamp mangrove beach river_bank flower_forest old_birch pale_garden cherry_grove ice_spikes jagged_peaks stony_shore snowy_beach eroded_badlands bamboo_jungle mushroom_fields frozen_river"
           want="$INPUT"
           if [ -z "$want" ]; then want=$(printf '%s' "$MESSAGE" | grep -oE '\[fieldtest[^]]*\]' | head -1 | sed -E 's/\[fieldtest ?//; s/\]//'); fi
-          [ -z "$want" ] && want="$all"
+          # seed=N or seed=random in the brackets picks the world; default is the regression seed
+          seed=$(printf '%s' "$want" | grep -oE 'seed=[a-z0-9]+' | head -1 | cut -d= -f2)
+          want=$(printf '%s' "$want" | sed -E 's/seed=[a-z0-9]+//')
+          [ -z "$seed" ] && seed=20261117
+          [ "$seed" = "random" ] && seed=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          [ -z "$(printf '%s' "$want" | tr -d ' ')" ] && want="$all"
           echo "sites=$(printf '%s\n' $want | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   site:
@@ -56,7 +63,7 @@ jobs:
         run: |
           mkdir -p run
           echo "eula=true" > run/eula.txt
-          printf 'level-type=minecraft\\:normal\nlevel-seed=20261117\nonline-mode=false\nspawn-protection=0\nmax-tick-time=-1\nview-distance=4\nsimulation-distance=4\n' > run/server.properties
+          printf 'level-type=minecraft\\:normal\nlevel-seed=${{ needs.plan.outputs.seed }}\nonline-mode=false\nspawn-protection=0\nmax-tick-time=-1\nview-distance=4\nsimulation-distance=4\n' > run/server.properties
           touch server.log
           {
             for i in $(seq 1 600); do grep -q 'Done (' server.log && break; grep -q 'BUILD FAILED\|Compilation failed' server.log && break; sleep 2; done

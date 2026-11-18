@@ -69,7 +69,19 @@ public final class FieldTest {
 			new Scenario("swamp", Set.of("swamp"), "land"),
 			new Scenario("mangrove", Set.of("mangrove_swamp"), "land"),
 			new Scenario("beach", Set.of("beach", "snowy_beach"), "shore"),
-			new Scenario("river_bank", Set.of("river"), "river"));
+			new Scenario("river_bank", Set.of("river"), "river"),
+			new Scenario("flower_forest", Set.of("flower_forest"), "land"),
+			new Scenario("old_birch", Set.of("old_growth_birch_forest"), "land"),
+			new Scenario("pale_garden", Set.of("pale_garden"), "land"),
+			new Scenario("cherry_grove", Set.of("cherry_grove"), "land"),
+			new Scenario("ice_spikes", Set.of("ice_spikes"), "land"),
+			new Scenario("jagged_peaks", Set.of("jagged_peaks", "frozen_peaks"), "land"),
+			new Scenario("stony_shore", Set.of("stony_shore"), "shore"),
+			new Scenario("snowy_beach", Set.of("snowy_beach"), "shore"),
+			new Scenario("eroded_badlands", Set.of("eroded_badlands", "wooded_badlands"), "land"),
+			new Scenario("bamboo_jungle", Set.of("bamboo_jungle"), "land"),
+			new Scenario("mushroom_fields", Set.of("mushroom_fields"), "land"),
+			new Scenario("frozen_river", Set.of("frozen_river"), "river"));
 
 	private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-00000000f1e1");
 	/** Half size of the inspected square around the heart: the wall ring, the moat, the beach and a margin. */
