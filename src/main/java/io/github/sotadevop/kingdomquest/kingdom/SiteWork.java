@@ -234,6 +234,66 @@ public final class SiteWork {
 	 * ground level within 40 blocks. Cached per heart.
 	 */
 	public static BlockState surface(ServerLevel level, BlockPos heart) {
+		BlockState top = surfaceOnly(level, heart);
+		if (currentHeart != heart.asLong()) {
+			currentHeart = heart.asLong();
+			currentStrata = strata(level, heart);
+			currentLayer = currentStrata.get(Integer.MIN_VALUE);
+		}
+		currentSurface = top;
+		return top;
+	}
+
+	/*
+	 * The land's own layers under its top (user, 2026-11-18: in the wooded badlands the coarse dirt is only the top,
+	 * the hills are terracotta inside, with its stripes). Worked out once per settlement from the same sample columns
+	 * as the surface: for every height the most common natural rock found 2 to 14 below the top there, and under the
+	 * key Integer.MIN_VALUE the most common one overall. surface() makes the settlement's layers the current ones, so
+	 * every later subsoil()/rock() of the same work uses them (the server does one settlement's work at a time).
+	 */
+	private static final Map<Long, Map<Integer, BlockState>> STRATA = new HashMap<>();
+	private static long currentHeart = Long.MIN_VALUE;
+	private static Map<Integer, BlockState> currentStrata = Map.of();
+	private static BlockState currentLayer = null;
+	private static BlockState currentSurface = null;
+
+	static Map<Integer, BlockState> strata(ServerLevel level, BlockPos heart) {
+		return STRATA.computeIfAbsent(heart.asLong(), k -> {
+			Map<Integer, Map<Block, Integer>> byY = new HashMap<>();
+			Map<Block, Integer> all = new HashMap<>();
+			for (int dx = -40; dx <= 40; dx += 8) {
+				for (int dz = -40; dz <= 40; dz += 8) {
+					int x = heart.getX() + dx, z = heart.getZ() + dz;
+					int y = groundDeep(level, x, z, heart.getY());
+					for (int depth = 2; depth <= 14; depth++) {
+						BlockState st = level.getBlockState(new BlockPos(x, y - depth, z));
+						if (layerRock(st)) {
+							byY.computeIfAbsent(y - depth, q -> new HashMap<>()).merge(st.getBlock(), 1, Integer::sum);
+							all.merge(st.getBlock(), 1, Integer::sum);
+						}
+					}
+				}
+			}
+			Map<Integer, BlockState> out = new HashMap<>();
+			byY.forEach((y, c) -> c.entrySet().stream().max(Map.Entry.comparingByValue()).ifPresent(e -> out.put(y, e.getKey().defaultBlockState())));
+			all.entrySet().stream().max(Map.Entry.comparingByValue()).ifPresent(e -> out.put(Integer.MIN_VALUE, e.getKey().defaultBlockState()));
+			return out;
+		});
+	}
+
+	/** Rock a hill is made of under its top: terracotta, sandstone or plain stone. */
+	private static boolean layerRock(BlockState st) {
+		return st.is(BlockTags.TERRACOTTA) || st.is(Blocks.SANDSTONE) || st.is(Blocks.RED_SANDSTONE) || st.is(Blocks.STONE) || st.is(Blocks.DEEPSLATE)
+				|| st.is(Blocks.ANDESITE) || st.is(Blocks.DIORITE) || st.is(Blocks.GRANITE) || st.is(Blocks.TUFF) || st.is(Blocks.DIRT);
+	}
+
+	/** True when the land under this surface is terracotta or sandstone: then made ground and cut faces are made of it. */
+	private static boolean layeredRock(BlockState surface) {
+		return currentLayer != null && currentSurface != null && surface.getBlock() == currentSurface.getBlock()
+				&& (currentLayer.is(BlockTags.TERRACOTTA) || currentLayer.is(Blocks.SANDSTONE) || currentLayer.is(Blocks.RED_SANDSTONE));
+	}
+
+	private static BlockState surfaceOnly(ServerLevel level, BlockPos heart) {
 		return SURFACE.computeIfAbsent(heart.asLong(), k -> {
 			Map<Block, Integer> count = new HashMap<>();
 			for (int dx = -40; dx <= 40; dx += 4) {
@@ -265,6 +325,9 @@ public final class SiteWork {
 	static BlockState subsoil(BlockState surface) {
 		if (surface.is(BlockTags.TERRACOTTA)) {
 			return surface;
+		}
+		if (layeredRock(surface)) {
+			return currentLayer; // coarse dirt on top, terracotta (or sandstone) inside, as the land itself is
 		}
 		return surface.is(Blocks.SAND) ? Blocks.SANDSTONE.defaultBlockState()
 				: surface.is(Blocks.RED_SAND) ? Blocks.RED_SANDSTONE.defaultBlockState() : Blocks.DIRT.defaultBlockState();
@@ -491,11 +554,20 @@ public final class SiteWork {
 	 * a face's top becomes rock too: high faces read as crags with at most a crown of masonry, never as tall walls of
 	 * dirt or brick (user: "less stone", field test renders of the windswept hills).
 	 */
-	public static void roughFaces(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, BlockState surface) {
+	public static void roughFaces(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, BlockState surface, Set<Long> touched) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int x = x0; x <= x1; x++) {
 			for (int z = z0; z <= z1; z++) {
 				if (!level.isLoaded(pos.set(x, 0, z))) {
+					continue;
+				}
+				// only ground the builders cut or filled (or its edge): a natural cliff nearby is left as it is (user,
+				// 2026-11-18: a hill the camp never touched had its terracotta turned to stone)
+				boolean worked = touched.contains(BlockPos.asLong(x, 0, z));
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					worked |= touched.contains(BlockPos.asLong(x + d.getStepX(), 0, z + d.getStepZ()));
+				}
+				if (!worked) {
 					continue;
 				}
 				int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
@@ -512,7 +584,8 @@ public final class SiteWork {
 						continue;
 					}
 					BlockState st = level.getBlockState(pos);
-					boolean earth = earthy(st) && !st.is(Blocks.SAND) && !st.is(Blocks.RED_SAND) && !st.is(Blocks.GRAVEL);
+					boolean earth = earthy(st) && !st.is(Blocks.SAND) && !st.is(Blocks.RED_SAND) && !st.is(Blocks.GRAVEL)
+							&& !st.is(BlockTags.TERRACOTTA) && !st.is(Blocks.SANDSTONE) && !st.is(Blocks.RED_SANDSTONE); // rock already
 					boolean deepBrick = earthwork(st) && y < top - 3;
 					if ((earth || deepBrick) && openSide(level, pos, built)) {
 						level.setBlock(pos, rock(surface, x, y, z), FLAGS);
@@ -705,6 +778,11 @@ public final class SiteWork {
 	/** Rough natural rock for the lower part of a plinth, matching the land: sandstone, terracotta, or stone with andesite and tuff. */
 	static BlockState rock(BlockState surface, int x, int y, int z) {
 		int h = Math.floorMod(x * 73 + y * 19 + z * 37, 10);
+		if (layeredRock(surface)) {
+			// the stripe the land itself has at this height (badlands), else its main rock
+			BlockState at = currentStrata.get(y);
+			return at != null && (at.is(BlockTags.TERRACOTTA) || at.is(Blocks.SANDSTONE) || at.is(Blocks.RED_SANDSTONE)) ? at : currentLayer;
+		}
 		if (surface.is(Blocks.SAND)) {
 			return Blocks.SANDSTONE.defaultBlockState();
 		}

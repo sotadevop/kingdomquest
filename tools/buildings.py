@@ -1410,6 +1410,15 @@ ROAD_MATS = {
     3: ("cobblestone", "gravel", "mossy_cobblestone"),
     4: ("stone_bricks", "polished_andesite", "cracked_stone_bricks"),
 }
+# the region's own road stone from level 3 (user, 2026-11-18): main, border/second, a little of the third.
+# Desert towns on red land get the red sandstone versions from the mod (see Settlements.redLand).
+ROAD_STYLE = {
+    "temperate": {3: ("cobblestone", "gravel", "mossy_cobblestone"), 4: ("stone_bricks", "polished_andesite", "cracked_stone_bricks")},
+    "frozen": {3: ("cobblestone", "gravel", "andesite"), 4: ("cobblestone", "stone_bricks", "mossy_cobblestone")},
+    "arid": {3: ("sandstone", "smooth_sandstone", "cut_sandstone"), 4: ("smooth_sandstone", "cut_sandstone", "sandstone")},
+    "highland": {3: ("cobblestone", "gravel", "andesite"), 4: ("cobblestone", "polished_andesite", "andesite")},
+    "wild": {3: ("mossy_cobblestone", "packed_mud", "coarse_dirt"), 4: ("mossy_stone_bricks", "mud_bricks", "packed_mud")},
+}
 
 
 def roads(style, level):
@@ -1419,7 +1428,7 @@ def roads(style, level):
     plan = ROAD_PLAN[style]
     cells = plan["cells"]
     seg = {name: i for i, (name, _) in enumerate(plan["segments"])}
-    m = ROAD_MATS[level]
+    m = ROAD_STYLE[style].get(level, ROAD_MATS[level])
     segs = {}
     for (x, z), (kind, names) in cells.items():
         h = (x * 73856093 ^ z * 19349663) % 20
@@ -1482,6 +1491,19 @@ def stairs_of(block):
             "bricks": "brick_stairs", "mud_bricks": "mud_brick_stairs"}.get(block, block + "_stairs")
 
 
+WALLMAT = {
+    # castle walls, towers and gatehouse per region, after real ones (user, 2026-11-18)
+    "temperate": dict(main="stone_bricks", alt="mossy_stone_bricks", crack="cracked_stone_bricks", top="stone_brick_wall", slab="stone_brick_slab",
+                      gallery=("stripped_dark_oak_log", "brick_stairs", "brick_slab", "dark_oak")),
+    "frozen": dict(main="cobblestone", alt="mossy_cobblestone", crack="stone_bricks", top="cobblestone_wall", slab="cobblestone_slab",
+                   gallery=("stripped_spruce_log", "dark_oak_stairs", "dark_oak_slab", "spruce")),
+    "arid": dict(main="smooth_sandstone", alt="sandstone", crack="cut_sandstone", top="sandstone_wall", slab="smooth_sandstone_slab",
+                 merlon="cut_sandstone", point=True),
+    "highland": dict(main="cobblestone", alt="andesite", crack="mossy_cobblestone", top="cobblestone_wall", slab="cobblestone_slab"),
+    "wild": dict(main="mud_bricks", alt="packed_mud", crack="bricks", top="mud_brick_wall", slab="mud_brick_slab", merlon="calcite"),
+}
+
+
 def stone_walls(style, level):
     """Walls 3: stone curtain wall with a parapet and battlements, a walkway behind them and stairs up to it beside
     the gate. Walls 4: square towers at the corners, beside the gate and along the long sides. Each tower has a door
@@ -1491,10 +1513,9 @@ def stone_walls(style, level):
     # the wall steps up and down with the hills instead of floating over valleys
     FOLLOW.add(id(b.b))
     ANCHORS_OF[id(b.b)] = b.anchors
-    frozen = style == "frozen"
-    main, alt, crack = ("cobblestone", "mossy_cobblestone", "stone_bricks") if frozen else ("stone_bricks", "mossy_stone_bricks", "cracked_stone_bricks")
-    wall_top = "cobblestone_wall" if frozen else "stone_brick_wall"
-    slab = "cobblestone_slab" if frozen else "stone_brick_slab"
+    WM = WALLMAT[style]
+    main, alt, crack, wall_top, slab = WM["main"], WM["alt"], WM["crack"], WM["top"], WM["slab"]
+    gal = WM.get("gallery")
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     H = 5
@@ -1522,8 +1543,22 @@ def stone_walls(style, level):
             if passage and y < 4:
                 continue
             b.put(x, y, z, main if house else mat(x, y, z))
-        if (x + z) % 2 == 0 and not house:
-            b.put(x, H + 1, z, wall_top, **POST)
+        if gal and not house:
+            # a covered wooden gallery on the wall, loopholes between its posts (Rothenburg; the hoardings of the North)
+            post, roof_st, roof_slab, _ = gal
+            out = "north" if z == z0 else "south" if z == z1 else "west" if x == x0 else "east"
+            along = "x" if z in (z0, z1) else "z"
+            if (x + z) % 3 == 0:
+                b.put(x, H + 1, z, post, axis="y")
+            b.put(x, H + 2, z, post, axis=along)
+            b.put(x, H + 3, z, roof_st, facing=out, **ST)
+        elif (x + z) % 2 == 0 and not house:
+            if WM.get("merlon"):    # stepped, pointed merlons (Morocco) or white ones (Siam)
+                b.put(x, H + 1, z, WM["merlon"])
+                if WM.get("point"):
+                    b.put(x, H + 2, z, wall_top, **POST)
+            else:
+                b.put(x, H + 1, z, wall_top, **POST)
         if not passage:
             b.put(x, -1, z, "cobblestone")
     # walkway behind the battlements
@@ -1534,6 +1569,8 @@ def stone_walls(style, level):
         oz = z0 if z == z0 + 1 else z1 if z == z1 - 1 else z
         b.anchor = section(ox, oz)
         b.put(x, H - 1, z, slab, type="top", waterlogged="false")
+        if gal and not (oz == z1 and abs(ox - gx) <= 3):
+            b.put(x, H + 3, z, gal[2], type="bottom", waterlogged="false")     # the gallery's roof over the walkway
     if level == 3:
         # stairs up to the walkway on both sides of the gate (the towers of the next level take their place)
         for i in range(H):
@@ -1575,7 +1612,10 @@ def stone_walls(style, level):
                     for y in range(-6, 0):
                         b.put(x, y, z, main)  # tower foundation
                     for y in range(0, 9):
-                        if edge:
+                        if edge and style == "highland" and y > 0:
+                            corner = x in (tx0, tx0 + 4) and z in (tz0, tz0 + 4)
+                            b.put(x, y, z, QUOIN[y % 2] if corner else pick(("calcite", "diorite", "calcite", "calcite"), x, y, z))
+                        elif edge:
                             b.put(x, y, z, mat(x, y, z))
                         elif y in (0, H - 1) and (x, z) != (lx, lz):
                             b.put(x, y, z, main)
@@ -2444,7 +2484,7 @@ def gate(style, level):
     b = B()
     w = s["wood"]
     log = MAT[style]["log"]
-    stone = "cobblestone" if style == "frozen" else "stone_bricks"
+    stone = WALLMAT[style]["main"]
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     if level == 1:
@@ -2464,7 +2504,7 @@ def gate(style, level):
                 passage = abs(x - gx) <= 1 and y < 4
                 b.put(x, y, z, "air" if passage else stone)
             if (x + z) % 2 == 0 and (x in (gx - 3, gx + 3) or z in (z1 - 1, z1 + 1)) and (x, z) != (gx - 2, z1 - 1):
-                b.put(x, 8, z, "stone_brick_wall" if style != "frozen" else "cobblestone_wall", up="true", north="none", south="none",
+                b.put(x, 8, z, WALLMAT[style]["top"], up="true", north="none", south="none",
                       east="none", west="none", waterlogged="false")
     for x in range(gx - 1, gx + 2):
         b.put(x, 3, z1 + 1, "iron_bars", north="false", south="false", east="true", west="true", waterlogged="false")  # portcullis, raised
@@ -2480,7 +2520,7 @@ def gate(style, level):
                 b.put(x, y, z1 + 1, pick(ZELLIGE, x, y, z1), facing=pick(("north", "east", "south", "west"), z1, x, y))
     for x in range(gx - 1, gx + 2):
         b.put(x, 4, z1 + 1, "chiseled_sandstone" if style == "arid" else "chiseled_stone_bricks" if not style == "frozen" else stone)
-    wall_top_ = "stone_brick_wall" if style != "frozen" else "cobblestone_wall"
+    wall_top_ = WALLMAT[style]["top"]
     for x in range(gx - 3, gx + 4):
         if x != gx:                         # machicolations, a parapet of wall posts on them
             b.put(x, 7, z1 + 2, stairs_of(stone), facing="north", half="top", shape="straight", waterlogged="false")
@@ -2541,7 +2581,7 @@ def gate(style, level):
                 for y in range(-5, -1):
                     if z == z1 + 7:
                         b.put(x, y, z, stone)  # the outer moat wall under the platform edge
-        wall_top = "stone_brick_wall" if style != "frozen" else "cobblestone_wall"
+        wall_top = WALLMAT[style]["top"]
         for x in (gx - 4, gx + 4):
             for z in range(z1 + 7, z1 + 11):
                 b.put(x, 0, z, wall_top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
