@@ -350,7 +350,8 @@ final class RoadLink {
 			if (o.id().toString().equals(job.settlement())) {
 				int anchor = 2 * o.heart().getY();
 				for (int k = 0; k < n && k < 64; k++) {
-					t[k] = Math.max(anchor - k, Math.min(anchor + k, t[k]));
+					int slope = (3 * k + 1) / 2; // three quarters of a block per block: slabs and full steps, never two
+					t[k] = Math.max(anchor - slope, Math.min(anchor + slope, t[k]));
 				}
 			}
 		}
@@ -449,6 +450,35 @@ final class RoadLink {
 						pave(level, cell, w, job.tier(), false);
 						if (half) {
 							set(level, cell.above(), (job.tier() >= 2 ? Blocks.COBBLESTONE_SLAB : Blocks.MUD_BRICK_SLAB).defaultBlockState());
+						}
+					}
+					// the sides of the cutting slope back a block per block, never a wall (field test: cuttings by a gate
+					// left faces of land 8 to 11 blocks high); the new ground keeps its turf
+					for (int sgn : new int[] {-1, 1}) {
+						for (int w = 2; w <= 14; w++) {
+							BlockPos col = p.relative(side, sgn * w);
+							int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, col.getX(), col.getZ()) - 1;
+							int keep = y + w - 1; // highest block the slope leaves here
+							if (top <= keep) {
+								break;
+							}
+							BlockState turf = level.getBlockState(new BlockPos(col.getX(), top, col.getZ()));
+							for (int yy = top; yy > keep; yy--) {
+								BlockPos a = new BlockPos(col.getX(), yy, col.getZ());
+								BlockState st = level.getBlockState(a);
+								if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+									SiteWork.removeTreeAt(level, a, Set.of());
+								} else if (!st.isAir() && st.getFluidState().isEmpty() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st))) {
+									level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+								} else if (!st.isAir()) {
+									break; // something built: left alone
+								}
+							}
+							BlockPos newTop = new BlockPos(col.getX(), keep, col.getZ());
+							if (level.getBlockState(newTop).is(Blocks.DIRT) && level.getBlockState(newTop.above()).isAir() && SiteWork.natural(turf)
+									&& !turf.is(BlockTags.LOGS) && !turf.is(BlockTags.LEAVES) && turf.isSolid()) {
+								level.setBlock(newTop, turf, Block.UPDATE_CLIENTS);
+							}
 						}
 					}
 					continue;
