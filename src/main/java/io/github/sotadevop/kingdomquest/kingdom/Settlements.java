@@ -1023,12 +1023,17 @@ public final class Settlements {
 				int dz = Integer.signum(h.getZ() - z);
 				boolean alongX = Math.abs(h.getX() - x) >= Math.abs(h.getZ() - z);
 				BlockPos water = p;
+				boolean shore = false;
 				for (int step = 0; step < 40; step++) {
 					BlockPos next = alongX ? water.offset(dx, 0, 0) : water.offset(0, 0, dz);
 					if (!level.getFluidState(next).is(net.minecraft.tags.FluidTags.WATER)) {
+						shore = true;
 						break;
 					}
 					water = next;
+				}
+				if (!shore) {
+					continue; // still open water after 40 blocks: the pier would stand free in the sea
 				}
 				boolean open = true;
 				for (int k = 1; k <= 14 && open; k++) {
@@ -1979,6 +1984,31 @@ public final class Settlements {
 			sweepDrops(level, first, last);
 		}
 		if (index >= cols + list.size()) {
+			if (Progression.DOCK.equals(s.jobTrack())) {
+				// the pier's posts go down to the bed, however deep the water is here
+				List<Long> posts = new ArrayList<>();
+				for (long l : built) {
+					BlockPos p = BlockPos.of(l);
+					BlockState st = level.getBlockState(p);
+					if (!st.is(net.minecraft.tags.BlockTags.LOGS)) {
+						continue;
+					}
+					BlockPos.MutableBlockPos q = p.mutable().move(Direction.DOWN);
+					for (int k = 0; k < 32 && !builtSet.contains(q.asLong()) && !allBuilt.contains(q.asLong()); k++, q.move(Direction.DOWN)) {
+						BlockState below = level.getBlockState(q);
+						if (!(below.isAir() || below.canBeReplaced() || below.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock)) {
+							break;
+						}
+						level.setBlock(q, st, NO_DROPS);
+						posts.add(q.asLong());
+					}
+				}
+				posts.forEach(l -> {
+					if (builtSet.add(l)) {
+						built.add(l);
+					}
+				});
+			}
 			Settlement done = s.withJob("", "", 0).withBuilt(s.jobTrack(), built);
 			// a block this build put where another track's block was (the gate in the wall's opening, a cellar over an
 			// old lane) is this build's now: the other track no longer counts it as its own, so no repair puts it back
@@ -2023,7 +2053,9 @@ public final class Settlements {
 					bz = Math.max(bz, c.dz());
 				}
 				if (ax <= bx) {
-					SiteWork.dropFloating(level, s.heart().getX() + ax - 3, s.heart().getZ() + az - 3, s.heart().getX() + bx + 3, s.heart().getZ() + bz + 3,
+					// 10 around: a thin strip of land left by a neighbour's pad edge must lie wholly inside the box,
+					// or touching the box's side would count as holding on (field test: a forest's dirt curtains)
+					SiteWork.dropFloating(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
 							nowBuilt);
 				}
 			}

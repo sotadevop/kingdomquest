@@ -1026,7 +1026,24 @@ public final class FieldTest {
 					}
 				}
 			}
-			sample(samples, "way out", gap(level, s, reach, reverse(level, h, edge, 400_000)));
+			Set<Long> back = reverse(level, h, edge, 400_000);
+			sample(samples, "way out", gap(level, s, reach, back));
+			// where the two walks end: is the gate reached from inside, its outside reached from the edge?
+			Rotation turn = Rotation.values()[s.rotation()];
+			StringBuilder at = new StringBuilder("walked " + reach.size() + " inside, " + back.size() + " from " + edge.size() + " edge cells;");
+			for (int gz : new int[] {34, 38, 42, 46, 52, 60}) {
+				BlockPos c = h.offset(Template.rotate(new BlockPos(0, 0, gz), turn));
+				boolean in = false, out = false;
+				for (long k : reach) {
+					in |= Math.abs(BlockPos.getX(k) - c.getX()) <= 2 && Math.abs(BlockPos.getZ(k) - c.getZ()) <= 2;
+				}
+				for (long k : back) {
+					out |= Math.abs(BlockPos.getX(k) - c.getX()) <= 2 && Math.abs(BlockPos.getZ(k) - c.getZ()) <= 2;
+				}
+				at.append(" z").append(gz).append(in ? " in" : "").append(out ? " out" : "").append(in || out ? "" : " -")
+						.append("@").append(level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, c.getX(), c.getZ()) - h.getY());
+			}
+			sample(samples, "way out", at.toString());
 		}
 		int doors = 0;
 		for (Map.Entry<Long, String> e : owner.entrySet()) {

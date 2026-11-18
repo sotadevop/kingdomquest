@@ -341,7 +341,7 @@ public final class SiteWork {
 		ylo = Math.max(level.getMinY(), ylo - 6);
 		yhi = yhi + 2;
 		int ny = yhi - ylo + 1;
-		if (ny <= 2 || (long) nx * nz * ny > 3_000_000) {
+		if (ny <= 2 || (long) nx * nz * ny > 4_000_000) {
 			return;
 		}
 		java.util.BitSet solid = new java.util.BitSet(nx * nz * ny);
