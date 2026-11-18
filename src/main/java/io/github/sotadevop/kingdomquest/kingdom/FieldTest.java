@@ -1145,6 +1145,9 @@ public final class FieldTest {
 		centres.put("gate", h.offset(Template.rotate(new BlockPos(0, 0, 40), r)));
 		centres.put("corner", h.offset(Template.rotate(new BlockPos(-60, 0, -52), r)));
 		centres.put("square", h);
+		if (RoadLink.WAY_OUT.containsKey(s.id())) {
+			centres.put("way_out", RoadLink.WAY_OUT.get(s.id()));
+		}
 		java.util.regex.Pattern rel = java.util.regex.Pattern.compile("\\((-?\\d+),(-?\\d+),(-?\\d+)\\)");
 		int doorViews = 0;
 		for (String text : samples.getOrDefault("doors unreached", List.of())) {

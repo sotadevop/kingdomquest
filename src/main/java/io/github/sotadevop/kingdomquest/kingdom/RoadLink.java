@@ -348,4 +348,224 @@ final class RoadLink {
 		level.setBlock(base.above(), Blocks.SPRUCE_FENCE.defaultBlockState(), Block.UPDATE_ALL);
 		level.setBlock(base.above(2), Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL);
 	}
+
+	// ---- the way out of the gate ----
+
+	private static final int OUT_RADIUS = 150;
+	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
+	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
+
+	/**
+	 * Makes sure one can walk from the gate out into the open land. A wall closes the ring, so a gate that opens onto a
+	 * pocket (sea on one side, cliffs or the wall on the others; field test: windswept hills) would leave the castle
+	 * with no way out on foot. The land around (150 blocks) is read as columns: the part from which one can walk to
+	 * the edge of that area is "open land". If the gate's landing isn't part of it, the cheapest route to it is found
+	 * (a long way round is cheaper than earthwork, water costs a causeway) and a country road of the settlement's
+	 * tier is laid along it, cut and filled so it never climbs more than one block per block. Built blocks, the ring
+	 * with its moat and anything not natural (other people's buildings) are never touched.
+	 */
+	static void wayOut(MinecraftServer server, Settlement s, Set<Long> built) {
+		ServerLevel level = server.overworld();
+		BlockPos heart = s.heart();
+		BlockPos start = gateExit(s);
+		int n = OUT_RADIUS * 2 + 1;
+		int x0 = heart.getX() - OUT_RADIUS, z0 = heart.getZ() - OUT_RADIUS;
+		if (!level.isLoaded(start)) {
+			return;
+		}
+		Rotation turn = Rotation.values()[s.rotation()];
+		BlockPos ra = heart.offset(Template.rotate(new BlockPos(-63 - 9, 0, -56 - 9), turn));
+		BlockPos rb = heart.offset(Template.rotate(new BlockPos(69 + 9, 0, 40 + 9), turn));
+		int bx0 = Math.min(ra.getX(), rb.getX()), bx1 = Math.max(ra.getX(), rb.getX());
+		int bz0 = Math.min(ra.getZ(), rb.getZ()), bz1 = Math.max(ra.getZ(), rb.getZ());
+		Set<Long> builtCols = new java.util.HashSet<>();
+		for (long b : built) {
+			builtCols.add(BlockPos.asLong(BlockPos.getX(b), 0, BlockPos.getZ(b)));
+		}
+		int[] h = new int[n * n];
+		boolean[] water = new boolean[n * n];
+		boolean[] blocked = new boolean[n * n];
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < n; i++) {
+			for (int k = 0; k < n; k++) {
+				int x = x0 + i, z = z0 + k, c = i * n + k;
+				if (!level.isLoaded(pos.set(x, 0, z)) || x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1 || builtCols.contains(BlockPos.asLong(x, 0, z))) {
+					blocked[c] = true;
+					continue;
+				}
+				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				while (y > level.getMinY() && st.getFluidState().isEmpty() && (st.is(BlockTags.LOGS) || st.canBeReplaced() || !st.isSolid())) {
+					st = level.getBlockState(pos.set(x, --y, z));
+				}
+				h[c] = y;
+				water[c] = !st.getFluidState().isEmpty();
+				blocked[c] = !water[c] && !SiteWork.natural(st); // someone's floor or roof: not ours to dig
+			}
+		}
+		int si = start.getX() - x0, sk = start.getZ() - z0;
+		if (si < 0 || sk < 0 || si >= n || sk >= n) {
+			return;
+		}
+		int startCell = si * n + sk;
+		blocked[startCell] = false;
+		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+		// open land: every column from which the edge of the area can be walked to (one up, three down, no swimming)
+		boolean[] open = new boolean[n * n];
+		java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
+		for (int i = 0; i < n; i++) {
+			for (int c : new int[] {i * n, i * n + n - 1, i, (n - 1) * n + i}) {
+				if (!blocked[c] && !water[c] && !open[c]) {
+					open[c] = true;
+					queue.add(c);
+				}
+			}
+		}
+		while (!queue.isEmpty()) {
+			int b = queue.poll();
+			int bi = b / n, bk = b % n;
+			for (int[] d : dirs) {
+				int ai = bi + d[0], ak = bk + d[1];
+				if (ai < 0 || ak < 0 || ai >= n || ak >= n) {
+					continue;
+				}
+				int a = ai * n + ak;
+				if (!open[a] && !blocked[a] && !water[a] && h[b] - h[a] <= 1 && h[a] - h[b] <= 3) {
+					open[a] = true;
+					queue.add(a);
+				}
+			}
+		}
+		if (open[startCell]) {
+			return; // the gate already opens onto land that leads away
+		}
+		// the cheapest route from the gate to the open land
+		int[] dist = new int[n * n];
+		int[] from = new int[n * n];
+		java.util.Arrays.fill(dist, Integer.MAX_VALUE);
+		java.util.PriorityQueue<long[]> pq = new java.util.PriorityQueue<>(java.util.Comparator.comparingLong((long[] e) -> e[0]));
+		dist[startCell] = 0;
+		from[startCell] = -1;
+		pq.add(new long[] {0, startCell});
+		int goal = -1;
+		while (!pq.isEmpty()) {
+			long[] e = pq.poll();
+			int a = (int) e[1];
+			if (e[0] > dist[a]) {
+				continue;
+			}
+			if (open[a]) {
+				goal = a;
+				break;
+			}
+			if (dist[a] > 1500) {
+				break; // no reasonable route: leave the land as it is
+			}
+			int ai = a / n, ak = a % n;
+			int ha = water[a] ? h[a] + 1 : h[a];
+			for (int[] d : dirs) {
+				int bi = ai + d[0], bk = ak + d[1];
+				if (bi < 0 || bk < 0 || bi >= n || bk >= n || blocked[bi * n + bk]) {
+					continue;
+				}
+				int b = bi * n + bk;
+				int hb = water[b] ? h[b] + 1 : h[b];
+				int cost = 1 + (water[b] ? 4 : 0) + 3 * Math.max(0, Math.abs(hb - ha) - 1);
+				if (dist[a] + cost < dist[b]) {
+					dist[b] = dist[a] + cost;
+					from[b] = a;
+					pq.add(new long[] {dist[b], b});
+				}
+			}
+		}
+		if (goal < 0) {
+			return;
+		}
+		List<Integer> path = new ArrayList<>();
+		for (int c = goal; c >= 0; c = from[c]) {
+			path.add(0, c);
+		}
+		int len = path.size();
+		// the road's height: never more than one block per block, as close to the land as that allows
+		// (the middle of the highest and the lowest such line through the land), ends on the gate landing and the land
+		int[] land = new int[len];
+		for (int i = 0; i < len; i++) {
+			int c = path.get(i);
+			int y = water[c] ? h[c] + 1 : h[c];
+			int ci = c / n, ck = c % n;
+			for (int[] d : dirs) { // beside water the road stays above it, so the cut can't flood
+				int ni = ci + d[0], nk = ck + d[1];
+				if (ni >= 0 && nk >= 0 && ni < n && nk < n && water[ni * n + nk]) {
+					y = Math.max(y, h[ni * n + nk] + 1);
+				}
+			}
+			land[i] = y;
+		}
+		int[] hi = land.clone(), lo = land.clone();
+		for (int i = 1; i < len; i++) {
+			hi[i] = Math.min(hi[i], hi[i - 1] + 1);
+			lo[i] = Math.max(lo[i], lo[i - 1] - 1);
+		}
+		for (int i = len - 2; i >= 0; i--) {
+			hi[i] = Math.min(hi[i], hi[i + 1] + 1);
+			lo[i] = Math.max(lo[i], lo[i + 1] - 1);
+		}
+		int[] road = new int[len];
+		for (int i = 0; i < len; i++) {
+			int r = Math.floorDiv(hi[i] + lo[i], 2);
+			r = Math.max(land[0] - i, Math.min(land[0] + i, r));
+			r = Math.max(land[len - 1] - (len - 1 - i), Math.min(land[len - 1] + (len - 1 - i), r));
+			road[i] = r;
+		}
+		BlockState fill = SiteWork.subsoil(SiteWork.surface(level, heart));
+		int tier = tier(s);
+		for (int i = 0; i < len; i++) {
+			int c = path.get(i);
+			BlockPos p = new BlockPos(x0 + c / n, road[i], z0 + c % n);
+			int prev = path.get(Math.max(0, i - 1)), next = path.get(Math.min(len - 1, i + 1));
+			boolean alongX = Math.abs(next / n - prev / n) >= Math.abs(next % n - prev % n);
+			Direction side = alongX ? Direction.SOUTH : Direction.EAST;
+			for (int w = -1; w <= 1; w++) {
+				BlockPos cell = p.relative(side, w);
+				int ci = cell.getX() - x0, ck = cell.getZ() - z0;
+				if (ci < 0 || ck < 0 || ci >= n || ck >= n || (w != 0 && blocked[ci * n + ck]) || builtCols.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
+					continue;
+				}
+				// cut: the land above the road goes (trees whole), headroom 3
+				int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, cell.getX(), cell.getZ());
+				for (int y = Math.max(top, cell.getY() + 3); y > cell.getY(); y--) {
+					BlockPos a = new BlockPos(cell.getX(), y, cell.getZ());
+					BlockState st = level.getBlockState(a);
+					if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+						SiteWork.removeTreeAt(level, a, built);
+					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st)) && st.getFluidState().isEmpty()) {
+						level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+					}
+				}
+				// fill: earth under the road down to the land; stone through water to the bed
+				for (int y = cell.getY() - 1, d = 0; d < 48 && y > level.getMinY(); y--, d++) {
+					BlockPos b = new BlockPos(cell.getX(), y, cell.getZ());
+					BlockState st = level.getBlockState(b);
+					boolean wet = !st.getFluidState().isEmpty();
+					if (!(st.isAir() || st.canBeReplaced() || wet || st.is(BlockTags.LEAVES))) {
+						break;
+					}
+					level.setBlock(b, wet ? Blocks.COBBLESTONE.defaultBlockState() : fill, Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+				}
+				pave(level, cell, w, tier, false);
+			}
+			if (tier >= 2 && i % 24 == 12) {
+				post(level, p.relative(side, 2));
+			}
+		}
+		int mid = path.get(len / 2);
+		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		if (owner != null) {
+			People.say(owner, "Architect", "Outside the gate the land was closed in, so my workers laid a road from the gate out to the open land (" + len
+					+ " blocks).");
+		}
+		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: road of {} blocks from {} to {}", s.name(), len, start,
+				new BlockPos(x0 + goal / n, h[goal], z0 + goal % n));
+	}
 }
