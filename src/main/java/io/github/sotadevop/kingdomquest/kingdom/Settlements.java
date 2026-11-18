@@ -1038,6 +1038,9 @@ public final class Settlements {
 				if (!open) {
 					continue; // the pier needs open water ahead
 				}
+				if (!dockFits(level, s, water)) {
+					continue; // inside the walls (that water becomes land) or in front of a door or on a building
+				}
 				// facing: from the shore out over the water (away from the heart)
 				Rotation rot = alongX ? (dx > 0 ? Rotation.CLOCKWISE_90 : Rotation.COUNTERCLOCKWISE_90) : (dz > 0 ? Rotation.CLOCKWISE_180 : Rotation.NONE);
 				BlockPos rel = water.subtract(h);
@@ -1047,6 +1050,36 @@ public final class Settlements {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * A harbor lies outside the walls, beyond the moat and the shore (water inside the ring is made into land), and
+	 * clear of every building and every door's approach (field test: a pier stood in front of the trophy hall).
+	 */
+	private static boolean dockFits(ServerLevel level, Settlement s, BlockPos water) {
+		BlockPos h = s.heart();
+		Rotation turn = Rotation.values()[s.rotation()];
+		BlockPos a = h.offset(Template.rotate(new BlockPos(-63 - 18, 0, -56 - 18), turn));
+		BlockPos b = h.offset(Template.rotate(new BlockPos(69 + 18, 0, 40 + 18), turn));
+		int minX = Math.min(a.getX(), b.getX()), maxX = Math.max(a.getX(), b.getX());
+		int minZ = Math.min(a.getZ(), b.getZ()), maxZ = Math.max(a.getZ(), b.getZ());
+		if (water.getX() >= minX && water.getX() <= maxX && water.getZ() >= minZ && water.getZ() <= maxZ) {
+			return false;
+		}
+		Set<Long> taken = new HashSet<>(doorApproaches(level, s));
+		s.built().forEach((track, blocks) -> {
+			for (long p : blocks) {
+				taken.add(BlockPos.asLong(BlockPos.getX(p), 0, BlockPos.getZ(p)));
+			}
+		});
+		for (int dx = -8; dx <= 8; dx++) {
+			for (int dz = -8; dz <= 8; dz++) {
+				if (taken.contains(BlockPos.asLong(water.getX() + dx, 0, water.getZ() + dz))) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	/** True if the water surface around {@code p} is at least 400 blocks big; smaller ones are remembered in {@code small}. */
@@ -1428,7 +1461,8 @@ public final class Settlements {
 						BlockPos rel = low.offset().below(down);
 						pos.set(s.heart().getX() + rel.getX(), heartY + rel.getY(), s.heart().getZ() + rel.getZ());
 						BlockState st = level.getBlockState(pos);
-						boolean open = st.isAir() || st.canBeReplaced() || st.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock
+						boolean open = st.isAir() || st.canBeReplaced() || st.getCollisionShape(level, pos).isEmpty() // coral fans, flowers...
+								|| st.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock
 								|| st.is(net.minecraft.tags.BlockTags.LEAVES) || SiteWork.plant(st);
 						if (!open && !own.contains(pos.asLong()) || placed.contains(rel.asLong())) {
 							break;
@@ -1614,7 +1648,9 @@ public final class Settlements {
 			for (int y = ground + 1; y < e.getValue()[0]; y++) { // raised: earth under it
 				pos.set(x, heartY + y, z);
 				BlockState st = level.getBlockState(pos);
-				if (!others.contains(pos.asLong()) && (st.isAir() || st.canBeReplaced()) && st.getFluidState().isEmpty() && placed.add(BlockPos.asLong(rx, y, rz))) {
+				// air, plants, hanging moss and leaves give way to the fill (they can't carry a road)
+				if (!others.contains(pos.asLong()) && (st.isAir() || st.canBeReplaced() || st.getCollisionShape(level, pos).isEmpty()
+						|| st.is(net.minecraft.tags.BlockTags.LEAVES)) && st.getFluidState().isEmpty() && placed.add(BlockPos.asLong(rx, y, rz))) {
 					out.add(new Template.Placement(new BlockPos(rx, y, rz), fill, p.segment(), p.anchor()));
 				}
 			}
@@ -1976,6 +2012,23 @@ public final class Settlements {
 			Set<Long> filled = FILLED.remove(s.id() + "|" + s.job());
 			if (filled != null) {
 				SiteWork.dressFaces(level, filled, nowBuilt, SiteWork.surface(level, s.heart()));
+			}
+			// natural pieces this build left hanging (overhangs, stumps) come down
+			{
+				int ax = Integer.MAX_VALUE, az = Integer.MAX_VALUE, bx = Integer.MIN_VALUE, bz = Integer.MIN_VALUE;
+				for (SiteWork.Column c : columns) {
+					ax = Math.min(ax, c.dx());
+					az = Math.min(az, c.dz());
+					bx = Math.max(bx, c.dx());
+					bz = Math.max(bz, c.dz());
+				}
+				if (ax <= bx) {
+					SiteWork.dropFloating(level, s.heart().getX() + ax - 3, s.heart().getZ() + az - 3, s.heart().getX() + bx + 3, s.heart().getZ() + bz + 3,
+							nowBuilt);
+				}
+			}
+			if (s.jobTrack().equals(Progression.GATE) && !moatColumns(done).isEmpty()) {
+				SiteWork.sealDitch(level, moatColumns(done), nowBuilt, SiteWork.surface(level, s.heart()));
 			}
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			{

@@ -9,6 +9,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -279,6 +280,157 @@ public final class SiteWork {
 	 */
 	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose) {
 		clear(level, heart, c, built, surface, loose, false, Set.of());
+	}
+
+	/**
+	 * The most common top block of the land that borders water in the band around the ring: what the natural shore
+	 * is made of here. Turf-like tops (grass, podzol, snow...) give the land's own surface.
+	 */
+	private static BlockState naturalShore(ServerLevel level, int x0, int z0, int x1, int z1, int reach, Set<Long> built, BlockState surface) {
+		Map<Block, Integer> count = new HashMap<>();
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0 - reach; x <= x1 + reach; x += 2) {
+			for (int z = z0 - reach; z <= z1 + reach; z += 2) {
+				if (x > x0 && x < x1 && z > z0 && z < z1 || !level.isLoaded(pos.set(x, 0, z))) {
+					continue;
+				}
+				int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
+				BlockState st = level.getBlockState(pos.set(x, top, z));
+				if (!st.getFluidState().isEmpty() || built.contains(pos.asLong()) || !terrain(st)) {
+					continue;
+				}
+				boolean wet = false;
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					wet |= level.getFluidState(pos.set(x + d.getStepX() * 2, top, z + d.getStepZ() * 2)).is(net.minecraft.tags.FluidTags.WATER);
+				}
+				if (wet) {
+					count.merge(level.getBlockState(pos.set(x, top, z)).getBlock(), 1, Integer::sum);
+				}
+			}
+		}
+		Block best = count.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(Blocks.SAND);
+		BlockState b = best.defaultBlockState();
+		if (b.is(Blocks.GRASS_BLOCK) || b.is(Blocks.DIRT) || b.is(Blocks.PODZOL) || b.is(Blocks.MYCELIUM) || b.is(Blocks.SNOW_BLOCK) || b.is(Blocks.COARSE_DIRT)) {
+			return surface;
+		}
+		return b;
+	}
+
+	/** The bed under the water off a shore of {@code shore}: turf can't lie under water, so it becomes its earth. */
+	private static BlockState bedFor(BlockState shore, BlockState surface) {
+		return shore.is(Blocks.GRASS_BLOCK) || shore.is(Blocks.MYCELIUM) || shore.is(Blocks.PODZOL) || shore.is(Blocks.SNOW_BLOCK) ? subsoil(surface) : shore;
+	}
+
+	/**
+	 * Natural pieces left hanging after a build cut the land (an overhang whose rock below was taken, the stump of a
+	 * cut tree): everything natural in the box that is no longer connected to the ground or the box's sides is
+	 * removed. Built blocks are never touched and count as support.
+	 */
+	public static void dropFloating(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built) {
+		int nx = x1 - x0 + 1, nz = z1 - z0 + 1;
+		if (nx <= 2 || nz <= 2 || (long) nx * nz > 90_000) {
+			return;
+		}
+		int ylo = Integer.MAX_VALUE, yhi = Integer.MIN_VALUE;
+		for (int x = x0; x <= x1; x += 3) {
+			for (int z = z0; z <= z1; z += 3) {
+				ylo = Math.min(ylo, level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z));
+				yhi = Math.max(yhi, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z));
+			}
+		}
+		ylo = Math.max(level.getMinY(), ylo - 6);
+		yhi = yhi + 2;
+		int ny = yhi - ylo + 1;
+		if (ny <= 2 || (long) nx * nz * ny > 3_000_000) {
+			return;
+		}
+		java.util.BitSet solid = new java.util.BitSet(nx * nz * ny);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < nx; i++) {
+			for (int k = 0; k < nz; k++) {
+				for (int j = 0; j < ny; j++) {
+					BlockState st = level.getBlockState(pos.set(x0 + i, ylo + j, z0 + k));
+					boolean leaves = st.getBlock() instanceof LeavesBlock && !(st.hasProperty(LeavesBlock.PERSISTENT) && st.getValue(LeavesBlock.PERSISTENT));
+					if (!st.isAir() && st.getFluidState().isEmpty() && !leaves) {
+						solid.set((i * nz + k) * ny + j);
+					}
+				}
+			}
+		}
+		java.util.BitSet seen = new java.util.BitSet(nx * nz * ny);
+		java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
+		for (int i = 0; i < nx; i++) {
+			for (int k = 0; k < nz; k++) {
+				for (int j = 0; j < ny; j++) {
+					int idx = (i * nz + k) * ny + j;
+					if ((j == 0 || i == 0 || k == 0 || i == nx - 1 || k == nz - 1) && solid.get(idx) && !seen.get(idx)) {
+						seen.set(idx);
+						queue.add(idx);
+					}
+				}
+			}
+		}
+		int[][] nb = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}, {1, 1, 0}, {-1, 1, 0}, {0, 1, 1}, {0, 1, -1}, {1, -1, 0},
+				{-1, -1, 0}, {0, -1, 1}, {0, -1, -1}, {1, 0, 1}, {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1}};
+		while (!queue.isEmpty()) {
+			int idx = queue.poll();
+			int j = idx % ny, col = idx / ny, i = col / nz, k = col % nz;
+			for (int[] d : nb) {
+				int a = i + d[0], c = k + d[2], b = j + d[1];
+				if (a < 0 || c < 0 || b < 0 || a >= nx || c >= nz || b >= ny) {
+					continue;
+				}
+				int n = (a * nz + c) * ny + b;
+				if (solid.get(n) && !seen.get(n)) {
+					seen.set(n);
+					queue.add(n);
+				}
+			}
+		}
+		for (int idx = solid.nextSetBit(0); idx >= 0; idx = solid.nextSetBit(idx + 1)) {
+			if (seen.get(idx)) {
+				continue;
+			}
+			int j = idx % ny, col = idx / ny;
+			pos.set(x0 + col / nz, ylo + j, z0 + col % nz);
+			BlockState st = level.getBlockState(pos);
+			if (!built.contains(pos.asLong()) && (terrain(st) || trunk(st) || earthwork(st))) {
+				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+			}
+		}
+	}
+
+	/**
+	 * A dug moat must stay dry: water standing in the ditch (ground water, a lake edge) is filled with earth, and
+	 * water right beside the ditch's open cells is walled off with earth, so nothing runs in later.
+	 */
+	public static void sealDitch(ServerLevel level, Set<Long> ditch, Set<Long> built, BlockState surface) {
+		BlockState earth = subsoil(surface);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (long col : ditch) {
+			int x = BlockPos.getX(col), z = BlockPos.getZ(col);
+			int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+			for (int y = top; y > top - 30; y--) {
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (!st.getFluidState().isEmpty() && !built.contains(pos.asLong())) {
+					level.setBlock(pos, earth, FLAGS);
+				} else if (!st.isAir()) {
+					break;
+				}
+			}
+			int floor = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+			for (int y = floor; y <= floor + 12; y++) {
+				if (!level.getBlockState(pos.set(x, y, z)).isAir()) {
+					continue;
+				}
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					BlockPos n = pos.relative(d);
+					if (!ditch.contains(BlockPos.asLong(n.getX(), 0, n.getZ())) && !level.getFluidState(n).isEmpty() && !built.contains(n.asLong())) {
+						level.setBlock(n, earth, FLAGS);
+					}
+				}
+			}
+		}
 	}
 
 	/** Earth and sand that can show as the side of made ground. */
@@ -682,6 +834,7 @@ public final class SiteWork {
 	public static void reclaim(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, Set<Long> keep, BlockState surface) {
 		final int berm = 6;
 		final int reach = 16;
+		BlockState shore = naturalShore(level, x0, z0, x1, z1, reach, built, surface);
 		boolean grass = surface.is(Blocks.GRASS_BLOCK) || surface.is(Blocks.PODZOL) || surface.is(Blocks.MYCELIUM) || surface.is(Blocks.COARSE_DIRT);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int x = x0 - reach; x <= x1 + reach; x++) {
@@ -725,11 +878,13 @@ public final class SiteWork {
 					if (y < target) {
 						fill = subsoil(surface);
 					} else if (target < top) {
-						fill = level.getBiome(pos).getRegisteredName().contains("swamp") ? Blocks.MUD.defaultBlockState()
-								: (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(); // the bed off the shore
+						// the bed off the shore: what the natural shore around is made of (sand, gravel, stone, mud...)
+						fill = shore.is(Blocks.SAND) ? (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState() : bedFor(shore, surface);
 					} else {
-						// a beach outside the walls; a swamp's shore is its own mud and grass, never sand
-						fill = grass && o >= 3 && !level.getBiome(pos).getRegisteredName().contains("swamp") ? Blocks.SAND.defaultBlockState() : surface;
+						// the new shore outside the walls looks like the natural shore here: a sand beach only where the
+						// shore is sand; stone, gravel, mycelium, snow or turf elsewhere (field test: sand beaches on a
+						// stony shore, in mushroom fields and on snowy plains)
+						fill = o >= 3 ? shore : surface;
 					}
 					level.setBlock(pos.set(x, y, z), fill, FLAGS);
 				}

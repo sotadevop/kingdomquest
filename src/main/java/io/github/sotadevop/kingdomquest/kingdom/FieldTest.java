@@ -1012,6 +1012,9 @@ public final class FieldTest {
 			}
 		}
 		w.out = spread(level, h, reach, queue, Set.of(), 400_000);
+		if (!w.out && reach.size() >= 400_000) {
+			sample(samples, "way out", "walk budget used up (" + reach.size() + " cells)");
+		}
 		if (!w.out) {
 			List<Long> edge = new ArrayList<>();
 			for (int i = -R + 1; i < R; i += 2) {
@@ -1075,10 +1078,19 @@ public final class FieldTest {
 	}
 
 	/** Walks from the queued cells (up 1.25, down 3.5, dry); true if it reached the edge of the inspected box. */
+	/** True in a cave: the column's top is natural ground (not a roof) more than 6 blocks over the feet. */
+	private static boolean underground(ServerLevel level, int x, int y, int z) {
+		int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+		return top > y + 6 && SiteWork.terrain(level.getBlockState(new BlockPos(x, top, z)));
+	}
+
 	private static boolean spread(ServerLevel level, BlockPos h, Set<Long> reach, ArrayDeque<long[]> queue, Set<Long> blockedCols, int cap) {
 		boolean edge = false;
-		while (!queue.isEmpty() && reach.size() < cap) {
-			long key = queue.poll()[0];
+		// surface first: cells in caves (natural rock overhead) wait until the surface is walked out, so a cave
+		// system under a hill can't use up the budget before the way out is found (windswept hills: "no contact")
+		ArrayDeque<long[]> caves = new ArrayDeque<>();
+		while ((!queue.isEmpty() || !caves.isEmpty()) && reach.size() < cap) {
+			long key = (queue.isEmpty() ? caves : queue).poll()[0];
 			int x = BlockPos.getX(key), y = BlockPos.getY(key), z = BlockPos.getZ(key);
 			if (Math.abs(x - h.getX()) >= R || Math.abs(z - h.getZ()) >= R) {
 				edge = true;
@@ -1098,7 +1110,7 @@ public final class FieldTest {
 					double g = feet(level, nx, y + dy, nz, false);
 					if (!Double.isNaN(g) && g - f <= 1.25 && f - g <= 3.5) {
 						reach.add(nk);
-						queue.add(new long[] {nk});
+						(underground(level, nx, y + dy, nz) ? caves : queue).add(new long[] {nk});
 					}
 				}
 			}
@@ -1198,8 +1210,9 @@ public final class FieldTest {
 		Set<Long> out = new HashSet<>(seeds);
 		ArrayDeque<long[]> queue = new ArrayDeque<>();
 		seeds.forEach(k -> queue.add(new long[] {k}));
-		while (!queue.isEmpty() && out.size() < cap) {
-			long key = queue.poll()[0];
+		ArrayDeque<long[]> caves = new ArrayDeque<>();
+		while ((!queue.isEmpty() || !caves.isEmpty()) && out.size() < cap) {
+			long key = (queue.isEmpty() ? caves : queue).poll()[0];
 			int x = BlockPos.getX(key), y = BlockPos.getY(key), z = BlockPos.getZ(key);
 			if (Math.abs(x - h.getX()) >= R || Math.abs(z - h.getZ()) >= R) {
 				continue;
@@ -1214,7 +1227,7 @@ public final class FieldTest {
 					double g = feet(level, x + d[0], y + dy, z + d[1], false);
 					if (!Double.isNaN(g) && f - g <= 1.25 && g - f <= 3.5) {
 						out.add(nk);
-						queue.add(new long[] {nk});
+						(underground(level, x + d[0], y + dy, z + d[1]) ? caves : queue).add(new long[] {nk});
 					}
 				}
 			}
