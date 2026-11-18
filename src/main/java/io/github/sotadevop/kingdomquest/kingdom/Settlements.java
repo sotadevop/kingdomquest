@@ -2071,7 +2071,7 @@ public final class Settlements {
 						Math.max(sa.getZ(), sb.getZ()), nowBuilt);
 			}
 			if ((Progression.WALLS.equals(s.jobTrack()) || Progression.GATE.equals(s.jobTrack())) && done.level(Progression.WALLS) >= 1
-					&& done.level(Progression.GATE) >= 1) {
+					&& done.level(Progression.GATE) >= 3) { // from gate 3 the landing and the moat are where they stay
 				RoadLink.wayOut(server, done, nowBuilt); // the gate must open onto land that leads away
 			}
 			Production.armTraps(level, done, list);

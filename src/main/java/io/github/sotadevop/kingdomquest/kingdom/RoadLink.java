@@ -602,7 +602,7 @@ final class RoadLink {
 			trace.append(String.format(" (%d,%d) land %d road %d%s", x0 + c / n - heart.getX(), z0 + c % n - heart.getZ(), land[c] - heart.getY(),
 					road[i] - heart.getY(), water[c] ? " water" : ""));
 		}
-		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out path:{}", trace);
+		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.debug("Way out path:{}", trace);
 		int mid = path.get(len / 2);
 		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
