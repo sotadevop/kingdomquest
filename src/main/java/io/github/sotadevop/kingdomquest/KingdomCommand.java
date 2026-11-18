@@ -55,6 +55,10 @@ final class KingdomCommand {
 					ctx.getSource().sendSuccess(() -> Component.literal(result), false);
 					return errors.isEmpty() ? 1 : 0;
 				}))
+				.then(Commands.literal("fieldtest")
+						.executes(ctx -> fieldTest(ctx, ""))
+						.then(Commands.argument("sites", StringArgumentType.greedyString())
+								.executes(ctx -> fieldTest(ctx, StringArgumentType.getString(ctx, "sites")))))
 				.then(Commands.literal("test")
 						.then(Commands.literal("finish").executes(ctx -> run(ctx, p -> Settlements.testFinish(p) != null, "Build finished.")))
 						.then(Commands.literal("max").executes(ctx -> run(ctx, Settlements::testMax, "Everything built to the highest level.")))
@@ -67,6 +71,16 @@ final class KingdomCommand {
 								.then(Commands.argument("level", IntegerArgumentType.integer(1, 10)).executes(ctx -> run(ctx,
 										p -> Settlements.testSet(p, StringArgumentType.getString(ctx, "track"), IntegerArgumentType.getInteger(ctx, "level")),
 										"Level built."))))))));
+	}
+
+	/** Field test in generated terrain (CI): sites separated by spaces, all when empty. See FieldTest. */
+	private static int fieldTest(CommandContext<CommandSourceStack> ctx, String sites) {
+		java.util.Set<String> only = new java.util.HashSet<>(java.util.Arrays.asList(sites.trim().split("\\s+")));
+		only.remove("");
+		int bad = io.github.sotadevop.kingdomquest.kingdom.FieldTest.run(ctx.getSource().getServer(), only);
+		KingdomQuest.LOG.info("Field test finished: {} sites with findings", bad);
+		ctx.getSource().sendSuccess(() -> Component.literal("Field test finished: " + bad + " sites with findings"), false);
+		return 1;
 	}
 
 	private static int run(CommandContext<CommandSourceStack> ctx, Predicate<ServerPlayer> action, String done) {

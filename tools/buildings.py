@@ -602,6 +602,7 @@ def hamlet(style, level):
         house(b, style, 28, 22, facing_north=True)
         b.put(hx + 1, 0, hz - 2, "bell", attachment="floor", facing="south", powered="false")
         for x, z in ((9, 15), (5, 15)):
+            b.put(x, -1, z, "grass_block", snowy="false")  # the bed's own soil: a road or regrade next to it can't take it away
             b.put(x, 0, z, "sweet_berry_bush" if style == "frozen" else "rose_bush", **({"age": "3"} if style == "frozen" else {"half": "lower"}))
             if style != "frozen":
                 b.put(x, 1, z, "rose_bush", half="upper")
@@ -1123,7 +1124,7 @@ def plan_roads(style, jobs):
                     queue.append(n)
         changed = True
 
-    # lamp posts along the streets: every ninth block of a centre line, on alternating sides, never on a road,
+    # lamp posts along the streets: every 13th block of a centre line, on alternating sides, never on a road,
     # in a doorway or against a wall
     lamps = []
     goal_cells = {g for _, _, g in goals}
@@ -1134,7 +1135,9 @@ def plan_roads(style, jobs):
         along = range(za, zb + 1) if axis == "x" else range(xa, xb + 1)
         side = 1
         for n, v in enumerate(along):
-            if n % 9 != 4:
+            # one post every 13 blocks, sides alternating: a lantern's light reaches ~14 blocks, and since 1.18
+            # hostile mobs only spawn in complete darkness, so the streets stay safe with half the clutter
+            if n % 13 != 6:
                 continue
             for sgn in (side, -side):
                 for off in (1, 2, 3):
@@ -1227,8 +1230,7 @@ def lamps(style, level):
             for y in (1, 2, 3):
                 b.put(x, y, z, fence)
             b.put(x + dx, 3, z + dz, fence)
-            b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")
-            b.put(x, 4, z, "lantern", hanging="false", waterlogged="false")
+            b.put(x + dx, 2, z + dz, "lantern", hanging="true", waterlogged="false")  # one lantern per post, on the arm
         for p in set(b.b) - before:
             segs[p] = [seg[name]]
     SEGS_OF[id(b.b)] = segs
@@ -2269,6 +2271,7 @@ def apiary(style, level):
                 else:
                     b.put(x, 0, z, w + "_fence")
             elif (x * 5 + z * 3) % 3 != 0:
+                b.put(x, -1, z, "grass_block", snowy="false")  # the meadow's own soil: flowers can't stand on sand
                 b.put(x, 0, z, flowers[(x * 7 + z) % len(flowers)])
     for x, z in ((x0 + 2, z0 + 2), (x1 - 2, z0 + 2)):
         b.put(x, 0, z, w + "_fence")
@@ -2601,9 +2604,10 @@ def donjon(b, style):
                 b.put(x, base + height + 1, z, top, up="true", north="none", south="none", east="none", west="none", waterlogged="false")
     for y in (base, base + 1):
         b.put(cx, y, cz + 3, "air")  # doorway from the keep's roof
+    # beside the window column: a ladder can't hold on to iron bars
     for y in range(base, base + height):
-        b.put(cx + 2, y, cz, "ladder", facing="west", waterlogged="false")
-    b.put(cx + 2, base + height, cz, "air")
+        b.put(cx + 2, y, cz - 1, "ladder", facing="west", waterlogged="false")
+    b.put(cx + 2, base + height, cz - 1, "air")
     for x in range(cx - 1, cx + 2):
         for z in range(cz - 1, cz + 2):
             b.put(x, base + height + 1, z, "iron_block")

@@ -1,0 +1,113 @@
+# Field test: founds settlements in real generated terrain (many biomes and heights), builds every track to its last
+# level and measures the criteria of FieldTest (floating, buried, walkable, water, natural land, roads, walls).
+# Runs on manual dispatch, or on a push whose commit message contains [fieldtest] (all sites) or
+# [fieldtest site1 site2] (only those). Every site runs in its own job; the reports and maps are published to the
+# ci-fieldtest branch (fieldtest/report.md). Uses no secrets besides the workflow token.
+name: Field test
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      sites:
+        description: 'Sites to run, separated by spaces (empty = all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write # only for the ci-fieldtest branch
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[fieldtest')
+    runs-on: ubuntu-24.04
+    outputs:
+      sites: ${{ steps.pick.outputs.sites }}
+      seed: ${{ steps.pick.outputs.seed }}
+    steps:
+      - id: pick
+        env:
+          INPUT: ${{ github.event.inputs.sites }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          all="plains forest dark_forest high_meadow snowy_plains snowy_slopes taiga windswept_hills stony_peaks desert badlands savanna_plateau jungle swamp mangrove beach river_bank flower_forest old_birch pale_garden cherry_grove ice_spikes jagged_peaks stony_shore snowy_beach eroded_badlands bamboo_jungle mushroom_fields frozen_river"
+          want="$INPUT"
+          if [ -z "$want" ]; then want=$(printf '%s' "$MESSAGE" | grep -oE '\[fieldtest[^]]*\]' | head -1 | sed -E 's/\[fieldtest ?//; s/\]//'); fi
+          # seed=N or seed=random in the brackets picks the world; default is the regression seed
+          seed=$(printf '%s' "$want" | grep -oE 'seed=[a-z0-9]+' | head -1 | cut -d= -f2)
+          want=$(printf '%s' "$want" | sed -E 's/seed=[a-z0-9]+//')
+          [ -z "$seed" ] && seed=20261117
+          [ "$seed" = "random" ] && seed=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          [ -z "$(printf '%s' "$want" | tr -d ' ')" ] && want="$all"
+          echo "sites=$(printf '%s\n' $want | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  site:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        site: ${{ fromJson(needs.plan.outputs.sites) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Run the field test
+        timeout-minutes: 65
+        run: |
+          mkdir -p run
+          echo "eula=true" > run/eula.txt
+          printf 'level-type=minecraft\\:normal\nlevel-seed=${{ needs.plan.outputs.seed }}\nonline-mode=false\nspawn-protection=0\nmax-tick-time=-1\nview-distance=4\nsimulation-distance=4\n' > run/server.properties
+          touch server.log
+          {
+            for i in $(seq 1 600); do grep -q 'Done (' server.log && break; grep -q 'BUILD FAILED\|Compilation failed' server.log && break; sleep 2; done
+            echo "kingdomquest fieldtest ${{ matrix.site }}"
+            for i in $(seq 1 1650); do grep -q 'Field test finished' server.log && break; grep -q 'Crash report\|Stopping the server\|BUILD FAILED' server.log && break; sleep 2; done
+            # a stack dump of the server thread if it is still busy
+            pid=$(jps -l | grep -i -E 'KnotServer|knot|minecraft' | awk '{print $1}' | head -1); [ -n "$pid" ] && jstack "$pid" > jstack.txt 2>/dev/null || true
+            echo "stop"
+          } | ./gradlew runServer --console=plain > server.log 2>&1 || true
+          grep -E 'Field test|ERROR|Exception' server.log | head -40
+
+      - name: Collect
+        if: always()
+        run: |
+          mkdir -p out/${{ matrix.site }}
+          cp -r run/fieldtest/. out/${{ matrix.site }}/ 2>/dev/null || true
+          tail -300 server.log > out/${{ matrix.site }}/server-tail.txt || true
+          grep -E 'Field test|KingdomQuest|ERROR|Exception|at io\.github|Caused by' server.log | head -300 > out/${{ matrix.site }}/log.txt || true
+          [ -f jstack.txt ] && grep -A 40 '"Server thread"' jstack.txt > out/${{ matrix.site }}/server-thread.txt || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: fieldtest-${{ matrix.site }}
+          path: out
+
+  publish:
+    needs: [plan, site]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: /tmp/in
+          pattern: fieldtest-*
+          merge-multiple: true
+      - name: Publish to the ci-fieldtest branch
+        run: |
+          mkdir -p /tmp/out/fieldtest
+          cp -r /tmp/in/. /tmp/out/fieldtest/ 2>/dev/null || true
+          cd /tmp/out
+          git init -q -b ci-fieldtest
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          printf '# KingdomQuest field test\n\nFrom commit %s (%s).\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" > README.md
+          git add -A
+          git commit -qm "Field test for $GITHUB_SHA"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-fieldtest

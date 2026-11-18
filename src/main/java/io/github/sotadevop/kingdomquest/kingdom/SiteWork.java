@@ -2,12 +2,14 @@ package io.github.sotadevop.kingdomquest.kingdom;
 
 import io.github.sotadevop.kingdomquest.building.Template;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
@@ -38,10 +40,11 @@ public final class SiteWork {
 	 * @param floor how far above the pad the land may stay in this column (0 on the pad itself)
 	 * @param edge  the outermost ring of the flat pad, where a terrace gets its retaining wall
 	 * @param drop  how far below the pad a bank of earth ends in this column (0 on the pad itself)
+	 * @param out   how many blocks this column lies outside the flat pad (0 on the pad itself)
 	 */
-	public record Column(int dx, int dz, int floor, boolean edge, int drop) {
+	public record Column(int dx, int dz, int floor, boolean edge, int drop, int out) {
 		public Column(int dx, int dz, int floor) {
-			this(dx, dz, floor, false, floor);
+			this(dx, dz, floor, false, floor, floor);
 		}
 
 		/** On the flat pad itself (not the graded land around it). */
@@ -49,6 +52,16 @@ public final class SiteWork {
 			return this.drop == 0;
 		}
 	}
+
+	/**
+	 * How far around a building the land is shaped: cut slopes and banks run on until they meet the land, and over a
+	 * deep drop the terraces step down to it, instead of stopping at the template's apron in a cliff.
+	 */
+	private static final int REACH = 14;
+	/** Over a deep drop the made ground steps down in terraces: a stone face this high, then a bench of earth. */
+	static final int TERRACE_STEP = 4;
+	/** Width of each terrace bench (the flat strip of earth between two stone faces). */
+	static final int BENCH = 3;
 
 	/** How deep a pad's stone foundation goes to find the ground. */
 	private static final int PLINTH = 48;
@@ -73,7 +86,7 @@ public final class SiteWork {
 			Blocks.SUGAR_CANE, Blocks.CACTUS, Blocks.BAMBOO, Blocks.SWEET_BERRY_BUSH, Blocks.SNOW_BLOCK, Blocks.POWDER_SNOW, Blocks.MUD,
 			Blocks.SANDSTONE, Blocks.RED_SANDSTONE, Blocks.POINTED_DRIPSTONE, Blocks.DRIPSTONE_BLOCK, Blocks.BROWN_MUSHROOM,
 			Blocks.RED_MUSHROOM, Blocks.BROWN_MUSHROOM_BLOCK, Blocks.RED_MUSHROOM_BLOCK, Blocks.MUSHROOM_STEM, Blocks.BEE_NEST,
-			Blocks.COBWEB, Blocks.LILY_PAD, Blocks.KELP, Blocks.KELP_PLANT, Blocks.SEAGRASS, Blocks.TALL_SEAGRASS);
+			Blocks.COBWEB, Blocks.MANGROVE_ROOTS, Blocks.MUDDY_MANGROVE_ROOTS, Blocks.LILY_PAD, Blocks.KELP, Blocks.KELP_PLANT, Blocks.SEAGRASS, Blocks.TALL_SEAGRASS);
 
 	private SiteWork() {
 	}
@@ -91,6 +104,7 @@ public final class SiteWork {
 			}
 			int a = t.apron;
 			int flat = Math.min(3, Math.max(1, a / 2));
+			int reach = a == 0 ? 0 : Math.max(a, REACH);
 			// distance from the footprint in tenths of a block, diagonal steps cost 1.4: pads get round corners
 			Map<Long, Integer> dist = new HashMap<>();
 			java.util.PriorityQueue<long[]> queue = new java.util.PriorityQueue<long[]>(java.util.Comparator.<long[]>comparingLong(c -> c[2]));
@@ -124,14 +138,14 @@ public final class SiteWork {
 						}
 						int d = (int) c[2] + (dx != 0 && dz != 0 ? 14 : 10);
 						long key = BlockPos.asLong((int) c[0] + dx, 0, (int) c[1] + dz);
-						if (d <= a * 10 && d < dist.getOrDefault(key, Integer.MAX_VALUE)) {
+						if (d <= reach * 10 && d < dist.getOrDefault(key, Integer.MAX_VALUE)) {
 							dist.put(key, d);
 							queue.add(new long[] {c[0] + dx, c[1] + dz, d});
 						}
 					}
 				}
 			}
-			Map<Long, int[]> shape = new HashMap<>(); // column -> {floor, drop}
+			Map<Long, int[]> shape = new HashMap<>(); // column -> {floor, drop, out}
 			for (Map.Entry<Long, Integer> e : dist.entrySet()) {
 				int x = BlockPos.getX(e.getKey());
 				int z = BlockPos.getZ(e.getKey());
@@ -142,7 +156,8 @@ public final class SiteWork {
 				int floor = out <= 0 ? 0 : (int) Math.floor(out <= 4 ? out * 0.5 + 0.5 : out - 1.5);
 				// made ground falls away the same way: gently at first, then one block per block
 				int drop = out <= 0 ? 0 : (int) Math.ceil(out <= 4 ? out * 0.5 : out - 2);
-				shape.put(e.getKey(), new int[] {e.getValue() == 0 ? 0 : floor, e.getValue() == 0 ? 0 : drop});
+				shape.put(e.getKey(), new int[] {e.getValue() == 0 ? 0 : floor, e.getValue() == 0 ? 0 : drop,
+						e.getValue() == 0 || out <= 0 ? 0 : (int) Math.ceil(out)});
 			}
 			List<Column> list = new ArrayList<>();
 			for (Map.Entry<Long, int[]> e : shape.entrySet()) {
@@ -156,7 +171,7 @@ public final class SiteWork {
 					}
 				}
 				BlockPos rel = Template.rotate(new BlockPos(x - t.heart.getX(), 0, z - t.heart.getZ()), rotation);
-				list.add(new Column(rel.getX(), rel.getZ(), e.getValue()[0], edge, e.getValue()[1]));
+				list.add(new Column(rel.getX(), rel.getZ(), e.getValue()[0], edge, e.getValue()[1], e.getValue()[2]));
 			}
 			list.sort(java.util.Comparator.comparingInt(Column::dx).thenComparingInt(Column::dz));
 			return List.copyOf(list);
@@ -254,8 +269,8 @@ public final class SiteWork {
 
 	/** Dirt or stone that only shows because a hill was cut away; it gets the surface block on top. */
 	private static boolean exposedInside(BlockState st) {
-		return st.is(Blocks.DIRT) || st.is(BlockTags.BASE_STONE_OVERWORLD) || st.is(Blocks.GRAVEL)
-				|| BuiltInRegistries.BLOCK.getKey(st.getBlock()).getPath().endsWith("_ore");
+		return st.is(Blocks.DIRT) || st.is(BlockTags.BASE_STONE_OVERWORLD) || st.is(Blocks.GRAVEL) || st.is(Blocks.SANDSTONE)
+				|| st.is(Blocks.RED_SANDSTONE) || BuiltInRegistries.BLOCK.getKey(st.getBlock()).getPath().endsWith("_ore");
 	}
 
 	/**
@@ -265,6 +280,206 @@ public final class SiteWork {
 	 */
 	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose) {
 		clear(level, heart, c, built, surface, loose, false, Set.of());
+	}
+
+	/**
+	 * The most common top block of the land that borders water in the band around the ring: what the natural shore
+	 * is made of here. Turf-like tops (grass, podzol, snow...) give the land's own surface.
+	 */
+	private static BlockState naturalShore(ServerLevel level, int x0, int z0, int x1, int z1, int reach, Set<Long> built, BlockState surface) {
+		Map<Block, Integer> count = new HashMap<>();
+		Map<Block, Integer> loose = new HashMap<>();
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0 - reach; x <= x1 + reach; x += 2) {
+			for (int z = z0 - reach; z <= z1 + reach; z += 2) {
+				if (x > x0 && x < x1 && z > z0 && z < z1 || !level.isLoaded(pos.set(x, 0, z))) {
+					continue;
+				}
+				int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z) - 1;
+				BlockState st = level.getBlockState(pos.set(x, top, z));
+				if (!st.getFluidState().isEmpty() || built.contains(pos.asLong()) || !terrain(st)) {
+					continue;
+				}
+				boolean wet = false;
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					wet |= level.getFluidState(pos.set(x + d.getStepX() * 2, top, z + d.getStepZ() * 2)).is(net.minecraft.tags.FluidTags.WATER);
+				}
+				if (wet) {
+					Block b = level.getBlockState(pos.set(x, top, z)).getBlock();
+					count.merge(b, 1, Integer::sum);
+					if (!b.defaultBlockState().is(BlockTags.BASE_STONE_OVERWORLD)) {
+						loose.merge(b, 1, Integer::sum);
+					}
+				}
+			}
+		}
+		// loose ground (sand, gravel, mud, turf) before bare rock: a desert pool walled by a rock ledge still gets
+		// a sand shore; only a shore that is rock all along (a stony shore) gets rock
+		if (!loose.isEmpty()) {
+			count = loose;
+		}
+		// no natural shore near (a settlement reclaimed out of the sea): a sand beach, but a mushroom island keeps
+		// its mycelium down to the water like the real ones
+		Block best = count.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey)
+				.orElse(surface.is(Blocks.MYCELIUM) ? Blocks.MYCELIUM : Blocks.SAND);
+		BlockState b = best.defaultBlockState();
+		if (b.is(Blocks.GRASS_BLOCK) || b.is(Blocks.DIRT) || b.is(Blocks.PODZOL) || b.is(Blocks.MYCELIUM) || b.is(Blocks.SNOW_BLOCK) || b.is(Blocks.COARSE_DIRT)) {
+			return surface;
+		}
+		return b;
+	}
+
+	/** The bed under the water off a shore of {@code shore}: turf can't lie under water, so it becomes its earth. */
+	private static BlockState bedFor(BlockState shore, BlockState surface) {
+		return shore.is(Blocks.GRASS_BLOCK) || shore.is(Blocks.MYCELIUM) || shore.is(Blocks.PODZOL) || shore.is(Blocks.SNOW_BLOCK) ? subsoil(surface) : shore;
+	}
+
+	/**
+	 * Natural pieces left hanging after a build cut the land (an overhang whose rock below was taken, the stump of a
+	 * cut tree): everything natural in the box that is no longer connected to the ground or the box's sides is
+	 * removed. Built blocks are never touched and count as support.
+	 */
+	public static void dropFloating(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built) {
+		int nx = x1 - x0 + 1, nz = z1 - z0 + 1;
+		if (nx <= 2 || nz <= 2 || (long) nx * nz > 90_000) {
+			return;
+		}
+		int ylo = Integer.MAX_VALUE, yhi = Integer.MIN_VALUE;
+		for (int x = x0; x <= x1; x += 3) {
+			for (int z = z0; z <= z1; z += 3) {
+				ylo = Math.min(ylo, level.getHeight(Heightmap.Types.OCEAN_FLOOR, x, z));
+				yhi = Math.max(yhi, level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z));
+			}
+		}
+		ylo = Math.max(level.getMinY(), ylo - 6);
+		yhi = yhi + 2;
+		int ny = yhi - ylo + 1;
+		if (ny <= 2 || (long) nx * nz * ny > 4_000_000) {
+			return;
+		}
+		java.util.BitSet solid = new java.util.BitSet(nx * nz * ny);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < nx; i++) {
+			for (int k = 0; k < nz; k++) {
+				for (int j = 0; j < ny; j++) {
+					BlockState st = level.getBlockState(pos.set(x0 + i, ylo + j, z0 + k));
+					boolean leaves = st.getBlock() instanceof LeavesBlock && !(st.hasProperty(LeavesBlock.PERSISTENT) && st.getValue(LeavesBlock.PERSISTENT));
+					// waterlogged blocks (mangrove roots, seagrass beds) are solid: a mangrove stands on its roots in the water
+					if (!st.isAir() && !(st.getBlock() instanceof LiquidBlock) && !leaves) {
+						solid.set((i * nz + k) * ny + j);
+					}
+				}
+			}
+		}
+		java.util.BitSet seen = new java.util.BitSet(nx * nz * ny);
+		java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
+		for (int i = 0; i < nx; i++) {
+			for (int k = 0; k < nz; k++) {
+				for (int j = 0; j < ny; j++) {
+					int idx = (i * nz + k) * ny + j;
+					if ((j == 0 || i == 0 || k == 0 || i == nx - 1 || k == nz - 1) && solid.get(idx) && !seen.get(idx)) {
+						seen.set(idx);
+						queue.add(idx);
+					}
+				}
+			}
+		}
+		int[][] nb = {{1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, 1, 0}, {0, -1, 0}, {1, 1, 0}, {-1, 1, 0}, {0, 1, 1}, {0, 1, -1}, {1, -1, 0},
+				{-1, -1, 0}, {0, -1, 1}, {0, -1, -1}, {1, 0, 1}, {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1}};
+		while (!queue.isEmpty()) {
+			int idx = queue.poll();
+			int j = idx % ny, col = idx / ny, i = col / nz, k = col % nz;
+			for (int[] d : nb) {
+				int a = i + d[0], c = k + d[2], b = j + d[1];
+				if (a < 0 || c < 0 || b < 0 || a >= nx || c >= nz || b >= ny) {
+					continue;
+				}
+				int n = (a * nz + c) * ny + b;
+				if (solid.get(n) && !seen.get(n)) {
+					seen.set(n);
+					queue.add(n);
+				}
+			}
+		}
+		for (int idx = solid.nextSetBit(0); idx >= 0; idx = solid.nextSetBit(idx + 1)) {
+			if (seen.get(idx)) {
+				continue;
+			}
+			int j = idx % ny, col = idx / ny;
+			pos.set(x0 + col / nz, ylo + j, z0 + col % nz);
+			BlockState st = level.getBlockState(pos);
+			if (!built.contains(pos.asLong()) && (terrain(st) || trunk(st) || earthwork(st))) {
+				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
+			}
+		}
+	}
+
+	/**
+	 * A dug moat must stay dry: water standing in the ditch (ground water, a lake edge) is filled with earth, and
+	 * water right beside the ditch's open cells is walled off with earth, so nothing runs in later.
+	 */
+	public static void sealDitch(ServerLevel level, Set<Long> ditch, Set<Long> built, BlockState surface) {
+		BlockState earth = subsoil(surface);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (long col : ditch) {
+			int x = BlockPos.getX(col), z = BlockPos.getZ(col);
+			int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+			for (int y = top; y > top - 30; y--) {
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (!st.getFluidState().isEmpty() && !built.contains(pos.asLong())) {
+					level.setBlock(pos, earth, FLAGS);
+				} else if (!st.isAir()) {
+					break;
+				}
+			}
+			int floor = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+			for (int y = floor; y <= floor + 12; y++) {
+				if (!level.getBlockState(pos.set(x, y, z)).isAir()) {
+					continue;
+				}
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					BlockPos n = pos.relative(d);
+					if (!ditch.contains(BlockPos.asLong(n.getX(), 0, n.getZ())) && !level.getFluidState(n).isEmpty() && !built.contains(n.asLong())) {
+						level.setBlock(n, earth, FLAGS);
+					}
+				}
+			}
+		}
+	}
+
+	/** Earth and sand that can show as the side of made ground. */
+	private static boolean earthy(BlockState st) {
+		return st.is(Blocks.DIRT) || st.is(Blocks.GRASS_BLOCK) || st.is(Blocks.COARSE_DIRT) || st.is(Blocks.ROOTED_DIRT) || st.is(Blocks.PODZOL)
+				|| st.is(Blocks.SAND) || st.is(Blocks.RED_SAND) || st.is(Blocks.GRAVEL) || st.is(Blocks.SANDSTONE) || st.is(Blocks.RED_SANDSTONE)
+				|| st.is(Blocks.MUD) || st.is(Blocks.SNOW_BLOCK) || st.is(BlockTags.TERRACOTTA);
+	}
+
+	/**
+	 * Made ground (columns a build filled up) whose side stands open 3 or more blocks high gets a masonry face there,
+	 * the top block stays turf: the same look as the terrace walls, never a tall bare wall of earth.
+	 */
+	public static void dressFaces(ServerLevel level, Set<Long> filled, Set<Long> built, BlockState surface) {
+		BlockState wall = wallFor(surface);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (long col : filled) {
+			int x = BlockPos.getX(col), z = BlockPos.getZ(col);
+			int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+			int low = Integer.MAX_VALUE;
+			for (Direction d : Direction.Plane.HORIZONTAL) {
+				low = Math.min(low, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + d.getStepX(), z + d.getStepZ()) - 1);
+			}
+			if (top - low < 3) {
+				continue; // no side of it stands 3 or more above its lowest neighbour
+			}
+			for (int y = top - 1; y > low; y--) {
+				pos.set(x, y, z);
+				BlockState st = level.getBlockState(pos);
+				if (built.contains(pos.asLong()) || !earthy(st) || !openSide(level, pos, built)) {
+					continue;
+				}
+				level.setBlock(pos, Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall, FLAGS);
+			}
+		}
 	}
 
 	/** Deepest drop under a pad's rim that is still made up with a natural bank of earth; beyond it the pad gets a stone terrace wall. */
@@ -298,7 +513,7 @@ public final class SiteWork {
 	 * instead of masonry, and around it a bank that falls away to the land (also under water: a shore).
 	 * {@code roads}: road blocks, which a bank may cover (they are laid again on top of it).
 	 */
-	public static void clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose, boolean bank,
+	public static boolean clear(ServerLevel level, BlockPos heart, Column c, Set<Long> built, BlockState surface, Set<Long> loose, boolean bank,
 			Set<Long> roads) {
 		int x = heart.getX() + c.dx();
 		int z = heart.getZ() + c.dz();
@@ -321,17 +536,20 @@ public final class SiteWork {
 				continue;
 			}
 			BlockState st = level.getBlockState(pos);
-			if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+			if (trunk(st) || st.is(BlockTags.LEAVES)) {
 				// any part of a tree in the way takes the whole tree: no half trees or floating crowns
+				// on the plot every tree goes, roots and all; on the slopes around it only a trunk standing in the way
+				// (mangrove roots there stay: felling whole swamp trees from the slope tore up the land around plots)
 				if (margin || st.is(BlockTags.LOGS) && y <= floor + 1) {
 					removeTreeAt(level, pos.immutable(), built);
 				}
 				continue;
 			}
-			// in the flat margin everything natural goes; further out only the land is shaped
-			if (margin ? natural(st) : terrain(st)) {
+			// in the flat margin everything natural goes; further out only the land is shaped. Old terrace masonry
+			// nobody owns is land too
+			if (margin ? natural(st) || earthwork(st) : terrain(st) || earthwork(st)) {
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), FLAGS);
-				if (level.getBlockState(pos.above()).is(BlockTags.LOGS) && !built.contains(pos.above().asLong())) {
+				if (trunk(level.getBlockState(pos.above())) && !built.contains(pos.above().asLong())) {
 					removeTreeAt(level, pos.above(), built); // the ground under a tree was cut: the tree goes too
 				}
 			}
@@ -345,7 +563,14 @@ public final class SiteWork {
 		}
 		// foundation: fill holes, water and leaves below the ground layer
 		int fillTop = heart.getY() - 1 - c.drop();
-		int reach = margin ? PLINTH : FOUNDATION;
+		// over a deep drop (no bank) the land around the pad steps down in terraces: benches BENCH wide, each
+		// TERRACE_STEP lower than the last, made up to the land below; the outer row of each bench is its stone face
+		boolean terrace = !bank && !margin && c.out() > 0;
+		int bench = terrace ? (c.out() + BENCH - 1) / BENCH : 0;
+		if (terrace) {
+			fillTop = heart.getY() - 1 - bench * TERRACE_STEP;
+		}
+		int reach = margin || terrace ? PLINTH : FOUNDATION;
 		int depth = 0;
 		boolean blocked = false;
 		for (int y = fillTop; y >= fillTop - reach && y > level.getMinY(); y--) {
@@ -368,21 +593,58 @@ public final class SiteWork {
 			}
 			depth++;
 		}
-		if (depth == 0 || !margin && depth > 2 && (!bank || blocked)) {
-			return; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
+		if (depth == 0 || !margin && !terrace && depth > 2 && (!bank || blocked) || terrace && blocked) {
+			return false; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
 		}
 		// a pad over lower land is built up solid: earth on top, stone below, and its rim is a masonry wall
 		BlockState wall = wallFor(surface);
+		// a terrace step of up to 2 blocks is a grassy bank; only a real step (3 and more) gets a stone face
+		boolean high = terrace && openBelow(level, x, fillTop, z, built) >= 3;
 		for (int y = fillTop; y > fillTop - depth; y--) {
 			pos.set(x, y, z);
 			if (built.contains(pos.asLong()) && !(bank && roads.contains(pos.asLong()))) {
 				continue;
 			}
-			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2);
+			// a terrace block whose side is open is part of a retaining wall: masonry. Where the next bench later
+			// covers it, the stone is simply hidden; every face that stays in sight is stone, never bare earth
+			boolean face = high && depth > 1 && y < fillTop && openSide(level, pos, built);
+			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face;
 			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
 		}
+		return true;
+	}
+
+	/** How far the land beside a column lies below {@code top} at its lowest side (open blocks counted, at most 3). */
+	private static int openBelow(ServerLevel level, int x, int top, int z, Set<Long> built) {
+		int most = 0;
+		BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			int n = 0;
+			while (n < 3) {
+				p.set(x + d.getStepX(), top - n, z + d.getStepZ());
+				BlockState st = level.getBlockState(p);
+				if (built.contains(p.asLong()) || !(st.isAir() || st.canBeReplaced() || !st.getFluidState().isEmpty())) {
+					break;
+				}
+				n++;
+			}
+			most = Math.max(most, n);
+		}
+		return most;
+	}
+
+	/** Air, water or a plant beside this block on any side (not counting built blocks): it would show. */
+	private static boolean openSide(ServerLevel level, BlockPos pos, Set<Long> built) {
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			BlockPos n = pos.relative(d);
+			BlockState st = level.getBlockState(n);
+			if (!built.contains(n.asLong()) && (st.isAir() || st.canBeReplaced() || !st.getFluidState().isEmpty())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Stone for retaining walls, matching the ground: sandstone in deserts, cobblestone in the snow, stone bricks elsewhere. */
@@ -449,9 +711,24 @@ public final class SiteWork {
 	}
 
 	/** A log or leaf block of a tree is in the way: every tree it belongs to goes, whole. */
+	/** Logs, and mangrove roots: they belong to their tree and go with it (cut one by one, the rest would hang). */
+	static boolean trunk(BlockState st) {
+		return st.is(BlockTags.LOGS) || st.is(Blocks.MANGROVE_ROOTS) || st.is(Blocks.MUDDY_MANGROVE_ROOTS);
+	}
+
+	/**
+	 * Masonry the settlement's own land work left (terrace faces, pad rims, dressed faces) where no building owns
+	 * it: a later cut removes it like the land, or it would stand on in a new plot (a door walled in by an old
+	 * terrace face, field test).
+	 */
+	static boolean earthwork(BlockState st) {
+		return st.is(Blocks.STONE_BRICKS) || st.is(Blocks.MOSSY_STONE_BRICKS) || st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE)
+				|| st.is(Blocks.SMOOTH_SANDSTONE) || st.is(Blocks.CUT_RED_SANDSTONE);
+	}
+
 	public static void removeTreeAt(ServerLevel level, BlockPos pos, Set<Long> built) {
 		BlockState st = level.getBlockState(pos);
-		if (st.is(BlockTags.LOGS)) {
+		if (trunk(st)) {
 			fellTree(level, pos, built);
 			return;
 		}
@@ -571,6 +848,7 @@ public final class SiteWork {
 	public static void reclaim(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, Set<Long> keep, BlockState surface) {
 		final int berm = 6;
 		final int reach = 16;
+		BlockState shore = naturalShore(level, x0, z0, x1, z1, reach, built, surface);
 		boolean grass = surface.is(Blocks.GRASS_BLOCK) || surface.is(Blocks.PODZOL) || surface.is(Blocks.MYCELIUM) || surface.is(Blocks.COARSE_DIRT);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int x = x0 - reach; x <= x1 + reach; x++) {
@@ -614,9 +892,13 @@ public final class SiteWork {
 					if (y < target) {
 						fill = subsoil(surface);
 					} else if (target < top) {
-						fill = (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(); // the bed off the shore
+						// the bed off the shore: what the natural shore around is made of (sand, gravel, stone, mud...)
+						fill = shore.is(Blocks.SAND) ? (h % 4 == 0 ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState() : bedFor(shore, surface);
 					} else {
-						fill = grass && o >= 3 ? Blocks.SAND.defaultBlockState() : surface; // a beach outside the walls
+						// the new shore outside the walls looks like the natural shore here: a sand beach only where the
+						// shore is sand; stone, gravel, mycelium, snow or turf elsewhere (field test: sand beaches on a
+						// stony shore, in mushroom fields and on snowy plains)
+						fill = o >= 3 ? shore : surface;
 					}
 					level.setBlock(pos.set(x, y, z), fill, FLAGS);
 				}
@@ -684,14 +966,14 @@ public final class SiteWork {
 		List<BlockPos> logs = new ArrayList<>();
 		queue.add(start);
 		seen.add(start.asLong());
-		while (!queue.isEmpty() && logs.size() < 400) {
+		while (!queue.isEmpty() && logs.size() < 900) {
 			BlockPos p = queue.poll();
-			if (!level.getBlockState(p).is(BlockTags.LOGS)) {
+			if (!trunk(level.getBlockState(p))) {
 				continue;
 			}
 			logs.add(p);
 			for (BlockPos n : BlockPos.betweenClosed(p.offset(-1, -1, -1), p.offset(1, 1, 1))) {
-				if (!built.contains(n.asLong()) && seen.add(n.asLong()) && level.getBlockState(n).is(BlockTags.LOGS)) {
+				if (!built.contains(n.asLong()) && seen.add(n.asLong()) && trunk(level.getBlockState(n))) {
 					queue.add(n.immutable());
 				}
 			}
@@ -902,6 +1184,32 @@ public final class SiteWork {
 	 * Makes cleared but unused ground look natural: grass tufts and flowers on some of the grass blocks of the area.
 	 * They are natural blocks, so a later building simply clears them again.
 	 */
+	/**
+	 * Where it snows, open ground the builders touched gets its snow back (cut, filled and regraded land would stay
+	 * green in a white land until the next snowfall). Built columns, roads included, stay clear.
+	 */
+	public static void snowCover(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0; x <= x1; x++) {
+			for (int z = z0; z <= z1; z++) {
+				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+				pos.set(x, y - 1, z);
+				BlockState ground = level.getBlockState(pos);
+				if (built.contains(pos.asLong()) || !terrain(ground) || !ground.isCollisionShapeFullBlock(level, pos)) {
+					continue;
+				}
+				pos.set(x, y, z);
+				BlockState at = level.getBlockState(pos);
+				if (built.contains(pos.asLong()) || !(at.isAir() || plant(at) && at.canBeReplaced()) || at.is(Blocks.SNOW)) {
+					continue;
+				}
+				if (level.getBiome(pos).value().shouldSnow(level, pos)) {
+					level.setBlock(pos, Blocks.SNOW.defaultBlockState(), Block.UPDATE_ALL);
+				}
+			}
+		}
+	}
+
 	public static void decorate(ServerLevel level, BlockPos heart, List<Column> columns, Set<Long> built) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (Column c : columns) {
