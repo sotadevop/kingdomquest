@@ -2060,6 +2060,8 @@ public final class Settlements {
 					// or touching the box's side would count as holding on (field test: a forest's dirt curtains)
 					SiteWork.dropFloating(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
 							nowBuilt);
+					SiteWork.roughFaces(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
+							nowBuilt, SiteWork.surface(level, s.heart()));
 				}
 			}
 			if (s.jobTrack().equals(Progression.GATE) && !moatColumns(done).isEmpty()) {

@@ -58,8 +58,11 @@ public final class SiteWork {
 	 * deep drop the terraces step down to it, instead of stopping at the template's apron in a cliff.
 	 */
 	private static final int REACH = 14;
-	/** Over a deep drop the made ground steps down in terraces: a stone face this high, then a bench of earth. */
-	static final int TERRACE_STEP = 4;
+	/**
+	 * Over a deep drop the made ground steps down in terraces: a stone face this high, then a bench of earth. 3 with
+	 * benches 3 wide is a 1:1 slope (was 4: faces of 4 read as walls, user asked for smaller steps).
+	 */
+	static final int TERRACE_STEP = 3;
 	/** Width of each terrace bench (the flat strip of earth between two stone faces). */
 	static final int BENCH = 3;
 
@@ -477,7 +480,44 @@ public final class SiteWork {
 				if (built.contains(pos.asLong()) || !earthy(st) || !openSide(level, pos, built)) {
 					continue;
 				}
-				level.setBlock(pos, Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall, FLAGS);
+				level.setBlock(pos, y < top - 3 ? rock(surface, x, y, z) : Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall, FLAGS);
+			}
+		}
+	}
+
+	/**
+	 * Every face 3 or more blocks high in the box that shows bare earth (a cut into the hill, made ground a later
+	 * build cut beside) becomes rough rock like the land's own, and brick that nobody owns more than 3 courses below
+	 * a face's top becomes rock too: high faces read as crags with at most a crown of masonry, never as tall walls of
+	 * dirt or brick (user: "less stone", field test renders of the windswept hills).
+	 */
+	public static void roughFaces(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, BlockState surface) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0; x <= x1; x++) {
+			for (int z = z0; z <= z1; z++) {
+				if (!level.isLoaded(pos.set(x, 0, z))) {
+					continue;
+				}
+				int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+				int low = Integer.MAX_VALUE;
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					low = Math.min(low, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + d.getStepX(), z + d.getStepZ()) - 1);
+				}
+				if (top - low < 3) {
+					continue;
+				}
+				for (int y = top - 1; y > low && y > top - 64; y--) {
+					pos.set(x, y, z);
+					if (built.contains(pos.asLong())) {
+						continue;
+					}
+					BlockState st = level.getBlockState(pos);
+					boolean earth = earthy(st) && !st.is(Blocks.SAND) && !st.is(Blocks.RED_SAND) && !st.is(Blocks.GRAVEL);
+					boolean deepBrick = earthwork(st) && y < top - 3;
+					if ((earth || deepBrick) && openSide(level, pos, built)) {
+						level.setBlock(pos, rock(surface, x, y, z), FLAGS);
+					}
+				}
 			}
 		}
 	}
@@ -609,7 +649,11 @@ public final class SiteWork {
 			// covers it, the stone is simply hidden; every face that stays in sight is stone, never bare earth
 			boolean face = high && depth > 1 && y < fillTop && openSide(level, pos, built);
 			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face;
-			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
+			// only the top of a high plinth is a built wall (a crown of 3 courses); below it the plot stands on
+			// rough rock like the land's own, so a plot over a deep drop reads as a crag, not a 30 block brick wall
+			boolean rough = stone && y < fillTop - 3;
+			BlockState fill = rough ? rock(surface, x, y, z)
+					: stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
 		}
@@ -656,6 +700,18 @@ public final class SiteWork {
 			return Blocks.CUT_RED_SANDSTONE.defaultBlockState();
 		}
 		return surface.is(Blocks.SNOW_BLOCK) ? Blocks.COBBLESTONE.defaultBlockState() : Blocks.STONE_BRICKS.defaultBlockState();
+	}
+
+	/** Rough natural rock for the lower part of a plinth, matching the land: sandstone, terracotta, or stone with andesite and tuff. */
+	static BlockState rock(BlockState surface, int x, int y, int z) {
+		int h = Math.floorMod(x * 73 + y * 19 + z * 37, 10);
+		if (surface.is(Blocks.SAND)) {
+			return Blocks.SANDSTONE.defaultBlockState();
+		}
+		if (surface.is(Blocks.RED_SAND) || surface.is(BlockTags.TERRACOTTA)) {
+			return (h < 7 ? Blocks.TERRACOTTA : Blocks.RED_SANDSTONE).defaultBlockState();
+		}
+		return (h < 7 ? Blocks.STONE : h < 9 ? Blocks.ANDESITE : Blocks.TUFF).defaultBlockState();
 	}
 
 	private static BlockState mossy(BlockState wall) {
