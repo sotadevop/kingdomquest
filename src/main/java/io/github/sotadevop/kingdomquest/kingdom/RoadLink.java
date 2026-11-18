@@ -430,34 +430,43 @@ final class RoadLink {
 			unloaded[startCell] = false;
 		}
 		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-		// open land: every column from which the edge of the area can be walked to (one up, three down, no swimming)
-		boolean[] open = new boolean[n * n];
-		java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
-		for (int i = 0; i < n; i++) {
-			for (int c : new int[] {i * n, i * n + n - 1, i, (n - 1) * n + i}) {
-				if (!unloaded[c] && !water[c] && !wall[c] && !open[c]) {
-					open[c] = true;
-					queue.add(c);
+		// can one walk from the gate's exit 100 blocks away (the same walk as the field test: one up, three down,
+		// through doors and under trees, no swimming)? Then nothing is needed.
+		Set<Long> reach = new java.util.HashSet<>();
+		java.util.ArrayDeque<long[]> walk = new java.util.ArrayDeque<>();
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				for (int dy = -3; dy <= 6; dy++) {
+					int x = start.getX() + dx, y = h[startCell] + 1 + dy, z = start.getZ() + dz;
+					if (!Double.isNaN(FieldTest.feet(level, x, y, z, false)) && reach.add(BlockPos.asLong(x, y, z))) {
+						walk.add(new long[] {BlockPos.asLong(x, y, z)});
+					}
 				}
 			}
 		}
-		while (!queue.isEmpty()) {
-			int b = queue.poll();
-			int bi = b / n, bk = b % n;
-			for (int[] d : dirs) {
-				int ai = bi + d[0], ak = bk + d[1];
-				if (ai < 0 || ak < 0 || ai >= n || ak >= n) {
-					continue;
-				}
-				int a = ai * n + ak;
-				if (!open[a] && !unloaded[a] && !water[a] && !wall[a] && h[b] - h[a] <= 1 && h[a] - h[b] <= 3) {
-					open[a] = true;
-					queue.add(a);
-				}
-			}
-		}
-		if (open[startCell]) {
+		if (FieldTest.spread(level, heart, reach, walk, Set.of(), 300_000)) {
 			return; // the gate already opens onto land that leads away
+		}
+		// open land: every column from which one can walk out to 100 blocks away
+		List<Long> edge = new ArrayList<>();
+		int r = FieldTest.R - 1;
+		for (int i = -r; i <= r; i += 2) {
+			for (int[] e2 : new int[][] {{i, -r}, {i, r}, {-r, i}, {r, i}}) {
+				int x = heart.getX() + e2[0], z = heart.getZ() + e2[1];
+				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+				if (!Double.isNaN(FieldTest.feet(level, x, y, z, false))) {
+					edge.add(BlockPos.asLong(x, y, z));
+				}
+			}
+		}
+		boolean[] open = new boolean[n * n];
+		for (long cell : FieldTest.reverse(level, heart, edge, 300_000)) {
+			int ci = BlockPos.getX(cell) - x0, ck = BlockPos.getZ(cell) - z0;
+			if (ci >= 0 && ck >= 0 && ci < n && ck < n) {
+				int c = ci * n + ck;
+				int feetY = BlockPos.getY(cell);
+				open[c] |= feetY >= h[c] && feetY <= h[c] + 2; // standing on the column's top, not in a cave below it
+			}
 		}
 		// the cheapest road from the gate to the open land. The search runs over (column, road height): the road
 		// rises or falls at most one block per block and lies at most DEPTH above or below the land (deeper cuts and

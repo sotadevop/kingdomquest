@@ -85,7 +85,7 @@ public final class FieldTest {
 
 	private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-00000000f1e1");
 	/** Half size of the inspected square around the heart: the wall ring, the moat, the beach and a margin. */
-	private static final int R = 100;
+	static final int R = 100;
 	private static final Set<String> IMAGE_STAGES = Set.of("tent_1", "hamlet_1", "village_1", "castle_1", "final");
 
 	private static final StringBuilder REPORT = new StringBuilder();
@@ -969,7 +969,7 @@ public final class FieldTest {
 	}
 
 	/** Feet height when standing in cell x/y/z, NaN if one can't stand there. Swimming counts only when {@code wet}. */
-	private static double feet(ServerLevel level, int x, int y, int z, boolean wet) {
+	static double feet(ServerLevel level, int x, int y, int z, boolean wet) {
 		BlockPos p = new BlockPos(x, y, z);
 		BlockState at = level.getBlockState(p);
 		if (!passable(at, level, p)) {
@@ -1101,7 +1101,7 @@ public final class FieldTest {
 		return top > y + 6 && SiteWork.terrain(level.getBlockState(new BlockPos(x, top, z)));
 	}
 
-	private static boolean spread(ServerLevel level, BlockPos h, Set<Long> reach, ArrayDeque<long[]> queue, Set<Long> blockedCols, int cap) {
+	static boolean spread(ServerLevel level, BlockPos h, Set<Long> reach, ArrayDeque<long[]> queue, Set<Long> blockedCols, int cap) {
 		boolean edge = false;
 		// surface first: cells in caves (natural rock overhead) wait until the surface is walked out, so a cave
 		// system under a hill can't use up the budget before the way out is found (windswept hills: "no contact")
@@ -1226,7 +1226,7 @@ public final class FieldTest {
 	}
 
 	/** Every cell from which {@code seeds} can be walked to (moves taken backwards: up 3.5, down 1.25). */
-	private static Set<Long> reverse(ServerLevel level, BlockPos h, java.util.Collection<Long> seeds, int cap) {
+	static Set<Long> reverse(ServerLevel level, BlockPos h, java.util.Collection<Long> seeds, int cap) {
 		Set<Long> out = new HashSet<>(seeds);
 		ArrayDeque<long[]> queue = new ArrayDeque<>();
 		seeds.forEach(k -> queue.add(new long[] {k}));
