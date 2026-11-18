@@ -639,6 +639,22 @@ final class RoadLink {
 			Set<Long> again = new java.util.HashSet<>();
 			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out check: out {}", walksOut(level, heart, again));
 		}
+		// stored with the settlement, so site grading, smoothing and later builds leave the road alone (also after a
+		// restart); the old road stays part of it (the new one may only link to it)
+		List<BlockPos> keepAll = new ArrayList<>(line);
+		for (BlockPos b : before) {
+			if (!keepAll.contains(b)) {
+				keepAll.add(b);
+			}
+		}
+		StringBuilder enc = new StringBuilder();
+		for (BlockPos b : keepAll) {
+			enc.append(enc.length() == 0 ? "" : ";").append(b.getX()).append(',').append(b.getY()).append(',').append(b.getZ());
+		}
+		Settlement current = Settlements.byHeart(server, heart);
+		if (current != null) {
+			Settlements.putState(server, current.withName(WAY_OUT_KEY, enc.toString()));
+		}
 		int mid = path.get(len / 2);
 		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
