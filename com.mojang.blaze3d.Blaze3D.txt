@@ -1,0 +1,7 @@
+Compiled from "Blaze3D.java"
+public class com.mojang.blaze3d.Blaze3D {
+  public static void youJustLostTheGame();
+  public static double getTime();
+  public static void openUri(java.net.URI);
+  public static void openPath(java.nio.file.Path);
+}

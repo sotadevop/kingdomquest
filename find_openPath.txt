@@ -1,0 +1,6 @@
+com/mojang/blaze3d/Blaze3D.class
+net/minecraft/client/gui/screens/DisconnectedScreen.class
+net/minecraft/client/gui/screens/Screen.class
+net/minecraft/client/gui/screens/packs/PackSelectionScreen.class
+net/minecraft/client/gui/screens/telemetry/TelemetryInfoScreen.class
+net/minecraft/client/gui/screens/worldselection/EditWorldScreen.class

@@ -1,0 +1,10 @@
+com/mojang/blaze3d/Blaze3D.class
+com/mojang/realmsclient/RealmsMainScreen.class
+com/mojang/realmsclient/dto/RealmsNotification$InfoPopup.class
+com/mojang/realmsclient/gui/screens/RealmsTermsScreen.class
+net/minecraft/client/gui/Gui.class
+net/minecraft/client/gui/screens/BanNoticeScreens.class
+net/minecraft/client/gui/screens/ConfirmLinkScreen.class
+net/minecraft/client/gui/screens/NoticeWithLinkScreen.class
+net/minecraft/client/gui/screens/PrivacyConfirmLinkScreen.class
+net/minecraft/client/gui/screens/Screen.class
