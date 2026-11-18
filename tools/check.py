@@ -430,7 +430,9 @@ def check_walk(world, out, quiet=False):
                         seen.add(n)
                         queue.append(n)
         floor = [short(world.get((c[0] >> 1, (c[1] - 1) >> 1, c[2] >> 1))[0]) for c in comp]
-        furniture = sum(f in ("bookshelf", "barrel", "chest", "hay_block", "crafting_table", "furnace", "smoker", "red_nether_bricks") or f.endswith("_log") for f in floor)
+        furniture = sum(f in ("bookshelf", "barrel", "chest", "hay_block", "crafting_table", "furnace", "smoker", "red_nether_bricks",
+                              "brewing_stand", "decorated_pot", "candle", "lectern", "copper_chest", "chiseled_bookshelf")
+                        or f.endswith(("_log", "_shelf")) or f.startswith("potted_") for f in floor)  # tops of counters and shelves
         if len(comp) >= 12 and furniture * 2 < len(comp):
             xs, ys, zs = [c[0] >> 1 for c in comp], [c[1] >> 1 for c in comp], [c[2] >> 1 for c in comp]
             tr = defaultdict(int)
