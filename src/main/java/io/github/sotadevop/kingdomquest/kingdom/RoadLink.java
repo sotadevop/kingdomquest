@@ -343,6 +343,17 @@ final class RoadLink {
 		for (int i = 0; i < n; i++) {
 			t[i] = 2 * g[i] + 2;
 		}
+		// the road starts level with the gate's landing (the heart's level) and meets the land on a ramp of half a
+		// block per block, cut into a rise or built up over a dip: the landing built later lies flush with it (user,
+		// 2026-11-18: a road laid on the hill in front of a young castle was left far above or below its gate)
+		for (Settlement o : Settlements.all(level.getServer())) {
+			if (o.id().toString().equals(job.settlement())) {
+				int anchor = 2 * o.heart().getY();
+				for (int k = 0; k < n && k < 64; k++) {
+					t[k] = Math.max(anchor - k, Math.min(anchor + k, t[k]));
+				}
+			}
+		}
 		for (int i = 0; i < n; ) {
 			if (!w[i]) {
 				i++;
@@ -424,6 +435,22 @@ final class RoadLink {
 				boolean raised = bridge || t > 2 * ground + 2;
 				if (bridge) {
 					bridgeCell(level, job, k, p, forward, side, y);
+					continue;
+				}
+				if (t < 2 * ground + 2) { // cut into the land: the road lies in a cutting, 3 blocks of air over it
+					for (int w = -1; w <= 1; w++) {
+						BlockPos cell = new BlockPos(p.getX(), y, p.getZ()).relative(side, w);
+						for (int up = 1; up <= ground - y + 3; up++) {
+							BlockState st = level.getBlockState(cell.above(up));
+							if (!st.isAir() && st.getFluidState().isEmpty() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st))) {
+								level.setBlock(cell.above(up), Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+							}
+						}
+						pave(level, cell, w, job.tier(), false);
+						if (half) {
+							set(level, cell.above(), (job.tier() >= 2 ? Blocks.COBBLESTONE_SLAB : Blocks.MUD_BRICK_SLAB).defaultBlockState());
+						}
+					}
 					continue;
 				}
 				for (int w = -1; w <= 1; w++) {

@@ -1795,13 +1795,13 @@ public final class Settlements {
 		// fixed: in front of a door or gate (the road meets the threshold), under anything built over the road
 		// (gatehouse, arch), and on the square around the heart
 		Map<Long, List<Integer>> builtYs = new HashMap<>();
-		Set<Long> doorCols = new HashSet<>();
+		Map<Long, Integer> doorCols = new HashMap<>(); // column -> the threshold: the door's lowest block (offset from the heart)
 		for (long o : others) {
 			BlockPos b = BlockPos.of(o);
 			builtYs.computeIfAbsent(BlockPos.asLong(b.getX(), 0, b.getZ()), k -> new ArrayList<>()).add(b.getY() - heartY);
 			Block block = level.getBlockState(b).getBlock();
 			if (block instanceof net.minecraft.world.level.block.DoorBlock || block instanceof net.minecraft.world.level.block.FenceGateBlock) {
-				doorCols.add(BlockPos.asLong(b.getX(), 0, b.getZ()));
+				doorCols.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b.getY() - heartY, Math::min);
 			}
 		}
 		Set<Long> fixed = new HashSet<>();
@@ -1817,12 +1817,21 @@ public final class Settlements {
 					fixed.add(c);
 				}
 			}
+			Integer threshold = null;
 			for (int dx = -2; dx <= 2; dx++) {
 				for (int dz = -2; dz <= 2; dz++) {
-					if (doorCols.contains(BlockPos.asLong(x + dx, 0, z + dz))) {
-						fixed.add(c);
+					Integer t = doorCols.get(BlockPos.asLong(x + dx, 0, z + dz));
+					if (t != null && (threshold == null || t < threshold)) {
+						threshold = t;
 					}
 				}
+			}
+			if (threshold != null) {
+				// in front of a door the road lies level with its threshold, not with the land there (field test, both-ways
+				// walk: the town's land just inside a gate stood 2 to 8 blocks above the gate's floor, so one could drop out
+				// of the castle but never walk back in); the free columns beyond ramp to it a block per block
+				fixed.add(c);
+				e.setValue(threshold);
 			}
 		}
 		Map<Long, Integer> low = new HashMap<>(g);
