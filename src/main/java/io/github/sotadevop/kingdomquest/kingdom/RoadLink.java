@@ -409,6 +409,15 @@ final class RoadLink {
 		}
 		int startCell = si * n + sk;
 		blocked[startCell] = false;
+		{ // the road starts on whatever is at the gate's exit now: the landing the gate built, or the land
+			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, start.getX(), start.getZ()) - 1;
+			BlockState st = level.getBlockState(pos.set(start.getX(), y, start.getZ()));
+			while (y > level.getMinY() && st.getFluidState().isEmpty() && (st.is(BlockTags.LOGS) || st.canBeReplaced() || !st.isSolid())) {
+				st = level.getBlockState(pos.set(start.getX(), --y, start.getZ()));
+			}
+			h[startCell] = y;
+			water[startCell] = !st.getFluidState().isEmpty();
+		}
 		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 		// open land: every column from which the edge of the area can be walked to (one up, three down, no swimming)
 		boolean[] open = new boolean[n * n];
@@ -482,12 +491,25 @@ final class RoadLink {
 				break; // no reasonable road: leave the land as it is
 			}
 			int ai = a / n, ak = a % n;
+			// the road can't come back over itself: the last columns it ran through are not entered again
+			int[] recent = new int[16];
+			int nr = 0;
+			for (int t = from[st]; t >= 0 && nr < recent.length; t = from[t]) {
+				recent[nr++] = t / kk;
+			}
 			for (int[] d : dirs) {
 				int bi = ai + d[0], bk = ak + d[1];
 				if (bi < 0 || bk < 0 || bi >= n || bk >= n || blocked[bi * n + bk]) {
 					continue;
 				}
 				int b = bi * n + bk;
+				boolean again = false;
+				for (int t = 0; t < nr; t++) {
+					again |= recent[t] == b;
+				}
+				if (again) {
+					continue;
+				}
 				for (int rb = ra - 1; rb <= ra + 1; rb++) {
 					int off = rb - land[b];
 					if (off < -depth || off > depth || rb < floor[b]) {
@@ -504,6 +526,12 @@ final class RoadLink {
 			}
 		}
 		if (goal < 0) {
+			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+			if (owner != null) {
+				People.say(owner, "Architect", "Outside the gate the land is closed in by water and cliffs, and no road can be laid down from it. "
+						+ "Make a way out by hand, or found the castle facing open land.");
+			}
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: no road possible from {}", s.name(), start);
 			return;
 		}
 		List<Integer> path = new ArrayList<>();

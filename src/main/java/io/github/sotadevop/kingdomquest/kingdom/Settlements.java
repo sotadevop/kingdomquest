@@ -2070,7 +2070,8 @@ public final class Settlements {
 				SiteWork.snowCover(level, Math.min(sa.getX(), sb.getX()), Math.min(sa.getZ(), sb.getZ()), Math.max(sa.getX(), sb.getX()),
 						Math.max(sa.getZ(), sb.getZ()), nowBuilt);
 			}
-			if ((Progression.WALLS.equals(s.jobTrack()) || Progression.GATE.equals(s.jobTrack())) && done.level(Progression.WALLS) >= 1) {
+			if ((Progression.WALLS.equals(s.jobTrack()) || Progression.GATE.equals(s.jobTrack())) && done.level(Progression.WALLS) >= 1
+					&& done.level(Progression.GATE) >= 1) {
 				RoadLink.wayOut(server, done, nowBuilt); // the gate must open onto land that leads away
 			}
 			Production.armTraps(level, done, list);
