@@ -486,7 +486,44 @@ public final class SiteWork {
 				if (built.contains(pos.asLong()) || !earthy(st) || !openSide(level, pos, built)) {
 					continue;
 				}
-				level.setBlock(pos, Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall, FLAGS);
+				level.setBlock(pos, y < top - 3 ? rock(surface, x, y, z) : Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall, FLAGS);
+			}
+		}
+	}
+
+	/**
+	 * Every face 3 or more blocks high in the box that shows bare earth (a cut into the hill, made ground a later
+	 * build cut beside) becomes rough rock like the land's own, and brick that nobody owns more than 3 courses below
+	 * a face's top becomes rock too: high faces read as crags with at most a crown of masonry, never as tall walls of
+	 * dirt or brick (user: "less stone", field test renders of the windswept hills).
+	 */
+	public static void roughFaces(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, BlockState surface) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0; x <= x1; x++) {
+			for (int z = z0; z <= z1; z++) {
+				if (!level.isLoaded(pos.set(x, 0, z))) {
+					continue;
+				}
+				int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+				int low = Integer.MAX_VALUE;
+				for (Direction d : Direction.Plane.HORIZONTAL) {
+					low = Math.min(low, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + d.getStepX(), z + d.getStepZ()) - 1);
+				}
+				if (top - low < 3) {
+					continue;
+				}
+				for (int y = top - 1; y > low && y > top - 64; y--) {
+					pos.set(x, y, z);
+					if (built.contains(pos.asLong())) {
+						continue;
+					}
+					BlockState st = level.getBlockState(pos);
+					boolean earth = earthy(st) && !st.is(Blocks.SAND) && !st.is(Blocks.RED_SAND) && !st.is(Blocks.GRAVEL);
+					boolean deepBrick = earthwork(st) && y < top - 3;
+					if ((earth || deepBrick) && openSide(level, pos, built)) {
+						level.setBlock(pos, rock(surface, x, y, z), FLAGS);
+					}
+				}
 			}
 		}
 	}
