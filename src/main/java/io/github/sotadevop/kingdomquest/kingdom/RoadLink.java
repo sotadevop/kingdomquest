@@ -354,6 +354,8 @@ final class RoadLink {
 	private static final int OUT_RADIUS = 150;
 	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
 	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
+	/** The centre line of the last way-out road (for finding what broke it). */
+	private static final Map<UUID, List<BlockPos>> LAID = new HashMap<>();
 	/** Settlements whose owner was told this session that no road out could be laid (said once). */
 	private static final Set<UUID> TOLD = new java.util.HashSet<>();
 
@@ -448,6 +450,20 @@ final class RoadLink {
 		if (FieldTest.spread(level, heart, reach, walk, Set.of(), 300_000)) {
 			return; // the gate already opens onto land that leads away
 		}
+		if (LAID.containsKey(s.id())) { // a road was laid before and is no longer walkable: where is it broken?
+			StringBuilder why = new StringBuilder();
+			List<BlockPos> line = LAID.get(s.id());
+			for (int i = 0; i < line.size() && why.length() < 600; i++) {
+				BlockPos b = line.get(i);
+				BlockState at = level.getBlockState(b), a1 = level.getBlockState(b.above()), a2 = level.getBlockState(b.above(2));
+				if (!(at.is(Blocks.DIRT_PATH) || at.is(Blocks.COARSE_DIRT) || at.is(Blocks.GRAVEL) || at.is(Blocks.COBBLESTONE) || at.is(Blocks.MOSSY_COBBLESTONE))
+						|| !a1.getCollisionShape(level, b.above()).isEmpty() || !a2.getCollisionShape(level, b.above(2)).isEmpty()) {
+					why.append(String.format(" #%d (%d,%d,%d) %s/%s/%s", i, b.getX() - heart.getX(), b.getY() - heart.getY(), b.getZ() - heart.getZ(),
+							at.getBlock().getName().getString(), a1.getBlock().getName().getString(), a2.getBlock().getName().getString()));
+				}
+			}
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out: the last road is broken at{}", why.length() == 0 ? " no cell (it ends cut off)" : why);
+		}
 		// open land: every column from which one can walk out to 100 blocks away
 		List<Long> edge = new ArrayList<>();
 		int r = FieldTest.R - 1;
@@ -504,7 +520,7 @@ final class RoadLink {
 				continue;
 			}
 			int a = st / kk, ra = land[a] + st % kk - depth;
-			if (open[a] && ra - land[a] <= 3 && land[a] - ra <= 1 && a != startCell) {
+			if (open[a] && ra == land[a] && a != startCell) { // ends on the open land itself, not on a bank over it
 				goal = st;
 				break;
 			}
@@ -656,6 +672,11 @@ final class RoadLink {
 			}
 			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out check: out {}, walked {} of {} road cells{}", out, last + 1, len, at);
 		}
+		List<BlockPos> laid = new ArrayList<>();
+		for (int i = 0; i < len; i++) {
+			laid.add(new BlockPos(x0 + path.get(i) / n, road[i], z0 + path.get(i) % n));
+		}
+		LAID.put(s.id(), laid);
 		int mid = path.get(len / 2);
 		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
