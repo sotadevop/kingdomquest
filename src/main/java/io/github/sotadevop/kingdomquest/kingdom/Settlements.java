@@ -775,7 +775,8 @@ public final class Settlements {
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), NO_DROPS);
 				for (int up = 1; up <= 2; up++) { // flowers and grass on it go too
 					BlockPos above = pos.above(up);
-					if (level.getBlockState(above).canBeReplaced() && !level.getBlockState(above).isAir() && level.getBlockState(above).getFluidState().isEmpty()) {
+					if (!nowBuilt.contains(above.asLong()) && level.getBlockState(above).canBeReplaced() && !level.getBlockState(above).isAir()
+							&& level.getBlockState(above).getFluidState().isEmpty()) {
 						level.setBlock(above, Blocks.AIR.defaultBlockState(), NO_DROPS);
 					}
 				}
@@ -1364,7 +1365,7 @@ public final class Settlements {
 			mask.append(on ? '1' : '0');
 		}
 		int dy = lift(s, job);
-		String track = trackOf(job);
+		String track = builtTrack(job); // "wall_3" is the walls track, "road_2" the roads
 		boolean red = (track.equals(Progression.ROADS) || track.equals(Progression.WALLS) || track.equals(Progression.GATE)) && redLand(s);
 		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy + (red ? "|red" : "");
 		return PLACEMENTS.computeIfAbsent(key, k -> {
