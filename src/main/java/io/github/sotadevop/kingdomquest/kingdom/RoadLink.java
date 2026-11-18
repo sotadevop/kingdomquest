@@ -200,75 +200,210 @@ final class RoadLink {
 
 	// ---- building ----
 
-	/** Ground and water along the line, then ramps up to the bridge decks. */
-	private static void profile(ServerLevel level, Job job) {
-		int n = job.line().size();
-		int[] h = new int[n];
-		boolean[] w = new boolean[n];
-		for (int i = 0; i < n; i++) {
-			BlockPos c = job.line().get(i);
-			int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, c.getX(), c.getZ());
-			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(c.getX(), top, c.getZ());
-			while (pos.getY() > level.getMinY()) {
-				BlockState st = level.getBlockState(pos);
-				if (st.getBlock() instanceof LiquidBlock) {
-					w[i] = true;
-					break;
-				}
-				if (!st.isAir() && !st.canBeReplaced() && !st.is(BlockTags.LEAVES) && !st.is(BlockTags.LOGS) && st.isSolid()) {
-					break;
-				}
-				pos.move(0, -1, 0);
+	/** The top block of a column and whether it is water (or lava): the road's ground. */
+	private static int[] surfaceAt(ServerLevel level, int x, int z) {
+		int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, top, z);
+		while (pos.getY() > level.getMinY()) {
+			BlockState st = level.getBlockState(pos);
+			if (st.getBlock() instanceof LiquidBlock) {
+				return new int[] {pos.getY(), 1};
 			}
-			h[i] = w[i] ? pos.getY() + 2 : pos.getY(); // bridge deck two blocks above the water
+			if (!st.isAir() && !st.canBeReplaced() && !st.is(BlockTags.LEAVES) && !st.is(BlockTags.LOGS) && st.isSolid()) {
+				return new int[] {pos.getY(), 0};
+			}
+			pos.move(0, -1, 0);
 		}
+		return new int[] {pos.getY(), 0};
+	}
+
+	/**
+	 * Water is crossed straight, at a right angle like a real bridge (user, 2026-11-18: a diagonal bridge had zigzag
+	 * railings that looked like castle walls in the river). Where the line meets water at a slant, the crossing is
+	 * replaced by the shortest straight crossing along an axis that still leads on (east, west, north or south from the
+	 * last bank cell), and the road joins its old line again on the far bank.
+	 */
+	private static List<BlockPos> straighten(ServerLevel level, List<BlockPos> line) {
+		List<BlockPos> out = new ArrayList<>(line);
+		BlockPos end = line.get(line.size() - 1);
+		for (int round = 0; round < 6; round++) {
+			int n = out.size();
+			boolean[] wet = new boolean[n];
+			for (int k = 0; k < n; k++) {
+				wet[k] = surfaceAt(level, out.get(k).getX(), out.get(k).getZ())[1] == 1;
+			}
+			boolean changed = false;
+			for (int i = 1; i < n && !changed; i++) {
+				if (!wet[i] || wet[i - 1]) {
+					continue;
+				}
+				int j = i;
+				while (j < n && wet[j]) {
+					j++;
+				}
+				if (j >= n) {
+					break; // the end lies in water: nothing to join
+				}
+				BlockPos a = out.get(i - 1);
+				boolean straight = true;
+				for (int k = i; k <= j; k++) {
+					straight &= out.get(k).getX() == a.getX() || out.get(k).getZ() == a.getZ();
+				}
+				if (straight) {
+					continue;
+				}
+				Direction best = null;
+				int bestLen = Integer.MAX_VALUE;
+				for (Direction d : new Direction[] {Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH}) {
+					// it must lead on: towards the far bank of the old crossing and the road's end
+					int toward = (out.get(j).getX() - a.getX()) * d.getStepX() + (out.get(j).getZ() - a.getZ()) * d.getStepZ();
+					int onward = (end.getX() - a.getX()) * d.getStepX() + (end.getZ() - a.getZ()) * d.getStepZ();
+					if (toward <= 0 || onward <= 0) {
+						continue;
+					}
+					int len = 1;
+					while (len < 96 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 1) {
+						len++;
+					}
+					if (len < 96 && len < bestLen) {
+						bestLen = len;
+						best = d;
+					}
+				}
+				if (best == null) {
+					continue;
+				}
+				BlockPos land = new BlockPos(a.getX() + best.getStepX() * bestLen, a.getY(), a.getZ() + best.getStepZ() * bestLen);
+				int m = j; // where the old line goes on, nearest the landing
+				for (int k = j; k < n; k++) {
+					if (out.get(k).distManhattan(land) < out.get(m).distManhattan(land)) {
+						m = k;
+					}
+				}
+				List<BlockPos> next = new ArrayList<>(out.subList(0, i));
+				for (int k = 1; k <= bestLen; k++) {
+					next.add(new BlockPos(a.getX() + best.getStepX() * k, a.getY(), a.getZ() + best.getStepZ() * k));
+				}
+				BlockPos join = out.get(m);
+				int steps = Math.max(Math.abs(join.getX() - land.getX()), Math.abs(join.getZ() - land.getZ()));
+				for (int k = 1; k < steps; k++) {
+					next.add(new BlockPos(land.getX() + Math.round((float) (join.getX() - land.getX()) * k / steps), a.getY(),
+							land.getZ() + Math.round((float) (join.getZ() - land.getZ()) * k / steps)));
+				}
+				next.addAll(out.subList(m, n));
+				out = next;
+				changed = true;
+			}
+			if (!changed) {
+				break;
+			}
+		}
+		return out;
+	}
+
+	/** Water a boat passes under a bridge's arches: the deck lies this many blocks above the water's top block. */
+	private static final int DECK_ABOVE_WATER = 4;
+
+	/**
+	 * The road's height along the line, in half blocks (the top of what one walks on: 2 * y + 2 on a full block at y,
+	 * one more on a slab over it). Bridges: one deck height per crossing, {@link #DECK_ABOVE_WATER} over the water so
+	 * boats pass under the arches, never below either bank; ramps of half a block per block (slabs) on both banks.
+	 */
+	private static void profile(ServerLevel level, Job job) {
+		List<BlockPos> line = straighten(level, job.line());
+		int n = line.size();
+		int[] g = new int[n];
+		boolean[] w = new boolean[n];
+		boolean[] liquid = new boolean[n];
+		for (int i = 0; i < n; i++) {
+			int[] sa = surfaceAt(level, line.get(i).getX(), line.get(i).getZ());
+			g[i] = sa[0];
+			w[i] = liquid[i] = sa[1] == 1;
+		}
+		int[] deckOf = new int[n];
 		// a hole in the ground (a cave mouth, a ravine): where the land drops 4 or more in one step and comes back up
 		// within 48 blocks, the road keeps its height and crosses on a bridge, the same as over water
 		for (int i = 1; i < n; i++) {
-			if (w[i] || w[i - 1] || h[i - 1] - h[i] < 4) {
+			if (w[i] || w[i - 1] || g[i - 1] - g[i] < 4) {
 				continue;
 			}
 			int j = i;
-			while (j < n && j < i + 48 && !w[j] && h[j] < h[i - 1] - 2) {
+			while (j < n && j < i + 48 && !w[j] && g[j] < g[i - 1] - 2) {
 				j++;
 			}
 			if (j >= n || j >= i + 48 || w[j]) {
 				continue; // no far side: a slope, not a hole
 			}
-			int deck = Math.max(h[i - 1], h[j]);
 			for (int k = i; k < j; k++) {
-				h[k] = deck;
 				w[k] = true;
 			}
 			i = j;
 		}
-		// one deck height per crossing (the highest), ramps of one block per block on both banks
+		int[] t = new int[n];
+		for (int i = 0; i < n; i++) {
+			t[i] = 2 * g[i] + 2;
+		}
+		// the road starts level with the gate's landing (the heart's level) and meets the land on a ramp of half a
+		// block per block, cut into a rise or built up over a dip: the landing built later lies flush with it (user,
+		// 2026-11-18: a road laid on the hill in front of a young castle was left far above or below its gate)
+		for (Settlement o : Settlements.all(level.getServer())) {
+			if (o.id().toString().equals(job.settlement())) {
+				int anchor = 2 * o.heart().getY();
+				for (int k = 0; k < n && k < 64; k++) {
+					int slope = (3 * k + 1) / 2; // three quarters of a block per block: slabs and full steps, never two
+					t[k] = Math.max(anchor - slope, Math.min(anchor + slope, t[k]));
+				}
+			}
+		}
 		for (int i = 0; i < n; ) {
 			if (!w[i]) {
 				i++;
 				continue;
 			}
 			int j = i;
-			int deck = h[i];
+			int deck = Integer.MIN_VALUE;
 			while (j < n && w[j]) {
-				deck = Math.max(deck, h[j]);
+				deck = Math.max(deck, liquid[j] ? g[j] + DECK_ABOVE_WATER : g[j]);
 				j++;
 			}
-			for (int k = i; k < j; k++) {
-				h[k] = deck;
+			if (i > 0) {
+				deck = Math.max(deck, g[i - 1]); // level with the banks: never a step up off the bridge
 			}
-			for (int k = 1; k < 12; k++) {
+			if (j < n) {
+				deck = Math.max(deck, g[j]);
+			}
+			for (int k = i; k < j; k++) {
+				t[k] = 2 * deck + 2;
+				deckOf[k] = deck;
+			}
+			for (int k = 1; k <= 48; k++) {
+				int ramp = 2 * deck + 2 - k;
 				if (i - k >= 0 && !w[i - k]) {
-					h[i - k] = Math.max(h[i - k], deck - k);
+					t[i - k] = Math.max(t[i - k], ramp);
 				}
 				if (j - 1 + k < n && !w[j - 1 + k]) {
-					h[j - 1 + k] = Math.max(h[j - 1 + k], deck - k);
+					t[j - 1 + k] = Math.max(t[j - 1 + k], ramp);
 				}
 			}
 			i = j;
 		}
-		Job full = new Job(job.player(), job.settlement(), job.key(), job.line(), job.index(), job.tier(), h, w);
-		JOBS.put(job.settlement() + "|" + job.key(), full);
+		for (int k = 0; k < n; k++) {
+			if (liquid[k]) {
+				BRIDGE.put(job.settlement(), new BlockPos(line.get(k).getX(), t[k] / 2 - 1, line.get(k).getZ()));
+				break;
+			}
+		}
+		JOBS.put(job.settlement() + "|" + job.key(), new Job(job.player(), job.settlement(), job.key(), line, job.index(), job.tier(), t, w));
+	}
+
+	/** Where each settlement's last road crosses water (its first bridge cell), for the field test's views. */
+	static final Map<String, BlockPos> BRIDGE = new HashMap<>();
+
+	/** Builds every queued road to the end at once (field test). */
+	static void runAll(MinecraftServer server) {
+		for (int guard = 0; guard < 50_000 && !JOBS.isEmpty(); guard++) {
+			tick(server);
+		}
 	}
 
 	static void tick(MinecraftServer server) {
@@ -293,36 +428,79 @@ final class RoadLink {
 				Direction forward = alongX ? (next.getX() >= prev.getX() ? Direction.EAST : Direction.WEST)
 						: (next.getZ() >= prev.getZ() ? Direction.SOUTH : Direction.NORTH);
 				Direction side = forward.getClockWise();
-				int y = job.height()[k];
+				int t = job.height()[k];
+				int y = t / 2 - 1; // the full block the road lies on (with a slab on it when t is odd)
+				boolean half = t % 2 == 1;
 				boolean bridge = job.water()[k];
 				int ground = groundAt(level, p);
-				boolean raised = bridge || y > ground + 1;
-				for (int w = -1; w <= 1; w++) {
-					BlockPos cell = new BlockPos(p.getX(), y, p.getZ()).relative(side, w);
-					cell = new BlockPos(cell.getX(), raised ? y : groundAt(level, cell), cell.getZ());
-					pave(level, cell, w, job.tier(), raised);
+				boolean raised = bridge || t > 2 * ground + 2;
+				if (bridge) {
+					bridgeCell(level, job, k, p, forward, side, y);
+					continue;
 				}
-				if (raised) {
-					for (int w : new int[] {-2, 2}) {
-						BlockPos rail = new BlockPos(p.getX(), y, p.getZ()).relative(side, w);
-						support(level, rail);
-						set(level, rail, Blocks.STONE_BRICKS.defaultBlockState());
-						set(level, rail.above(), (k % 6 == 0 ? Blocks.STONE_BRICKS : Blocks.STONE_BRICK_WALL).defaultBlockState());
-						if (k % 6 == 0) {
-							set(level, rail.above(2), Blocks.LANTERN.defaultBlockState());
+				if (t < 2 * ground + 2) { // cut into the land: the road lies in a cutting, 3 blocks of air over it
+					for (int w = -1; w <= 1; w++) {
+						BlockPos cell = new BlockPos(p.getX(), y, p.getZ()).relative(side, w);
+						for (int up = 1; up <= ground - y + 3; up++) {
+							BlockState st = level.getBlockState(cell.above(up));
+							if (!st.isAir() && st.getFluidState().isEmpty() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st))) {
+								level.setBlock(cell.above(up), Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+							}
+						}
+						pave(level, cell, w, job.tier(), false);
+						if (half) {
+							set(level, cell.above(), (job.tier() >= 2 ? Blocks.COBBLESTONE_SLAB : Blocks.MUD_BRICK_SLAB).defaultBlockState());
 						}
 					}
-					if (bridge && k % 6 == 0) {
-						for (int w = -2; w <= 2; w++) {
-							support(level, new BlockPos(p.getX(), y, p.getZ()).relative(side, w)); // pillar to the riverbed
+					// the sides of the cutting slope back a block per block, never a wall (field test: cuttings by a gate
+					// left faces of land 8 to 11 blocks high); the new ground keeps its turf
+					for (int sgn : new int[] {-1, 1}) {
+						for (int w = 2; w <= 14; w++) {
+							BlockPos col = p.relative(side, sgn * w);
+							int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, col.getX(), col.getZ()) - 1;
+							int keep = y + w - 1; // highest block the slope leaves here
+							if (top <= keep) {
+								break;
+							}
+							BlockState turf = level.getBlockState(new BlockPos(col.getX(), top, col.getZ()));
+							for (int yy = top; yy > keep; yy--) {
+								BlockPos a = new BlockPos(col.getX(), yy, col.getZ());
+								BlockState st = level.getBlockState(a);
+								if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+									SiteWork.removeTreeAt(level, a, Set.of());
+								} else if (!st.isAir() && st.getFluidState().isEmpty() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st))) {
+									level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+								} else if (!st.isAir()) {
+									break; // something built: left alone
+								}
+							}
+							BlockPos newTop = new BlockPos(col.getX(), keep, col.getZ());
+							if (level.getBlockState(newTop).is(Blocks.DIRT) && level.getBlockState(newTop.above()).isAir() && SiteWork.natural(turf)
+									&& !turf.is(BlockTags.LOGS) && !turf.is(BlockTags.LEAVES) && turf.isSolid()) {
+								level.setBlock(newTop, turf, Block.UPDATE_CLIENTS);
+							}
 						}
-					} else if (bridge && (k % 6 == 1 || k % 6 == 5)) {
-						Direction toPillar = k % 6 == 1 ? forward.getOpposite() : forward;
-						for (int w = -1; w <= 1; w++) {
-							BlockPos under = new BlockPos(p.getX(), y - 1, p.getZ()).relative(side, w);
-							set(level, under, Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, toPillar)
-									.setValue(StairBlock.HALF, Half.TOP)); // the arch springs from the pillar
+					}
+					continue;
+				}
+				for (int w = -1; w <= 1; w++) {
+					BlockPos cell = p.relative(side, w);
+					if (raised) {
+						BlockPos at = new BlockPos(cell.getX(), y, cell.getZ());
+						pave(level, at, w, job.tier(), true);
+						if (half) {
+							set(level, at.above(), Blocks.STONE_BRICK_SLAB.defaultBlockState());
 						}
+					} else {
+						pave(level, new BlockPos(cell.getX(), groundAt(level, cell), cell.getZ()), w, job.tier(), false);
+					}
+				}
+				if (raised) { // a ramp up to a bridge: an embankment with a parapet
+					for (int w : new int[] {-2, 2}) {
+						BlockPos rail = new BlockPos(p.getX(), half ? y + 1 : y, p.getZ()).relative(side, w);
+						support(level, rail);
+						set(level, rail, Blocks.STONE_BRICKS.defaultBlockState());
+						set(level, rail.above(), Blocks.STONE_BRICK_WALL.defaultBlockState());
 					}
 				} else if (job.tier() >= 2 && k % 24 == 12) {
 					post(level, p.relative(side, 2));
@@ -330,10 +508,65 @@ final class RoadLink {
 			}
 			if (i[0] >= n) {
 				JOBS.remove(id);
+				storeLine(server, job);
 				ServerPlayer pl = server.getPlayerList().getPlayer(job.player());
 				if (pl != null) {
 					People.say(pl, "Architect", "The road is finished.");
 				}
+			}
+		}
+	}
+
+	/**
+	 * One cell of a bridge: a deck 5 wide (road 3, a parapet each side) on stone pillars. The pillars stand evenly,
+	 * at most 6 apart, and between them the deck rests on arches; under the middle of each arch there are
+	 * {@link #DECK_ABOVE_WATER} - 1 blocks of air over the water, so a boat passes.
+	 */
+	private static void bridgeCell(ServerLevel level, Job job, int k, BlockPos p, Direction forward, Direction side, int deck) {
+		int a = k, b = k;
+		while (a > 0 && job.water()[a - 1]) {
+			a--;
+		}
+		while (b + 1 < job.water().length && job.water()[b + 1]) {
+			b++;
+		}
+		int len = b - a + 1;
+		int spans = Math.max(1, (len + 6) / 7); // piers between spans of at most 6 (the banks carry the ends)
+		int pos = k - a;
+		// piers at evenly spaced cells inside the crossing; distance to the nearest support (pier or bank)
+		int dist = Integer.MAX_VALUE;
+		boolean pier = false;
+		Direction toSupport = forward;
+		for (int m = 0; m <= spans; m++) {
+			int at = m == 0 ? -1 : m == spans ? len : Math.round((float) m * (len + 1) / spans) - 1;
+			int d = Math.abs(pos - at);
+			if (d < dist) {
+				dist = d;
+				toSupport = at < pos ? forward.getOpposite() : forward;
+			}
+			pier |= m > 0 && m < spans && at == pos;
+		}
+		for (int w = -2; w <= 2; w++) {
+			BlockPos cell = new BlockPos(p.getX(), deck, p.getZ()).relative(side, w);
+			if (Math.abs(w) <= 1) {
+				pave(level, cell, w, job.tier(), true, false);
+			} else {
+				set(level, cell, Blocks.STONE_BRICKS.defaultBlockState());
+				boolean post = pier || pos == 0 || pos == len - 1;
+				set(level, cell.above(), (post ? Blocks.STONE_BRICKS : Blocks.STONE_BRICK_WALL).defaultBlockState());
+				if (post) {
+					set(level, cell.above(2), Blocks.LANTERN.defaultBlockState());
+				}
+			}
+			if (pier) {
+				support(level, cell); // a pier down to the riverbed
+			} else if (dist == 1) { // the arch springs from the pier: two steps of upside-down stairs
+				BlockState arch = Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, toSupport).setValue(StairBlock.HALF, Half.TOP);
+				set(level, cell.below(), arch);
+				set(level, cell.below(2), arch);
+			} else if (dist == 2) {
+				set(level, cell.below(), Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, toSupport).setValue(StairBlock.HALF,
+						Half.TOP));
 			}
 		}
 	}
@@ -380,6 +613,11 @@ final class RoadLink {
 	}
 
 	private static void pave(ServerLevel level, BlockPos cell, int w, int tier, boolean raised) {
+		pave(level, cell, w, tier, raised, raised);
+	}
+
+	/** {@code fillBelow}: stone under a raised block down to the ground (a ramp); a bridge deck has air under it. */
+	private static void pave(ServerLevel level, BlockPos cell, int w, int tier, boolean raised, boolean fillBelow) {
 		for (int up = 1; up <= 3; up++) {
 			BlockPos a = cell.above(up);
 			BlockState st = level.getBlockState(a);
@@ -392,7 +630,9 @@ final class RoadLink {
 		int h = Math.floorMod(cell.getX() * 31 + cell.getZ() * 17, 7);
 		BlockState block;
 		if (raised) {
-			support(level, cell);
+			if (fillBelow) {
+				support(level, cell);
+			}
 			block = (h == 0 ? Blocks.CRACKED_STONE_BRICKS : Blocks.STONE_BRICKS).defaultBlockState();
 		} else if (tier >= 2) {
 			block = (w == 0 ? (h < 2 ? Blocks.COBBLESTONE : Blocks.GRAVEL) : h == 0 ? Blocks.MOSSY_COBBLESTONE : Blocks.COBBLESTONE).defaultBlockState();
@@ -430,19 +670,67 @@ final class RoadLink {
 
 	/** The columns of the settlement's way-out road (3 wide, and one more each side for its banks), empty if it has none. */
 	static Set<Long> wayOutColumns(Settlement s) {
-		String v = s.names().get(WAY_OUT_KEY);
-		if (v == null || v.isEmpty()) {
-			return Set.of();
-		}
 		Set<Long> out = new java.util.HashSet<>();
-		for (String cell : v.split(";")) {
-			String[] p = cell.split(",");
-			int x = Integer.parseInt(p[0]), z = Integer.parseInt(p[2]);
-			for (int dx = -2; dx <= 2; dx++) {
-				for (int dz = -2; dz <= 2; dz++) {
-					out.add(BlockPos.asLong(x + dx, 0, z + dz));
+		for (Map.Entry<String, String> e : s.names().entrySet()) {
+			// the way out of the gate, and the roads to other places near the settlement (user, 2026-11-18: a castle
+			// level made terraces right over the road to a village and left the gate with no way in)
+			if (!e.getKey().equals(WAY_OUT_KEY) && !e.getKey().startsWith(LINE_PREFIX) || e.getValue().isEmpty()) {
+				continue;
+			}
+			for (String cell : e.getValue().split(";")) {
+				String[] p = cell.split(",");
+				int x = Integer.parseInt(p[0]), z = Integer.parseInt(p[2]);
+				for (int dx = -2; dx <= 2; dx++) {
+					for (int dz = -2; dz <= 2; dz++) {
+						out.add(BlockPos.asLong(x + dx, 0, z + dz));
+					}
 				}
 			}
+		}
+		return out;
+	}
+
+	/** Names key of a road's stored line near its settlement: "line|<link key>" = "x,y,z;..." (land cells, road height). */
+	static final String LINE_PREFIX = "line|";
+	/** How far from the heart a road's line is stored and kept free of later land work. */
+	private static final int LINE_RADIUS = 110;
+
+	/** Stores the part of a finished road near its settlement, so later builds leave it alone and it can be laid again. */
+	private static void storeLine(MinecraftServer server, Job job) {
+		Settlement s = null;
+		for (Settlement o : Settlements.all(server)) {
+			if (o.id().toString().equals(job.settlement())) {
+				s = o;
+			}
+		}
+		if (s == null) {
+			return;
+		}
+		StringBuilder enc = new StringBuilder();
+		for (int k = 0; k < job.line().size(); k++) {
+			BlockPos p = job.line().get(k);
+			if (job.water()[k] || Math.abs(p.getX() - s.heart().getX()) > LINE_RADIUS || Math.abs(p.getZ() - s.heart().getZ()) > LINE_RADIUS) {
+				continue;
+			}
+			int y = job.height()[k] / 2 - 1; // the full block the road lies on (a slab on it is left out)
+			enc.append(enc.length() == 0 ? "" : ";").append(p.getX()).append(',').append(y).append(',').append(p.getZ());
+		}
+		Settlements.putState(server, s.withName(LINE_PREFIX + job.key(), enc.toString()));
+	}
+
+	/** The stored lines of the settlement's roads to other places (land cells near it). */
+	static List<List<BlockPos>> storedLinks(Settlement s) {
+		List<List<BlockPos>> out = new ArrayList<>();
+		for (Map.Entry<String, String> e : s.names().entrySet()) {
+			if (!e.getKey().startsWith(LINE_PREFIX) || e.getValue().isEmpty()) {
+				continue;
+			}
+			List<BlockPos> line = new ArrayList<>();
+			for (String cell : e.getValue().split(";")) {
+				String[] p = cell.split(",");
+				line.add(new BlockPos(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])));
+			}
+			out.add(line);
 		}
 		return out;
 	}
@@ -514,11 +802,20 @@ final class RoadLink {
 		if (walksOut(level, heart, reach)) {
 			return;
 		}
-		// a road laid before that a later build covered or cut (a slope, a bank): laid again where it was
+		// a road laid before that a later build covered or cut (a slope, a bank): laid again where it was. The roads to
+		// other places too: a building that had to stand on one is the only thing that still cuts it (user: builders
+		// keep off roads, laying them again is the fallback)
 		List<BlockPos> before = storedLine(s);
-		if (!before.isEmpty()) {
-			lay(level, before, col -> !builtCols.contains(col) && !(BlockPos.getX(col) >= bx0 && BlockPos.getX(col) <= bx1 && BlockPos.getZ(col) >= bz0
-					&& BlockPos.getZ(col) <= bz1), built, SiteWork.surface(level, heart), tier(s));
+		List<List<BlockPos>> links = storedLinks(s);
+		if (!before.isEmpty() || !links.isEmpty()) {
+			java.util.function.LongPredicate free = col -> !builtCols.contains(col) && !(BlockPos.getX(col) >= bx0 && BlockPos.getX(col) <= bx1
+					&& BlockPos.getZ(col) >= bz0 && BlockPos.getZ(col) <= bz1);
+			if (!before.isEmpty()) {
+				lay(level, before, free, built, SiteWork.surface(level, heart), tier(s));
+			}
+			for (List<BlockPos> link : links) {
+				lay(level, link, free, built, SiteWork.surface(level, heart), tier(s));
+			}
 			reach.clear();
 			if (walksOut(level, heart, reach)) {
 				io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: the road was covered by a build and is laid again", s.name());
