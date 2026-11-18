@@ -1,0 +1,43 @@
+# Prints the public API of Minecraft classes (javap) for the classes listed in .github/probe.txt and publishes the
+# output to the ci-probe branch. Used while writing code against a new Minecraft version. Uses no secrets.
+name: Probe
+
+on:
+  push:
+    paths:
+      - .github/probe.txt
+  workflow_dispatch:
+
+permissions:
+  contents: write # only for the ci-probe branch
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Let Loom fetch Minecraft
+        run: ./gradlew --no-daemon help > /dev/null
+      - name: javap
+        run: |
+          mkdir -p out
+          jars=$(find ~/.gradle/caches .gradle -name "*.jar" 2>/dev/null | grep -i "minecraft" | grep -v sources | sort -u)
+          echo "$jars" > out/jars.txt
+          cp=$(echo "$jars" | tr '\n' ':')
+          while read -r cls; do
+            [ -z "$cls" ] && continue
+            javap -public -classpath "$cp" "$cls" > "out/${cls//[\/\$]/_}.txt" 2>&1 || true
+          done < .github/probe.txt
+      - name: Publish
+        run: |
+          cd out
+          git init -q
+          git config user.name ci && git config user.email ci@users.noreply.github.com
+          git checkout -q -b ci-probe
+          git add -A && git commit -qm "probe ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-probe
