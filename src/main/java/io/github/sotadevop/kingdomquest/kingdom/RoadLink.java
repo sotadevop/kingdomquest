@@ -328,7 +328,7 @@ final class RoadLink {
 			block = (w == 0 || h < 4 ? Blocks.DIRT_PATH : Blocks.COARSE_DIRT).defaultBlockState();
 		}
 		BlockState now = level.getBlockState(cell);
-		if (now.getBlock() instanceof LiquidBlock || now.isAir() || SiteWork.natural(now) || now.is(Blocks.DIRT_PATH) || now.is(Blocks.GRAVEL)
+		if (now.getBlock() instanceof LiquidBlock || now.isAir() || SiteWork.natural(now) || SiteWork.earthwork(now) || now.is(Blocks.DIRT_PATH) || now.is(Blocks.GRAVEL)
 				|| now.is(Blocks.COBBLESTONE) || now.is(Blocks.MOSSY_COBBLESTONE) || now.is(Blocks.SPRUCE_PLANKS) || now.is(Blocks.STONE_BRICKS)) {
 			level.setBlock(cell, block, Block.UPDATE_CLIENTS);
 			BlockPos below = cell.below();
@@ -410,7 +410,8 @@ final class RoadLink {
 				net.minecraft.world.phys.shapes.VoxelShape shape = st.getCollisionShape(level, pos);
 				wall[c] = !water[c] && !shape.isEmpty() && shape.max(Direction.Axis.Y) > 1.0;
 				inRing[c] = x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1;
-				dig[c] = !inRing[c] && !builtCols.contains(BlockPos.asLong(x, 0, z)) && (water[c] || SiteWork.natural(st));
+				// natural land, and the settlement's own old terrace masonry outside the walls (no one's building)
+				dig[c] = !inRing[c] && !builtCols.contains(BlockPos.asLong(x, 0, z)) && (water[c] || SiteWork.natural(st) || SiteWork.earthwork(st));
 			}
 		}
 		int si = start.getX() - x0, sk = start.getZ() - z0;
@@ -599,7 +600,7 @@ final class RoadLink {
 					BlockState st = level.getBlockState(a);
 					if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
 						SiteWork.removeTreeAt(level, a, built);
-					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st)) && st.getFluidState().isEmpty()) {
+					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st)) && st.getFluidState().isEmpty()) {
 						level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
 					}
 				}
