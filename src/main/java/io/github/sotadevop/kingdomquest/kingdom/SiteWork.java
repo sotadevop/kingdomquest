@@ -621,7 +621,11 @@ public final class SiteWork {
 			// covers it, the stone is simply hidden; every face that stays in sight is stone, never bare earth
 			boolean face = high && depth > 1 && y < fillTop && openSide(level, pos, built);
 			boolean stone = !bank && margin && depth > 2 && (c.edge() || y < fillTop - 2) || face;
-			BlockState fill = stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
+			// only the top of a high plinth is a built wall (a crown of 3 courses); below it the plot stands on
+			// rough rock like the land's own, so a plot over a deep drop reads as a crag, not a 30 block brick wall
+			boolean rough = stone && y < fillTop - 3;
+			BlockState fill = rough ? rock(surface, x, y, z)
+					: stone ? (Math.floorMod(x * 31 + y * 7 + z * 13, 5) == 0 ? mossy(wall) : wall)
 					: y == fillTop ? surface : subsoil(surface);
 			level.setBlock(pos, fill, FLAGS);
 		}
@@ -668,6 +672,18 @@ public final class SiteWork {
 			return Blocks.CUT_RED_SANDSTONE.defaultBlockState();
 		}
 		return surface.is(Blocks.SNOW_BLOCK) ? Blocks.COBBLESTONE.defaultBlockState() : Blocks.STONE_BRICKS.defaultBlockState();
+	}
+
+	/** Rough natural rock for the lower part of a plinth, matching the land: sandstone, terracotta, or stone with andesite and tuff. */
+	static BlockState rock(BlockState surface, int x, int y, int z) {
+		int h = Math.floorMod(x * 73 + y * 19 + z * 37, 10);
+		if (surface.is(Blocks.SAND)) {
+			return Blocks.SANDSTONE.defaultBlockState();
+		}
+		if (surface.is(Blocks.RED_SAND) || surface.is(BlockTags.TERRACOTTA)) {
+			return (h < 7 ? Blocks.TERRACOTTA : Blocks.ORANGE_TERRACOTTA).defaultBlockState();
+		}
+		return (h < 7 ? Blocks.STONE : h < 9 ? Blocks.ANDESITE : Blocks.TUFF).defaultBlockState();
 	}
 
 	private static BlockState mossy(BlockState wall) {
