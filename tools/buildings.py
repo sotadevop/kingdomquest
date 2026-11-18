@@ -322,6 +322,37 @@ def shutters(b, x, ys, z, wood):
             b.put(sx, y, z + 1, f"{wood}_trapdoor", facing="south", half="bottom", open="true", powered="false", waterlogged="false")
 
 
+def house_yard(b, style, x0, z0, F=0):
+    """What stands around a lived-in house: a rain butt at the back corner, a bench by the side wall, and a small bed
+    of whatever grows there (flowers, berries, a cactus in a pot, ferns)."""
+    x1, z1 = x0 + 6, z0 + 8
+    wood = {"temperate": "spruce", "frozen": "spruce", "arid": "acacia", "highland": "spruce", "wild": "jungle"}[style]
+    if style not in ("wild", "frozen"):        # (the log house keeps its firewood there)
+        b.put(x1 + 1, 0, z0 + 1, "barrel", facing="up", open="false")             # the rain butt under the eave
+    if style != "wild":
+        b.put(x0 - 1, 0, z1 - 2, f"{wood}_stairs", facing="east", **ST)            # a bench against the side wall
+    plants = {"temperate": ("rose_bush", "peony", "lilac"), "frozen": ("sweet_berry_bush",), "highland": ("fern",),
+              "arid": None, "wild": ("fern", "large_fern")}[style]
+    if style == "arid":
+        b.put(x1 + 1, 0, z1 - 2, "decorated_pot", facing="south", cracked="false", waterlogged="false")
+        b.put(x1 + 1, 0, z1 - 3, "potted_cactus")
+    elif plants and style != "wild":
+        for z in (z1 - 3, z1 - 2):
+            b.put(x1 + 1, -1, z, "grass_block", snowy="false")
+            p = plants[(z + x0) % len(plants)]
+            if p in ("rose_bush", "peony", "lilac", "large_fern"):
+                b.put(x1 + 1, 0, z, p, half="lower")
+                b.put(x1 + 1, 1, z, p, half="upper")
+            elif p == "sweet_berry_bush":
+                b.put(x1 + 1, 0, z, p, age="3")
+            else:
+                b.put(x1 + 1, 0, z, p)
+    else:                                       # under the stilt house: firewood and a water jar
+        b.put(x0 + 1, 0, z0 + 2, "bamboo_block", axis="x")
+        b.put(x0 + 1, 0, z0 + 3, "bamboo_block", axis="x")
+        b.put(x1 - 1, 0, z0 + 2, "decorated_pot", facing="south", cracked="false", waterlogged="false")
+
+
 def house_temperate(b, x0=4, z0=0):
     """German half-timbered house (Fachwerk), gable to the street: stone plinth, a dark oak frame with white or ochre
     infill, the 'Mann' braces at the corners, a framed upper gable, painted shutters and window boxes, a steep tiled
@@ -397,6 +428,7 @@ def house_temperate(b, x0=4, z0=0):
     house_inside(b, x0, z0, 0, dict(shelf="spruce_shelf", firewood="spruce_log", work="barrel", work_props=dict(facing="up", open="false"),
                                     pot="potted_fern", fence="spruce_fence", plate="spruce_pressure_plate", stairs="spruce_stairs",
                                     plant="potted_azalea_bush", mat="brown_carpet", beam="dark_oak_log", beam_y=4, lantern="lantern"))
+    house_yard(b, "temperate", x0, z0)
 
 
 def house_norse(b, x0=4, z0=0):
@@ -473,6 +505,7 @@ def house_norse(b, x0=4, z0=0):
                                     pot="potted_spruce_sapling", fence="spruce_fence", plate="spruce_pressure_plate",
                                     stairs="spruce_stairs", plant="potted_fern", mat="white_carpet", beam="stripped_dark_oak_log",
                                     beam_y=4, lantern="lantern"))
+    house_yard(b, "frozen", x0, z0)
 
 
 def house_arid(b, x0=4, z0=0):
@@ -552,6 +585,7 @@ def house_arid(b, x0=4, z0=0):
                                     work_props=dict(facing="west", cracked="false", waterlogged="false"), pot="potted_cactus",
                                     fence="acacia_fence", plate="acacia_pressure_plate", stairs="acacia_stairs",
                                     plant="potted_flowering_azalea_bush", mat="red_carpet", beam_y=5, lantern="copper_lantern"))
+    house_yard(b, "arid", x0, z0)
 
 
 def house_highland(b, x0=4, z0=0):
@@ -619,6 +653,7 @@ def house_highland(b, x0=4, z0=0):
                                     work_props=dict(facing="up", open="false"), pot="potted_fern", fence="spruce_fence",
                                     plate="spruce_pressure_plate", stairs="spruce_stairs", plant="potted_azalea_bush",
                                     mat="green_carpet", beam="dark_oak_log", beam_y=4, lantern="lantern"))
+    house_yard(b, "highland", x0, z0)
 
 
 def house_wild(b, x0=4, z0=0):
@@ -684,6 +719,7 @@ def house_wild(b, x0=4, z0=0):
     house_inside(b, x0, z0, F, dict(shelf="jungle_shelf", firewood="bamboo_block", work="barrel", work_props=dict(facing="up", open="false"),
                                     pot="potted_bamboo", floor_seating=True, low_table="bamboo_slab", mat="lime_carpet",
                                     beam="stripped_jungle_log", beam_y=F + 4, lantern="lantern"), zf=zb)
+    house_yard(b, "wild", x0, z0)
 
 
 FARM = (22, 1, 9, 9)  # x0, z0, width, depth of the field
@@ -768,6 +804,8 @@ def hamlet(style, level):
     b.put(hx + 2, 0, hz, f"{w}_stairs", facing="east", **ST)
     b.put(hx + 2, 0, hz + 1, f"{w}_stairs", facing="east", **ST)
     banner_pole(b, s, 0, 10, 3)
+    for x in (6, 8):                                             # benches looking at the fire
+        b.put(x, 0, 13, f"{w}_stairs", facing="south", **ST)
     # well
     for x in (1, 3):
         for z in (12, 14):
@@ -807,7 +845,7 @@ def hamlet(style, level):
     return b.b
 
 
-def pasture(b, s):
+def pasture(b, s, style="temperate"):
     """Farm level 2: fenced pasture east of the field with hay, a water trough and a lean-to shelter."""
     w = s["wood"]
     x0, x1, z0, z1 = 35, 43, 0, 9
@@ -830,12 +868,11 @@ def pasture(b, s):
     for x in (x0 + 1, x0 + 3):
         b.put(x, 0, z0 + 1, s["pole"])
         b.put(x, 1, z0 + 1, s["pole"])
-    for x in range(x0, x0 + 5):
-        b.put(x, 2, z0 + 1, w + "_slab", type="bottom", waterlogged="false")
-        b.put(x, 2, z0, w + "_stairs", facing="south", **ST)
+    small_roof(b, style, x0, x0 + 4, z0 + 2, z0, 2)
+    b.put(x0 + 2, 0, z0 + 1, "hay_block", axis="x")             # winter hay under the shelter
 
 
-def smokehouse(b, s):
+def smokehouse(b, s, style="temperate"):
     """Farm level 3: small smokehouse between the farm road and the street, where meat is cured over a smoker."""
     w = s["wood"]
     x0, x1, z0, z1 = 36, 40, 13, 16
@@ -851,20 +888,13 @@ def smokehouse(b, s):
     porch(b, door[0], z1 + 1, w, width=1)
     b.put(door[0], 1, door[1], w + "_door", facing="south", half="lower", hinge="left", open="false", powered="false")
     b.put(door[0], 2, door[1], w + "_door", facing="south", half="upper", hinge="left", open="false", powered="false")
-    for x in range(x0 - 1, x1 + 2):
-        for z in range(z0 - 1, z1 + 2):
-            b.put(x, 3, z, w + "_slab", type="bottom", waterlogged="false")
-    for x in range(x0, x1 + 1):
-        for z in range(z0, z1 + 1):
-            if x in (x0, x1) or z in (z0, z1):
-                b.put(x, 3, z, "cobblestone_slab", type="bottom", waterlogged="false")
-    b.put(x0 + 2, 3, z0 + 1, "cobblestone")
-    b.put(x0 + 2, 4, z0 + 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    ridge = small_roof(b, style, x0 - 1, x1 + 1, z1 + 1, z0 - 1, 3)
+    for y in range(3, ridge + 2):                                # the smoke goes up a stone chimney
+        b.put(x0 + 2, y, z0 + 1, "cobblestone")
+    b.put(x0 + 2, ridge + 2, z0 + 1, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
     b.put(x0 + 2, 1, z0 + 1, "smoker", facing="south", lit="true")
     b.put(x0 + 1, 1, z0 + 1, "barrel", facing="up", open="false")
     b.put(x0 + 3, 1, z0 + 1, "barrel", facing="up", open="false")
-    for x in (x0 + 1, x0 + 3):
-        b.put(x, 2, z1 - 1, "iron_chain", axis="y", waterlogged="false")
 
 
 def farm(style, level):
@@ -898,10 +928,13 @@ def farm(style, level):
     # storehouse barrel: the farmer puts the harvest in here
     b.put(x0 - 2, 0, zc - 1, "barrel", facing="up", open="false")
     b.put(x0 - 2, 0, zc - 2, "composter", level="0")
+    b.put(x0 - 2, 0, zc + 1, "hay_block", axis="z")              # the harvest stacked by the store
+    b.put(x0 - 2, 1, zc + 1, "hay_block", axis="x")
+    b.put(x0 - 2, 0, zc + 2, "water_cauldron", level="3")
     if level >= 2:
-        pasture(b, s)
+        pasture(b, s, style)
     if level >= 3:
-        smokehouse(b, s)
+        smokehouse(b, s, style)
     return b.b
 
 
@@ -2094,6 +2127,24 @@ def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=No
         rises = (1, 1, 2) + (1,) * 8
     top, low, zc, ridge = gable_roof(b, xl, xr, z1 + 1, z0 - 1, h, rises, bf, sf, cap)
     peak = ridge
+    # small dormer windows in the roof over the street side's windows (not in Norway or Scotland: their roofs stay whole)
+    if style in ("temperate", "wild") and x1 - x0 >= 8:
+        for g in groups_x:
+            x = g[len(g) // 2]
+            if abs(x - cx) > 2 and xl < x - 1 and x + 1 < xr:
+                cheek = {"temperate": "calcite", "frozen": "stripped_spruce_log", "highland": "calcite", "wild": "bamboo_mosaic"}[style]
+                for z in (dz, dz - out):                        # the dormer's room in the roof
+                    for y in (h + 1, h + 2):
+                        b.put(x, y, z, "air")
+                for y in (h + 1, h + 2):                        # its front: two cheeks and a window
+                    for xx in (x - 1, x + 1):
+                        b.put(xx, y, dz, cheek, **({"axis": "y"} if "log" in cheek else {}))
+                    b.put(x, y, dz, "glass_pane", **PANE_X)
+                for z in (dz, dz - out):                        # its own little gable roof (none over the eave: nothing to hide under)
+                    b.put(x - 1, h + 3, z, st, facing="east", **ST)
+                    b.put(x + 1, h + 3, z, st, facing="west", **ST)
+                    b.put(x, h + 3, z, blk)
+                    b.put(x, h + 4, z, cap, type="bottom", waterlogged="false")
     # gables
     for xx in (x0, x1):
         for z in range(z0, z1 + 1):
@@ -2359,6 +2410,13 @@ def stables(style, level):
             b.put(x, y, z, m["roof"], facing="south" if i < 3 else "north", **ST) if i != 3 else b.put(x, y, z, m["slab"], type="bottom", waterlogged="false")
     for x in range(x0 + 2, x1 - 1, 3):
         b.put(x, 0, z0 + 2, "hay_block", axis="y")
+    for x in range(x0 + 3, x1, 3):                               # partitions between the stalls, a lantern over each
+        for z in (z0 + 1, z0 + 3):
+            b.put(x, 0, z, w + "_fence")
+        b.put(x, 2, z0 + 2, "lantern", hanging="true", waterlogged="false")
+    for x in range(x0 + 1, x1, 3):                               # a water trough in each stall
+        if (x, 0, z0 + 3) not in b.b:
+            b.put(x, 0, z0 + 3, "water_cauldron", level="3")
     b.put(*STABLE_STORE, "barrel", facing="up", open="false")
     # paddock behind (south)
     for x in range(x0, x1 + 1):
@@ -2371,6 +2429,7 @@ def stables(style, level):
             b.put(x, 0, z1 - 3, "hay_block", axis="x")
         b.put(x1 - 1, 0, z0 + 1, "chest", facing="west", type="single", waterlogged="false")
         b.put(x1 - 1, 1, z0 + 3, "{color}_wool")
+        b.put(x1 - 1, 1, z0 + 1, f"{SHELF_WOOD[style]}_shelf", facing="west")      # the saddle rack
     return b.b
 
 
@@ -2887,6 +2946,13 @@ def barracks(style, level):
             b.put(x, 6, z1 - 1, "{color}_bed", facing="south", part="head", occupied="false")
             b.put(x, 6, z1 - 2, "{color}_bed", facing="south", part="foot", occupied="false")
         b.put((x0 + x1) // 2, 7, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+        w = SHELF_WOOD[style]
+        for x in range(x0 + 3, x1, 3):              # a shelf over each bunk's head for the guard's things
+            b.put(x, 8, z1 - 1, f"{w}_shelf", facing="north")
+        for z in (z0 + 2, z0 + 3):                  # the officers' table with the watch map
+            b.put(x1 - 3, 6, z, f"{w}_slab", type="top", waterlogged="false")
+        b.put(x1 - 3, 7, z0 + 2, "candle", candles="1", lit="true", waterlogged="false")
+        b.put(x1 - 2, 6, z0 + 2, f"{w}_stairs", facing="west", half="bottom", shape="straight", waterlogged="false")
     for x in range(x0 + 2, x1 - 1, 3):
         b.put(x, 1, z1 - 1, "white_bed", facing="south", part="head", occupied="false")
         b.put(x, 1, z1 - 2, "white_bed", facing="south", part="foot", occupied="false")
@@ -3036,6 +3102,10 @@ def apiary(style, level):
         b.put(x, 1, z, w + "_fence")
         b.put(x, 2, z, "bee_nest", facing="south", honey_level="0")
     b.put(*APIARY_STORE, "barrel", facing="up", open="false")
+    b.put(x1 - 1, 0, z0 + 1, w + "_slab", type="top", waterlogged="false")   # the beekeeper's bench: honey and a candle
+    b.put(x1 - 1, 1, z0 + 1, "honey_block")
+    b.put(x1 - 2, 0, z0 + 1, w + "_slab", type="top", waterlogged="false")
+    b.put(x1 - 2, 1, z0 + 1, "candle", candles="2", lit="true", waterlogged="false")
     if level >= 2:
         for x in (x0 + 3, x0 + 5, x0 + 7):
             b.put(x, 0, z1 - 2, "beehive", facing="south", honey_level="0")
@@ -4153,6 +4223,205 @@ def gasthaus(style, level):
 
 
 
+def shop_interior(b, style, name, level, x0, z0, x1, z1, door, h, base_h):
+    """The trade's room as such a shop would look in a real town, laid out from the back wall (v = 0) toward the door,
+    u from the west wall; level 2 adds to it, level 3 puts the shopkeeper's home on the upper floor. Keeps clear: the
+    door's line, the ladder's column (x0 + 1, middle) and the store barrel in the floor."""
+    w = SHELF_WOOD[style]
+    W, D = x1 - x0 - 1, z1 - z0 - 1
+    cz = (z0 + z1) // 2
+    back_z = z0 + 1 if door == "s" else z1 - 1
+    sgn = 1 if door == "s" else -1
+    FACE = {"f": "south" if door == "s" else "north", "b": "north" if door == "s" else "south", "l": "west", "r": "east"}
+    ladder = (x0 + 1, cz)
+    door_u = (x0 + x1) // 2 - x0 - 1
+    BL = {"barrel", "decorated_pot", "hay_block"}
+
+    def at(u, v):
+        return x0 + 1 + u, back_z + sgn * v
+
+    def put(u, v, y, block, **p):
+        x, z = at(u, v)
+        if not (0 <= u < W and 0 <= v < D) or (x, z) == ladder and y < (base_h or h) + 3:
+            return
+        if v >= D - 2 and abs(u - door_u) <= 1 and y <= 2:
+            return                                  # the way in stays open
+        p = {k: FACE.get(v_, v_) if k == "facing" else v_ for k, v_ in p.items()}
+        if block == "barrel":
+            p.setdefault("facing", "up"); p.setdefault("open", "false")
+        if block == "hay_block":
+            p.setdefault("axis", "y")
+        if block == "decorated_pot":
+            p.setdefault("facing", "south"); p.setdefault("cracked", "false"); p.setdefault("waterlogged", "false")
+        if block in ("chest", "trapped_chest"):
+            p.setdefault("type", "single"); p.setdefault("waterlogged", "false")
+        if block == "candle":
+            p = dict(candles="2", lit="true", waterlogged="false")
+        if block.endswith("_slab"):
+            p.setdefault("type", "top"); p.setdefault("waterlogged", "false")
+        if block.endswith("_stairs"):
+            p = dict(dict(half="bottom", shape="straight", waterlogged="false"), **p)
+        if block.endswith("lantern"):
+            p.setdefault("hanging", "true"); p.setdefault("waterlogged", "false")
+        b.put(x, y, z, block, **p)
+
+    def table(u, v, top=None):
+        """A table: a fence leg under a top slab, something on it."""
+        put(u, v, 1, f"{w}_fence")
+        put(u, v, 2, f"{w}_pressure_plate", powered="false") if top is None else put(u, v, 2, top)
+
+    def counter(u0, u1, v, goods=()):
+        """A shop counter of upside-down slabs on a plank front, the wares on top."""
+        for i, u in enumerate(range(u0, u1 + 1)):
+            put(u, v, 1, f"{w}_slab", type="top")
+            if goods:
+                g = goods[i % len(goods)]
+                if g:
+                    put(u, v, 2, g)
+
+    rack = lambda u, v, y=2: put(u, v, y, f"{w}_shelf", facing="f")
+    # ---- the trades
+    if name == "market":
+        # a covered market: crates and sacks along the back, two stalls with produce, a weighing bench, a cart corner
+        for u in range(1, W - 1):
+            put(u, 0, 1, ("barrel", "hay_block", "barrel", "decorated_pot", "barrel", "composter")[u % 6])
+            rack(u, 0)
+        counter(1, 4, 3, ("candle", None, "flower_pot", None))
+        counter(W - 5, W - 2, 3, ("flower_pot", None, "candle", None))
+        for u, crate in ((1, "pumpkin"), (2, "melon"), (3, "hay_block"), (W - 4, "beehive"), (W - 3, "barrel")):
+            put(u, 2, 1, crate)                         # the produce in crates behind the stalls
+        put(0, 2, 1, "loom", facing="r")
+        put(W - 1, 1, 1, "cartography_table")
+        put(W - 1, 2, 1, "smithing_table")
+        put(W - 1, D - 2, 1, "barrel"); put(W - 1, D - 2, 2, "barrel")
+        if level >= 2:
+            put(0, D - 2, 1, "barrel", open="true"); put(1, D - 2, 1, "hay_block")
+            put(4, 3, 2, "cake"); put(W - 2, 3, 2, "candle")
+    elif name == "cartographer":
+        # the map maker's study: a drafting table under the window, chart chests, bookcases, a big map table
+        put(1, 0, 1, "cartography_table"); put(1, 1, 1, f"{w}_stairs", facing="f")
+        put(2, 0, 1, "chest", facing="f"); put(3, 0, 1, "chest", facing="f")
+        for u in (4, 5):
+            put(u, 0, 1, "bookshelf"); put(u, 0, 2, "bookshelf")
+        put(W - 1, 0, 1, "lectern", facing="f", has_book="false", powered="false")
+        for u in range(2, 5):                       # the big table with charts held down by candles
+            put(u, 3, 1, f"{w}_slab", type="top")
+        put(2, 3, 2, "candle"); put(4, 3, 2, "candle")
+        put(W - 1, 2, 1, "barrel"); put(W - 1, 2, 2, "barrel")      # rolled charts
+        rack(W - 1, 3)
+        if level >= 2:
+            put(W - 1, 4, 1, "chiseled_bookshelf", facing="l")
+            put(1, 4, 1, f"{w}_stairs", facing="r")
+    elif name == "music":
+        # the bard's hall: a raised stage at the back with the jukebox and note blocks, benches for listeners
+        for u in range(1, W - 1):
+            put(u, 0, 1, f"{w}_slab", type="bottom") if u not in (door_u,) else None
+            put(u, 1, 1, f"{w}_slab", type="bottom")
+        put(door_u, 0, 1, "jukebox", has_record="false")
+        put(1, 0, 2, "note_block", instrument="harp", note="0", powered="false")
+        put(W - 2, 0, 2, "note_block", instrument="bell", note="12", powered="false")
+        put(2, 0, 2, "note_block", instrument="flute", note="5", powered="false")
+        for u in range(1, W - 1):                   # listeners' benches
+            if abs(u - door_u) > 0:
+                put(u, 3, 1, f"{w}_stairs", facing="f")
+        put(0, 1, 1, "white_wool"); put(W - 1, 1, 1, "white_wool")
+        if level >= 2:
+            put(W - 1, 3, 1, "bell", attachment="floor", facing="r", powered="false")
+            rack(0, 3)
+            for u in range(1, W - 1):
+                if abs(u - door_u) > 0:
+                    put(u, 4, 1, f"{w}_stairs", facing="f")
+    elif name == "workshop":
+        # the tinkerer's workshop: a long workbench with tools, the crafter, copper parts, a test bench for redstone
+        put(1, 0, 1, "crafting_table"); put(2, 0, 1, "crafter", orientation="north_up", crafting="false", triggered="false")
+        put(3, 0, 1, "grindstone", face="floor", facing="f")
+        for u in (1, 2, 3, 4):
+            rack(u, 0)
+        put(W - 1, 0, 1, "copper_chest", facing="l"); put(W - 1, 1, 1, "copper_block")
+        put(W - 1, 2, 1, "barrel"); put(W - 1, 2, 2, "copper_bulb", lit="true", powered="false")
+        counter(2, 4, 3, ("lightning_rod", "redstone_lamp", "copper_grate"))
+        put(0, 3, 1, "piston", facing="r", extended="false"); put(0, 4, 1, "observer", facing="up", powered="false")
+        if level >= 2:
+            put(W - 1, 4, 1, "copper_golem_statue")
+            put(W - 2, 0, 1, "redstone_lamp", lit="false")
+    elif name == "armorer":
+        # the armorer's forge: blast furnace and quench tub at the back, anvil in the middle, armour racks on the walls
+        put(1, 0, 1, "blast_furnace", facing="f", lit="true"); put(2, 0, 1, "water_cauldron", level="3")
+        put(3, 0, 1, "coal_block")
+        put(W - 2, 0, 1, "smithing_table"); put(W - 1, 0, 1, "barrel")
+        put(door_u, 2, 1, "anvil", facing="r")
+        put(0, 2, 1, "grindstone", face="floor", facing="r")
+        for u in (W - 1,):
+            for v in (1, 2):
+                put(u, v, 2, "iron_bars", north="true", south="true", east="false", west="false", waterlogged="false")
+                put(u, v, 1, "chest", facing="l")
+        rack(1, 0, 2); rack(2, 0, 2)
+        if level >= 2:
+            put(door_u + 1, 2, 1, "chipped_anvil", facing="r")
+            put(0, 3, 1, "barrel"); put(0, 3, 2, "lantern", hanging="false")
+    elif name == "tannery":
+        # the tanner's yard under a roof: soaking vats, hides drying on frames, the scraping bench
+        put(1, 0, 1, "water_cauldron", level="3"); put(2, 0, 1, "water_cauldron", level="2"); put(3, 0, 1, "cauldron")
+        put(W - 2, 0, 1, "smoker", facing="f", lit="false"); put(W - 1, 0, 1, "barrel")
+        for u in (1, 2, 3):                         # drying frame with hides
+            put(u, 2, 1, f"{w}_fence"); put(u, 2, 2, "brown_carpet")
+        put(W - 1, 2, 1, f"{w}_stairs", facing="l"); put(W - 2, 2, 1, f"{w}_slab", type="top")
+        put(W - 1, 1, 1, "composter", level="3")
+        if level >= 2:
+            for u in (W - 3, W - 2):
+                put(u, 3, 1, f"{w}_fence"); put(u, 3, 2, "white_carpet")
+            put(0, 3, 1, "barrel")
+    elif name == "archaeology":
+        # the finds room: trays of sand being brushed, shelves of pots, a desk with notes, bones of the old world
+        put(1, 0, 1, "chiseled_bookshelf", facing="f"); put(2, 0, 1, "lectern", facing="f", has_book="false", powered="false")
+        for u in range(3, W - 1):
+            put(u, 0, 1, "decorated_pot" if u % 2 else "barrel")
+            rack(u, 0)
+        for u in (1, 2):                             # brushing trays
+            put(u, 3, 0, "suspicious_sand" if u == 1 else "suspicious_gravel", dusted="0")
+        put(W - 1, 2, 1, "bone_block", axis="y"); put(W - 1, 3, 1, "decorated_pot")
+        table(W - 3, 3, "candle")
+        if level >= 2:
+            put(W - 1, 1, 1, "chiseled_bookshelf", facing="l")
+            put(0, 4, 1, "decorated_pot", cracked="true")
+    elif name == "mine":
+        # the mine office: ore samples on a bench, tools on the wall, a chest of the day's haul, rails to the shaft
+        for u, ore in zip((W - 4, W - 3, W - 2), ("iron_ore", "coal_ore", "copper_ore")):   # ore samples, tools racked over them
+            put(u, 0, 1, ore)
+            rack(u, 0)
+        put(W - 1, 0, 1, "chest", facing="f"); put(W - 1, 1, 1, "barrel"); put(W - 1, 1, 2, "lantern", hanging="false")
+        put(W - 1, 3, 1, "grindstone", face="floor", facing="l")
+        if level >= 2:
+            put(W - 1, 4, 1, "barrel"); put(W - 1, 4, 2, "barrel")
+            put(W - 2, 2, 1, "rail", shape="east_west", waterlogged="false")
+    elif name == "nether":
+        # the nether trader's post: gold on the counter, blackstone shelves, soul light
+        counter(2, 4, 1, ("gilded_blackstone", "gold_block", "crying_obsidian"))
+        put(W - 1, 0, 1, "chest", facing="f"); put(W - 1, 1, 1, "chest", facing="l")
+        put(0, 2, 1, "chiseled_polished_blackstone"); put(0, 2, 2, "soul_lantern", hanging="false")
+        if level >= 2:
+            put(W - 1, 3, 1, "polished_blackstone_bricks"); put(W - 1, 3, 2, "soul_lantern", hanging="false")
+    # ---- level 3: the shopkeeper's home upstairs, the rest is the store room
+    if level >= 3 and base_h is not None:
+        fy = base_h + 1
+        y = fy + 1
+        put(W - 1, 0, y, "{color}_bed", facing="b", part="head", occupied="false")
+        put(W - 1, 1, y, "{color}_bed", facing="b", part="foot", occupied="false")
+        put(W - 2, 0, y, "barrel"); put(W - 2, 0, y + 1, "candle")              # night stand
+        put(W - 1, 3, y, "chest", facing="l"); put(W - 1, 3, y + 1, "barrel")   # wardrobe
+        put(W - 1, 2, y, "water_cauldron", level="2")                            # wash basin
+        rack(W - 2, 0, y + 2)
+        table(W - 3, 3)
+        put(W - 3, 2, y, f"{w}_stairs", facing="b")
+        for u in range(W - 4, W - 1):
+            put(u, 4, y, "{color}_carpet") if D > 5 else None
+        for u in range(1, max(2, W - 5)):                                       # the store room on the other side
+            put(u, 0, y, "barrel"); put(u, 0, y + 1, "barrel" if u % 2 else "hay_block")
+            if u % 3 == 0:
+                put(u, 2, y, "chest", facing="f")
+        put(door_u, 2, base_h + 4, "lantern") if base_h + 4 < h else None
+
+
 def shop(style, name, level):
     """A small building in the village style with the furniture of its trade; level 2 adds more of it."""
     if name == "tavern":  # the detailed inns, one per region (see gasthaus and the regional inns)
@@ -4172,37 +4441,6 @@ def shop(style, name, level):
     cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
     b.put(*shop_store(name), "barrel", facing="up", open="false")
     b.put(cx, h - 1, cz, "lantern", hanging="true", waterlogged="false")
-    fb = "north" if door == "s" else "south"
-    inside = {
-        "tavern": [("barrel", (x0 + 2, back), dict(facing="up", open="false")), ("barrel", (x0 + 3, back), dict(facing="up", open="false")),
-                   ("smoker", (x1 - 1, back), dict(facing=fb, lit="true")), ("campfire", (x1 - 2, back), dict(facing=fb, lit="true", signal_fire="false", waterlogged="false"))],
-        "market": [("composter", (x0 + 2, back), dict(level="0")), ("barrel", (x0 + 3, back), dict(facing="up", open="true")),
-                   ("smithing_table", (x1 - 2, back), {}), ("cartography_table", (x1 - 3, back), {}), ("loom", (x1 - 4, back), dict(facing=fb))],
-        "cartographer": [("cartography_table", (x0 + 2, back), {}), ("lectern", (x1 - 1, back), dict(facing=fb, has_book="false", powered="false"))],
-        "music": [("jukebox", (cx, back), dict(has_record="false")), ("note_block", (x0 + 2, back), dict(instrument="harp", note="0", powered="false")),
-                  ("note_block", (x1 - 2, back), dict(instrument="bell", note="12", powered="false"))],
-        "workshop": [("crafter", (x0 + 2, back), dict(orientation="north_up", crafting="false", triggered="false")),
-                     ("copper_block", (x1 - 2, back), {}), ("redstone_lamp", (x1 - 1, back), dict(lit="false"))],
-        "armorer": [("blast_furnace", (x0 + 2, back), dict(facing=fb, lit="true")), ("smithing_table", (x1 - 2, back), {}),
-                    ("anvil", (cx, back), dict(facing="east"))],
-        "tannery": [("cauldron", (x0 + 2, back), {}), ("water_cauldron", (x0 + 3, back), dict(level="3")), ("smoker", (x1 - 2, back), dict(facing=fb, lit="false"))],
-        "archaeology": [("decorated_pot", (x0 + 2, back), dict(facing=fb, cracked="false", waterlogged="false")),
-                        ("decorated_pot", (x0 + 4, back), dict(facing=fb, cracked="false", waterlogged="false")),
-                        ("suspicious_sand", (x1 - 2, back), dict(dusted="0")), ("chiseled_bookshelf", (x1 - 3, back), dict(facing=fb))],
-        "nether": [("gold_block", (cx, back), {}), ("crying_obsidian", (x0 + 1, back), {}),
-                   ("soul_campfire", (x1 - 1, back), dict(facing=fb, lit="true", signal_fire="false", waterlogged="false")),
-                   ("respawn_anchor", (x0 + 2, back), dict(charges="2"))],
-        "mine": [("rail", (cx, front), dict(shape="north_south", waterlogged="false")), ("chest", (x1 - 1, back), dict(facing=fb, type="single", waterlogged="false"))],
-    }[name]
-    for block, (x, z), props in inside:
-        b.put(x, 1, z, block, **props)
-    if name == "tavern":
-        for x in range(x0 + 2, x1 - 1, 3):
-            b.put(x, 1, cz, "spruce_fence")
-            b.put(x, 2, cz, "spruce_pressure_plate", powered="false")
-            b.put(x - 1, 1, cz, "spruce_stairs", facing="east", **ST)
-            b.put(x + 1, 1, cz, "spruce_stairs", facing="west", **ST)
-        b.put(cx, h - 1, cz - 2, "lantern", hanging="true", waterlogged="false")
     if name == "mine":
         # shaft with a ladder down to a lit gallery
         sx, sz = x0 + 2, cz
@@ -4221,24 +4459,11 @@ def shop(style, name, level):
             b.put(sx - 1, y, sz, "stone" if y < -3 else "cobblestone")      # the shaft's wall: the ladder hangs on it
             b.put(sx, y, sz, "ladder", facing="east", waterlogged="false")
     if level >= 2:
-        b.put(x0 + 1, 1, front, "{color}_banner", rotation="0")
         b.put(x1 - 1, h - 1, front, "lantern", hanging="true", waterlogged="false")
-        if name == "tavern":
-            b.put(x0 + 1, 1, back, "{color}_bed", facing="north" if door == "s" else "south", part="head", occupied="false")
-            b.put(x0 + 1, 1, back + (1 if door == "s" else -1), "{color}_bed", facing="north" if door == "s" else "south", part="foot", occupied="false")
     if level >= 3:
-        fy = base_h + 1
-        upper_floor(b, x0, z0, x1, z1, fy, x0 + 1, cz)
+        upper_floor(b, x0, z0, x1, z1, base_h + 1, x0 + 1, cz)
         b.put(cx, base_h, cz, "lantern", hanging="true", waterlogged="false")
-        bf = "north" if door == "s" else "south"
-        for x in range(x0 + 3, x1, 3):
-            if name == "tavern":  # guest rooms
-                b.put(x, fy + 1, back, "{color}_bed", facing=bf, part="head", occupied="false")
-                b.put(x, fy + 1, back + (1 if door == "s" else -1), "{color}_bed", facing=bf, part="foot", occupied="false")
-            else:  # warehouse
-                b.put(x, fy + 1, back, "barrel", facing="up", open="false")
-                b.put(x, fy + 2, back, "barrel", facing="up", open="false")
-                b.put(x, fy + 1, front, "chest", facing=bf, type="single", waterlogged="false")
+    shop_interior(b, style, name, level, x0, z0, x1, z1, door, h, base_h if level >= 3 else None)
     furnish(b, style, name, x0, z0, x1, z1)
     return b.b
 
@@ -4261,15 +4486,16 @@ def dock(style, level):
                     b.put(x, y, z, log, axis="y")
                 if z in (0, L - 4):
                     b.put(x, 2, z, "lantern", hanging="false", waterlogged="false")
-    for z in range(L - 4, L):
-        for x in (-2, -1, 0, 1, 2):
-            b.put(x, 4, z, w + "_slab", type="bottom", waterlogged="false")
+    small_roof(b, style, -3, 3, L - 1, L - 5, 4)               # the fishing hut's roof
     for x in (-2, 2):
         for z in (L - 4, L - 1):
             for y in range(1, 4):
                 b.put(x, y, z, w + "_fence")
     b.put(-1, 1, L - 2, "barrel", facing="up", open="false")
     b.put(1, 1, L - 1, "composter", level="0")
+    b.put(-1, 1, L - 3, "barrel", facing="up", open="false")    # the catch, a net on a rack, a stool
+    b.put(1, 1, L - 3, w + "_stairs", facing="west", **ST)
+    b.put(0, 3, L - 3, "lantern", hanging="true", waterlogged="false")
     if level >= 2:
         for x in range(2, 8):
             b.put(x, 0, L // 2, w + "_planks")
