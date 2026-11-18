@@ -31,7 +31,7 @@ jobs:
           cp=$(echo "$jars" | tr '\n' ':')
           while read -r cls; do
             [ -z "$cls" ] && continue
-            javap -public -classpath "$cp" "$cls" > "out/${cls//[\/\$]/_}.txt" 2>&1 || true
+            javap -protected -classpath "$cp" "$cls" > "out/${cls//[\/\$]/_}.txt" 2>&1 || true
           done < .github/probe.txt
       - name: Publish
         run: |
