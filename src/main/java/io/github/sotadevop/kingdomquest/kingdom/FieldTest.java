@@ -666,6 +666,7 @@ public final class FieldTest {
 		int cliffs = 0;
 		int pits = 0;
 		int tall = 0;
+		Map<String, Integer> tallBy = new java.util.TreeMap<>();
 		Set<String> masonry = Set.of("stone_bricks", "mossy_stone_bricks", "cobblestone", "mossy_cobblestone", "smooth_sandstone", "cut_red_sandstone");
 		for (int i = 1; i < n - 1; i++) {
 			for (int k = 1; k < n - 1; k++) {
@@ -682,7 +683,12 @@ public final class FieldTest {
 							if (Math.abs(now[a] - now[b]) >= 7) {
 								tall++;
 								marks.add(new Mark(base.x0() + i, base.z0() + k, 0xFFFFFF));
-								sample(samples, "tall walls", rel(s, new BlockPos(base.x0() + i, now[a], base.z0() + k)) + " " + (now[b] - now[a]));
+								BlockPos capPos = new BlockPos(base.x0() + hi / n, now[hi], base.z0() + hi % n);
+								String who = owner.getOrDefault(capPos.asLong(), "unowned");
+								tallBy.merge(who + "/" + owner.getOrDefault(capPos.below(2).asLong(), "unowned"), 1, Integer::sum);
+								BlockPos under = capPos.below(Math.min(6, Math.abs(now[a] - now[b]) - 1));
+								sample(samples, "tall walls", rel(s, new BlockPos(base.x0() + i, now[a], base.z0() + k)) + " " + (now[b] - now[a]) + " cap " + who
+										+ " low " + owner.getOrDefault(under.asLong(), "unowned") + ":" + name(level.getBlockState(under)));
 							}
 							continue;
 						}
@@ -717,6 +723,9 @@ public final class FieldTest {
 		}
 		c.put("new cliffs", cliffs);
 		c.put("tall walls", tall);
+		if (!tallBy.isEmpty()) {
+			sample(samples, "tall by", tallBy.toString());
+		}
 		c.put("pits", pits);
 
 		// 7 roads, 8 walls
@@ -827,7 +836,7 @@ public final class FieldTest {
 		}
 		REPORT.append(row).append(" |\n");
 		boolean any = false;
-		for (String extra : new String[] {"door gaps", "way out"}) {
+		for (String extra : new String[] {"door gaps", "way out", "tall by"}) {
 			if (samples.containsKey(extra) && "final".equals(stage)) {
 				problems.add(stage + ": " + extra + " " + samples.get(extra));
 			}
