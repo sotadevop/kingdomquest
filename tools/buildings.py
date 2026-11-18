@@ -2457,8 +2457,254 @@ def upper_floor(b, x0, z0, x1, z1, y, ladder_x, ladder_z):
         b.put(ladder_x, yy, ladder_z, "ladder", facing="east", waterlogged="false")
 
 
+def gasthaus(style, level):
+    """The tavern as a German inn ("Gasthaus"), after the half-timbered houses of Burg Eltz and the old towns on the
+    German Timber-Frame Road (pilot of the detailed building style, 2026-11-18).
+
+    Level 1: a rubble-stone ground floor (stone bricks, cobblestone, andesite and tuff mixed, quoins at the corners),
+    arched door, windows with stone sills and shutters, a slate roof (deepslate tiles) with timber-framed gables.
+    Level 2: outdoor seating under the eaves, the inn's hanging sign on an iron bracket, banner, lanterns.
+    Level 3: a timber-framed upper storey that juts out over the street on brackets (a jetty), with braces beside
+    every window, an oriel over the door, a steep slate roof with two dormers, and guest rooms.
+    Footprint (22, -24)..(34, -14), door south at x 28 like the old tavern: storage, innkeeper and roads unchanged."""
+    b = B()
+    x0, z0, x1, z1 = 22, -24, 34, -14
+    fz = -15                    # the ground floor's front wall; the strip in front of it lies under the eaves / jetty
+    cx = 28
+    upper = level >= 3
+    STONE = ("stone_bricks", "stone_bricks", "cobblestone", "andesite", "tuff_bricks", "mossy_stone_bricks", "stone_bricks", "cobblestone")
+    BEAM, BEAM_ST = "dark_oak_log", "dark_oak_stairs"
+    FILL = ("calcite", "calcite", "calcite", "polished_diorite")
+    SLATE = ("deepslate_tiles",)
+    SLATE_ST = ("deepslate_tile_stairs",)
+
+    def stone(x, y, z):
+        b.put(x, y, z, pick(STONE, x, y, z))
+
+    def beam(x, y, z, axis="y"):
+        b.put(x, y, z, BEAM, axis=axis)
+
+    def plaster(x, y, z):
+        b.put(x, y, z, pick(FILL, x, y, z))
+
+    # ---- ground floor: stone, 4 high, floor of spruce planks on a stone course ----
+    gh = 4
+    for x in range(x0, x1 + 1):
+        for z in range(z0, fz + 1):
+            edge = x in (x0, x1) or z in (z0, fz)
+            b.put(x, 0, z, pick(("cobblestone", "stone_bricks", "mossy_cobblestone"), x, 0, z) if edge else "spruce_planks")
+            if not edge:
+                continue
+            for y in range(1, gh + 1):
+                corner = x in (x0, x1) and z in (z0, fz)
+                if corner:  # quoins: dressed stone alternating at the corners
+                    b.put(x, y, z, "polished_andesite" if y % 2 else "stone_bricks")
+                else:
+                    stone(x, y, z)
+    # the strip under the eaves in front: a raised stone terrace, one step up from the street
+    for x in range(x0, x1 + 1):
+        b.put(x, 0, z1, pick(("stone_bricks", "cobblestone", "andesite"), x, 0, z1))
+    b.put(cx, 0, z1, "stone_brick_stairs", facing="north", **ST)
+    # windows: pairs in the front, singles on the sides; stone sills outside in front, shutters
+    front_windows = (24, 25, 31, 32)
+    for x in front_windows:
+        for y in (2, 3):
+            b.put(x, y, fz, "glass_pane", **PANE_X)
+        if level >= 2:
+            b.put(x, 1, z1, "stone_brick_slab", type="top", waterlogged="false")
+        b.put(x, 4, fz, "stone_brick_stairs", facing="north", half="top", shape="straight", waterlogged="false")
+    for x in (23, 26, 30, 33):
+        b.put(x, 2, z1, "spruce_trapdoor", facing="south", half="bottom", open="true", powered="false", waterlogged="false")
+    for z in (-21, -18):
+        for xx in (x0, x1):
+            for y in (2, 3):
+                b.put(xx, y, z, "glass_pane", **PANE_Z)
+    for x in (25, 31):
+        for y in (2, 3):
+            b.put(x, y, z0, "glass_pane", **PANE_X)
+    # arched door with a keystone
+    for half, y in (("lower", 1), ("upper", 2)):
+        b.put(cx, y, fz, "spruce_door", facing="south", half=half, hinge="left", open="false", powered="false")
+    b.put(cx - 1, 3, fz, "stone_brick_stairs", facing="east", half="top", shape="straight", waterlogged="false")
+    b.put(cx + 1, 3, fz, "stone_brick_stairs", facing="west", half="top", shape="straight", waterlogged="false")
+    b.put(cx, 3, fz, "chiseled_stone_bricks")
+    for x in (cx - 1, cx + 1):
+        b.put(x, 1, fz, "polished_andesite")
+        b.put(x, 2, fz, "polished_andesite")
+
+    # ---- upper storey (level 3): timber frame, jutting one block out over the front ----
+    if upper:
+        floor_y, top_y = gh + 1, gh + 6          # floor/jetty beam at 5, panels 6..9, top plate 10
+        for x in range(x0 + 1, x1):
+            for z in range(z0 + 1, fz + 1):
+                b.put(x, floor_y, z, "spruce_planks")
+        for x in range(x0, x1 + 1):              # jetty sill over the street, joists' ends below it
+            beam(x, floor_y, z1, "x")
+            beam(x, floor_y, z0, "x")
+            if x % 2 == 0:
+                b.put(x, floor_y - 1, z1, BEAM_ST, facing="north", half="top", shape="straight", waterlogged="false")
+        for z in range(z0, z1 + 1):
+            beam(x0, floor_y, z, "z")
+            beam(x1, floor_y, z, "z")
+
+        def frame(cells, posts, along, windows):
+            """One timber-framed wall, mostly white: posts every 3, sill and plate, windows in the bays listed, and
+            only at the two ends a head and a foot brace beside the corner post (the 'Mann' figure of German
+            framing). Heavy bracing everywhere read as a dark wall in the renders."""
+            lo_dir, hi_dir = ("west", "east") if along == "x" else ("north", "south")
+            pane = PANE_X if along == "x" else PANE_Z
+            at = {u: (x, z) for u, x, z in cells}
+            for u, x, z in cells:
+                for y in range(floor_y + 1, top_y + 1):
+                    if u in posts:
+                        beam(x, y, z)
+                    elif y == top_y:
+                        beam(x, y, z, along)
+                    else:
+                        plaster(x, y, z)
+            bays = [[u for u in at if a < u < c] for a, c in zip(posts, posts[1:])]
+            for i, bay in enumerate(bays):
+                if i in windows:
+                    for u in bay:
+                        for y in (floor_y + 2, floor_y + 3):
+                            b.put(at[u][0], y, at[u][1], "glass_pane", **pane)
+                elif i in (0, len(bays) - 1) and bay:
+                    u = bay[0] if i == 0 else bay[-1]
+                    toward = lo_dir if i == 0 else hi_dir
+                    b.put(at[u][0], top_y - 1, at[u][1], BEAM_ST, facing=toward, half="top", shape="straight", waterlogged="false")
+                    b.put(at[u][0], floor_y + 1, at[u][1], BEAM_ST, facing=toward, **ST)
+
+        posts_x = [22, 25, 28, 31, 34]
+        frame([(x, x, z1) for x in range(x0, x1 + 1)], posts_x, "x", {1, 2})
+        frame([(x, x, z0) for x in range(x0, x1 + 1)], posts_x, "x", {1, 2})
+        posts_z = [-24, -21, -18, -15, -14]
+        frame([(z, x0, z) for z in range(z0, z1 + 1)], posts_z, "z", {1})
+        frame([(z, x1, z) for z in range(z0, z1 + 1)], posts_z, "z", {1})
+        # oriel (Erker) over the door, on stone corbels, under the eaves
+        for x in (cx - 1, cx, cx + 1):
+            b.put(x, floor_y, z1 + 1, "stone_brick_stairs", facing="north", half="top", shape="straight", waterlogged="false")
+            for y in range(floor_y + 1, top_y + 1):
+                if x != cx or y == top_y:
+                    beam(x, y, z1 + 1)
+                elif y == floor_y + 1:
+                    plaster(x, y, z1 + 1)
+                else:
+                    b.put(x, y, z1 + 1, "glass_pane", **PANE_X)
+            for y in range(floor_y + 1, top_y):
+                b.put(x, y, z1, "air")       # the oriel opens into the room
+        b.put(cx, floor_y - 1, z1 + 1, "stone_brick_stairs", facing="north", half="top", shape="straight", waterlogged="false")
+        wall_top = top_y
+    else:
+        wall_top = gh
+        for x in range(x0, x1 + 1):          # timber wall plate on the stone
+            beam(x, gh + 1, z0, "x")
+            beam(x, gh + 1, fz, "x")
+        for z in range(z0, fz + 1):
+            beam(x0, gh + 1, z, "z")
+            beam(x1, gh + 1, z, "z")
+        wall_top = gh + 1
+
+    # ---- slate roof, ridge along x; steep (2 up per row near the eaves) on the storeyed inn ----
+    front_eave = z1 + (1 if upper else 0)
+    back_eave = z0 - 1
+    rows = front_eave - back_eave + 1
+    half_rows = rows // 2
+    rises = [2, 2, 2, 2, 1, 1, 1, 1] if upper else [1] * 8
+    base = wall_top + 1
+    hz = {}
+    for i in range(half_rows + 1):
+        hz[i] = base + sum(rises[:i])
+    roof_y = {}
+    roof_lo = {}   # lowest roof block of each row: the gable stops below it
+    for x in range(x0 - 1, x1 + 2):
+        for i in range(half_rows):
+            for z, facing in ((front_eave - i, "north"), (back_eave + i, "south")):
+                lo = hz[i - 1] + 1 if i else hz[i]
+                for y in range(lo, hz[i]):
+                    b.put(x, y, z, pick(SLATE, x, y, z))
+                b.put(x, hz[i], z, pick(SLATE_ST, x, hz[i], z), facing=facing, **ST)
+                roof_y[z] = hz[i]
+                roof_lo[z] = lo
+        if rows % 2 == 1:
+            zc = back_eave + half_rows
+            for y in range(hz[half_rows - 1] + 1, hz[half_rows] + 1):
+                b.put(x, y, zc, pick(SLATE, x, y, zc))
+            b.put(x, hz[half_rows] + 1, zc, "deepslate_tile_slab", type="bottom", waterlogged="false")
+            roof_y[zc] = hz[half_rows] + 1
+            roof_lo[zc] = hz[half_rows - 1] + 1
+    # gables: timber-framed triangles with a small window
+    for xx in (x0, x1):
+        for z in range(z0, (z1 if upper else fz) + 1):
+            top_here = roof_lo.get(z, base) - 1
+            for y in range(wall_top + 1, top_here + 1):
+                if z in (z0, z1 if upper else fz, -19) or (y - wall_top) % 3 == 0:
+                    beam(xx, y, z, "y" if z in (z0, z1 if upper else fz, -19) else "z")
+                else:
+                    plaster(xx, y, z)
+        for y in (wall_top + 2, wall_top + 3):
+            for z in (-21, -17):
+                if roof_y.get(z, 0) - 1 > y:
+                    b.put(xx, y, z, "glass_pane", **PANE_Z)
+    # chimney of rough stone through the back slope, with a cap
+    chx, chz = 32, z0 + 1
+    peak = max(roof_y.values())
+    for y in range(1, peak + 3):
+        stone(chx, y, chz)
+    b.put(chx, peak + 3, chz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    # ---- inside: hearth, bar, tables ----
+    back = z0 + 1
+    b.put(chx, 1, chz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
+    b.put(chx - 1, 1, chz, "smoker", facing="south", lit="true")
+    for x in (chx - 1, chx + 1):
+        b.put(x, 3, chz, "stone_brick_stairs", facing="south", half="top", shape="straight", waterlogged="false")
+    b.put(*shop_store("tavern"), "barrel", facing="up", open="false")
+    for x in (24, 25):
+        b.put(x, 1, back, "barrel", facing="up", open="false")
+        b.put(x, 2, back, "barrel", facing="south", open="false")
+    for x in range(23, 27):  # the bar
+        b.put(x, 1, back + 2, "spruce_planks" if x == 26 else "barrel", **({} if x == 26 else dict(facing="up", open="false")))
+        b.put(x, 2, back + 2, "spruce_slab", type="bottom", waterlogged="false")
+    for tx in (27, 30):      # tables with benches
+        for tz in (-19, -17):
+            b.put(tx, 1, tz, "spruce_fence")
+            b.put(tx, 2, tz, "spruce_pressure_plate", powered="false")
+            b.put(tx - 1, 1, tz, "spruce_stairs", facing="east", **ST)
+            b.put(tx + 1, 1, tz, "spruce_stairs", facing="west", **ST)
+    for x in (26, 30):        # tie beams carry the lanterns
+        for z in range(z0 + 1, fz):
+            beam(x, gh, z, "z")
+        b.put(x, gh - 1, -19, "lantern", hanging="true", waterlogged="false")
+    # ---- level 2: outdoor seating, the inn's sign on an iron bracket, banner ----
+    if level >= 2:
+        for x in (23, 33):
+            b.put(x, 1, z1, "barrel", facing="up", open="false")
+            b.put(x, 2, z1, "potted_red_tulip" if x == 23 else "potted_cornflower")
+        for x in (24, 32):
+            b.put(x, 1, z1, "spruce_stairs", facing="west" if x == 24 else "east", **ST)
+        b.put(26, gh, z1, "iron_bars", east="true", west="true", north="true", south="false", waterlogged="false")
+        b.put(26, gh - 1, z1, "dark_oak_hanging_sign", rotation="4", attached="false", waterlogged="false")
+        b.put(cx + 2, gh, z1, "lantern", hanging="true", waterlogged="false")
+        b.put(cx - 2, gh, z1, "lantern", hanging="true", waterlogged="false")
+        b.put(x0 + 1, 1, fz - 1, "{color}_banner", rotation="0")
+    # ---- level 3: guest rooms upstairs, a ladder in the corner ----
+    if upper:
+        fy = gh + 2
+        for yy in range(1, gh + 2):
+            b.put(x0 + 1, yy, -20, "ladder", facing="east", waterlogged="false")
+        for x in range(25, x1, 3):
+            b.put(x, fy, back, "{color}_bed", facing="north", part="head", occupied="false")
+            b.put(x, fy, back + 1, "{color}_bed", facing="north", part="foot", occupied="false")
+        for z in range(z0 + 1, z1):           # a tie beam across the guest floor carries its lantern
+            beam(cx, gh + 6, z, "z")
+        b.put(cx, gh + 5, -19, "lantern", hanging="true", waterlogged="false")
+    return b.b
+
+
+
 def shop(style, name, level):
     """A small building in the village style with the furniture of its trade; level 2 adds more of it."""
+    if name == "tavern" and style == "temperate":
+        return gasthaus(style, level)  # pilot of the detailed style (see gasthaus)
     m = mats(style)
     b = B()
     (x0, z0, x1, z1), door = SHOPS[name]
