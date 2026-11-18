@@ -2575,7 +2575,12 @@ def gasthaus(style, level):
                     b.put(at[u][0], floor_y + 1, at[u][1], BEAM_ST, facing=toward, **ST)
 
         posts_x = [22, 25, 28, 31, 34]
-        frame([(x, x, z1) for x in range(x0, x1 + 1)], posts_x, "x", {1, 2})
+        frame([(x, x, z1) for x in range(x0, x1 + 1)], posts_x, "x", {0, 3})
+        for wx in (23, 24, 32, 33):        # window boxes: a slatted box with flowers under each upper window
+            b.put(wx, floor_y + 1, z1 + 1, "spruce_trapdoor", facing="south", half="top", open="false", powered="false", waterlogged="false")
+            b.put(wx, floor_y + 2, z1 + 1, pick(("potted_red_tulip", "potted_azure_bluet", "potted_poppy", "potted_cornflower"), wx, 0, 0))
+        for wx in (22, 25, 31, 34):        # shutters
+            b.put(wx, floor_y + 3, z1 + 1, "spruce_trapdoor", facing="south", half="bottom", open="true", powered="false", waterlogged="false")
         frame([(x, x, z0) for x in range(x0, x1 + 1)], posts_x, "x", {1, 2})
         posts_z = [-24, -21, -18, -15, -14]
         frame([(z, x0, z) for z in range(z0, z1 + 1)], posts_z, "z", {1})
@@ -2651,25 +2656,67 @@ def gasthaus(style, level):
     for y in range(1, peak + 3):
         stone(chx, y, chz)
     b.put(chx, peak + 3, chz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
-    # ---- inside: hearth, bar, tables ----
+    zc = back_eave + half_rows
+    # weathervanes on both ends of the ridge, a hoist beam with its chain under the east gable (old German inns
+    # hauled their casks into the loft through the gable)
+    for xx in (x0, x1):
+        b.put(xx, roof_y[zc] + 1, zc, "lightning_rod", facing="up", powered="false", waterlogged="false")
+    hoist = roof_lo[zc] - 2
+    b.put(x1 + 1, hoist, zc, BEAM, axis="x")
+    b.put(x1, hoist, zc, BEAM, axis="x")
+    b.put(x1 + 1, hoist - 1, zc, "iron_chain", axis="y", waterlogged="false")
+    b.put(x1 + 1, hoist - 2, zc, "lantern", hanging="true", waterlogged="false")
+    # ivy on the back wall's stone
+    for vx in (24, 25, 29, 33):
+        for vy in range(1, 3 + (vx % 3)):
+            b.put(vx, vy, z0 - 1, "vine", north="true", south="false", east="false", west="false", up="false")
+
+    # ---- inside, ground floor: the tap room ----
     back = z0 + 1
+    for x in range(x0 + 1, x1):            # floor: planks with a border of stripped logs
+        for z in range(z0 + 1, fz):
+            if x in (x0 + 1, x1 - 1) or z in (z0 + 1, fz - 1):
+                b.put(x, 0, z, "stripped_spruce_log", axis="z" if x in (x0 + 1, x1 - 1) else "x")
+    b.put(*shop_store("tavern"), "barrel", facing="up", open="false")
+    # hearth: fire in the chimney's mouth, stone cheeks, a mantel with pots and candles, firewood stacked beside it
     b.put(chx, 1, chz, "campfire", facing="south", lit="true", signal_fire="false", waterlogged="false")
     b.put(chx - 1, 1, chz, "smoker", facing="south", lit="true")
-    for x in (chx - 1, chx + 1):
+    b.put(chx + 1, 1, chz, "stone_bricks")
+    b.put(chx + 1, 2, chz, "stone_bricks")
+    b.put(chx - 1, 2, chz, "stone_bricks")
+    for x in (chx - 1, chx + 1):            # the mantel
         b.put(x, 3, chz, "stone_brick_stairs", facing="south", half="top", shape="straight", waterlogged="false")
-    b.put(*shop_store("tavern"), "barrel", facing="up", open="false")
-    for x in (24, 25):
-        b.put(x, 1, back, "barrel", facing="up", open="false")
+    b.put(chx, 3, chz + 1, "stone_brick_slab", type="top", waterlogged="false")   # the hood over the fire
+    b.put(chx - 1, 4, chz, "candle", candles="2", lit="true", waterlogged="false")
+    b.put(chx + 1, 4, chz, "decorated_pot", facing="south", cracked="false", waterlogged="false")
+    b.put(chx, 0, chz + 1, "stone_bricks")
+    for y in (1, 2):
+        b.put(x1 - 1, y, back + 1, "spruce_log", axis="x")
+    # casks on the back wall, the kingdom's banner over them
+    for x in (24, 25, 26):
+        b.put(x, 1, back, "barrel", facing="south", open="false")
         b.put(x, 2, back, "barrel", facing="south", open="false")
-    for x in range(23, 27):  # the bar
-        b.put(x, 1, back + 2, "spruce_planks" if x == 26 else "barrel", **({} if x == 26 else dict(facing="up", open="false")))
-        b.put(x, 2, back + 2, "spruce_slab", type="bottom", waterlogged="false")
-    for tx in (27, 30):      # tables with benches
-        for tz in (-19, -17):
-            b.put(tx, 1, tz, "spruce_fence")
-            b.put(tx, 2, tz, "spruce_pressure_plate", powered="false")
-            b.put(tx - 1, 1, tz, "spruce_stairs", facing="east", **ST)
-            b.put(tx + 1, 1, tz, "spruce_stairs", facing="west", **ST)
+    b.put(25, 3, back, "{color}_wall_banner", facing="south")
+    # the bar: a counter of casks and planks with a spruce top, and what an innkeeper keeps on it
+    for x in range(23, 27):
+        b.put(x, 1, back + 2, "barrel" if x < 26 else "spruce_planks", **(dict(facing="up", open="false") if x < 26 else {}))
+    b.put(23, 2, back + 2, "brewing_stand", has_bottle_0="true", has_bottle_1="false", has_bottle_2="true")
+    b.put(24, 2, back + 2, "candle", candles="3", lit="true", waterlogged="false")
+    b.put(25, 2, back + 2, "decorated_pot", facing="south", cracked="false", waterlogged="false")
+    b.put(26, 2, back + 2, "potted_fern")
+    # tables of casks with a candle each, benches on both sides
+    for tx, tz in ((28, -18), (31, -18), (30, -21)):
+        b.put(tx, 1, tz, "barrel", facing="up", open="false")
+        b.put(tx, 2, tz, "candle", candles=str(1 + (tx + tz) % 3), lit="true", waterlogged="false")
+        b.put(tx - 1, 1, tz, "spruce_stairs", facing="east", **ST)
+        b.put(tx + 1, 1, tz, "spruce_stairs", facing="west", **ST)
+    # a shelf along the east wall
+    for z in (-19, -18, -17):
+        b.put(x1 - 1, 2, z, "spruce_slab", type="top", waterlogged="false")
+    b.put(x1 - 1, 3, -19, "decorated_pot", facing="west", cracked="false", waterlogged="false")
+    b.put(x1 - 1, 3, -18, "potted_red_mushroom")
+    b.put(x1 - 1, 3, -17, "candle", candles="2", lit="true", waterlogged="false")
+    b.put(cx, 1, fz - 1, "brown_carpet")       # a mat inside the door
     for x in (26, 30):        # tie beams carry the lanterns
         for z in range(z0 + 1, fz):
             beam(x, gh, z, "z")
@@ -2691,9 +2738,24 @@ def gasthaus(style, level):
         fy = gh + 2
         for yy in range(1, gh + 2):
             b.put(x0 + 1, yy, -20, "ladder", facing="east", waterlogged="false")
-        for x in range(25, x1, 3):
-            b.put(x, fy, back, "{color}_bed", facing="north", part="head", occupied="false")
-            b.put(x, fy, back + 1, "{color}_bed", facing="north", part="foot", occupied="false")
+        # three rooms along the back, divided by plank walls; each with a bed, a chest at its foot, a night stand
+        for dxw in (27, 30):
+            for z in range(z0 + 1, z0 + 4):
+                for y in range(fy, fy + 3):
+                    b.put(dxw, y, z, "spruce_planks")
+        for bx in (25, 28, 31):
+            b.put(bx, fy, back, "{color}_bed", facing="north", part="head", occupied="false")
+            b.put(bx, fy, back + 1, "{color}_bed", facing="north", part="foot", occupied="false")
+            b.put(bx, fy, back + 2, "chest", facing="south", type="single", waterlogged="false")
+            stand = bx + 1 if bx + 1 != chx else bx + 2
+            b.put(stand, fy, back, "barrel", facing="up", open="false")
+            b.put(stand, fy + 1, back, "candle", candles="1", lit="true", waterlogged="false")
+            b.put(bx, fy, back + 3, "{color}_carpet")
+        # a seat in the oriel, a small table by the stair
+        b.put(cx, fy, z1, "spruce_stairs", facing="north", **ST)
+        b.put(x0 + 2, fy, -17, "barrel", facing="up", open="false")
+        b.put(x0 + 2, fy + 1, -17, "potted_azure_bluet")
+        b.put(x0 + 3, fy, -17, "spruce_stairs", facing="west", **ST)
         for z in range(z0 + 1, z1):           # a tie beam across the guest floor carries its lantern
             beam(cx, gh + 6, z, "z")
         b.put(cx, gh + 5, -19, "lantern", hanging="true", waterlogged="false")
