@@ -1,6 +1,1 @@
-net.minecraft.util.Util
-net.minecraft.client.renderer.entity.LivingEntityRenderer
-net.minecraft.client.gui.screens.packs.PackSelectionScreen
-com.mojang.blaze3d.platform.NativeImage
-net.minecraft.client.renderer.texture.DynamicTexture
-net.minecraft.client.gui.screens.inventory.InventoryScreen
+net.minecraft.client.gui.components.Tooltip

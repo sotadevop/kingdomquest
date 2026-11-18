@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - .github/probe.txt
+      - .github/probe-find.txt
   workflow_dispatch:
 
 permissions:
@@ -33,6 +34,15 @@ jobs:
             [ -z "$cls" ] && continue
             javap -protected -classpath "$cp" "$cls" > "out/${cls//[\/\$]/_}.txt" 2>&1 || true
           done < .github/probe.txt
+          # .github/probe-find.txt: words to look for; lists the classes whose bytecode contains each
+          if [ -f .github/probe-find.txt ]; then
+            mkdir -p cls
+            for j in $(echo "$jars" | grep -E "client|common" | grep -v deobf); do unzip -qo "$j" '*.class' -d cls 2>/dev/null || true; done
+            while read -r word; do
+              [ -z "$word" ] && continue
+              grep -rl --include=*.class -a "$word" cls | sed 's|^cls/||' | sort > "out/find_${word}.txt" || true
+            done < .github/probe-find.txt
+          fi
       - name: Publish
         run: |
           cd out

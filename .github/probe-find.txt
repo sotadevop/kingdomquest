@@ -1,0 +1,3 @@
+openPath
+openUri
+openFile
