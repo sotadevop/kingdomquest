@@ -681,7 +681,7 @@ public final class SiteWork {
 			return Blocks.SANDSTONE.defaultBlockState();
 		}
 		if (surface.is(Blocks.RED_SAND) || surface.is(BlockTags.TERRACOTTA)) {
-			return (h < 7 ? Blocks.TERRACOTTA : Blocks.ORANGE_TERRACOTTA).defaultBlockState();
+			return (h < 7 ? Blocks.TERRACOTTA : Blocks.RED_SANDSTONE).defaultBlockState();
 		}
 		return (h < 7 ? Blocks.STONE : h < 9 ? Blocks.ANDESITE : Blocks.TUFF).defaultBlockState();
 	}
