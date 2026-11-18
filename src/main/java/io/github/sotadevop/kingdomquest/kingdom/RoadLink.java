@@ -374,10 +374,10 @@ final class RoadLink {
 			return;
 		}
 		Rotation turn = Rotation.values()[s.rotation()];
-		BlockPos ra = heart.offset(Template.rotate(new BlockPos(-63 - 9, 0, -56 - 9), turn));
-		BlockPos rb = heart.offset(Template.rotate(new BlockPos(69 + 9, 0, 40 + 9), turn));
-		int bx0 = Math.min(ra.getX(), rb.getX()), bx1 = Math.max(ra.getX(), rb.getX());
-		int bz0 = Math.min(ra.getZ(), rb.getZ()), bz1 = Math.max(ra.getZ(), rb.getZ());
+		BlockPos cornerA = heart.offset(Template.rotate(new BlockPos(-63 - 9, 0, -56 - 9), turn));
+		BlockPos cornerB = heart.offset(Template.rotate(new BlockPos(69 + 9, 0, 40 + 9), turn));
+		int bx0 = Math.min(cornerA.getX(), cornerB.getX()), bx1 = Math.max(cornerA.getX(), cornerB.getX());
+		int bz0 = Math.min(cornerA.getZ(), cornerB.getZ()), bz1 = Math.max(cornerA.getZ(), cornerB.getZ());
 		Set<Long> builtCols = new java.util.HashSet<>();
 		for (long b : built) {
 			builtCols.add(BlockPos.asLong(BlockPos.getX(b), 0, BlockPos.getZ(b)));
@@ -508,14 +508,14 @@ final class RoadLink {
 		}
 		List<Integer> path = new ArrayList<>();
 		List<Integer> heights = new ArrayList<>();
-		int wet = 0;
+		int wetCols = 0;
 		for (int st = goal; st >= 0; st = from[st]) {
 			int c = st / kk;
 			path.add(0, c);
 			heights.add(0, land[c] + st % kk - depth);
-			wet += water[c] ? 1 : 0;
+			wetCols += water[c] ? 1 : 0;
 		}
-		if (wet > 24) {
+		if (wetCols > 24) {
 			return; // a long causeway over the sea would make the island something else: it stays an island
 		}
 		int len = path.size();
