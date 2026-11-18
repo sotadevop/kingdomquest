@@ -586,6 +586,236 @@ public final class Settlements {
 	}
 
 	/**
+	 * Roads and lamps never hang: where the ground under a road block or a lamp post (or the block of land it stands on)
+	 * was taken away by later site work, earth is put back under it down to solid ground (12 blocks at most, never in the
+	 * moat or water; deeper than that it is a ravine and left as it is). Field test, 2026-11-18: roads over air and lamps
+	 * on hanging turf after the room around buildings was cut.
+	 */
+	static void carryRoads(ServerLevel level, Settlement s, BlockState surface) {
+		Set<Long> all = new HashSet<>();
+		s.built().values().forEach(all::addAll);
+		Map<Long, Integer> lowest = new HashMap<>();
+		for (String track : List.of(Progression.ROADS, "lamps")) {
+			for (long p : s.built().getOrDefault(track, List.of())) {
+				BlockPos q = BlockPos.of(p);
+				if (!level.getBlockState(q).isAir()) {
+					lowest.merge(BlockPos.asLong(q.getX(), 0, q.getZ()), q.getY(), Math::min);
+				}
+			}
+		}
+		Set<Long> moat = moatColumns(s);
+		BlockState fill = SiteWork.subsoil(surface);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (Map.Entry<Long, Integer> e : lowest.entrySet()) {
+			if (moat.contains(e.getKey())) {
+				continue;
+			}
+			int x = BlockPos.getX(e.getKey()), z = BlockPos.getZ(e.getKey());
+			int y = e.getValue() - 1;
+			int land = 0; // a block or two of land it stands on may itself hang
+			while (land < 2 && y > e.getValue() - 4) {
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (st.isAir() || st.canBeReplaced() || !SiteWork.natural(st) || all.contains(pos.asLong())) {
+					break;
+				}
+				land++;
+				y--;
+			}
+			List<BlockPos> gap = new ArrayList<>();
+			boolean held = false;
+			for (int down = 0; down < 12; down++, y--) {
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (!st.getFluidState().isEmpty()) {
+					break;
+				}
+				if (st.isAir() || st.canBeReplaced() && !all.contains(pos.asLong())) {
+					gap.add(pos.immutable());
+					continue;
+				}
+				held = true;
+				break;
+			}
+			if (held) {
+				for (BlockPos g : gap) {
+					level.setBlock(g, fill, NO_DROPS);
+				}
+			}
+		}
+	}
+
+	/** How much level ground stays around each kind of thing built before the land may rise again (user: 3 blocks). */
+	static final int CLEAR_BUILDING = 3, CLEAR_WALL = 2, CLEAR_ROAD = 1, CLEAR_REACH = 14;
+
+	/**
+	 * Room around everything the settlement built (agreed with the user, 2026-11-18): natural land stays where nothing
+	 * needs it, but within {@link #CLEAR_BUILDING} of a building (2 of the walls and the gate, 1 of a road or lamp) the
+	 * ground is no higher than the thing's own foot, and further out it may rise only one block per block, a gentle
+	 * hillside. So no hill leans on a wall, lies on a road, reaches up a building's side or covers its roof. Only land
+	 * and old made ground are cut, never anything built; the moat, door approaches and the way-out road are left to their
+	 * own rules; a column right beside a building keeps the ground that carries it. A thing's foot in a column is the
+	 * world height of its template's y 0 there: for terrain-following tracks (walls, roads) it differs per column and is
+	 * found from the column's highest built block against the template's. Returns the columns it cut.
+	 */
+	static Set<Long> clearance(ServerLevel level, Settlement s, Set<Long> nowBuilt) {
+		Rotation r = Rotation.values()[s.rotation()];
+		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(-63 - CLEAR_REACH, 0, -56 - CLEAR_REACH), r));
+		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(69 + CLEAR_REACH, 0, 40 + CLEAR_REACH), r));
+		int x0 = Math.min(a.getX(), b.getX()), z0 = Math.min(a.getZ(), b.getZ());
+		int w = Math.max(a.getX(), b.getX()) - x0 + 1, d = Math.max(a.getZ(), b.getZ()) - z0 + 1;
+		int[] cap = new int[w * d];
+		int[] keep = new int[w * d];
+		boolean[] source = new boolean[w * d];
+		java.util.Arrays.fill(cap, Integer.MAX_VALUE);
+		java.util.Arrays.fill(keep, Integer.MIN_VALUE);
+		for (String track : Progression.ORDER) {
+			Progression.Step step = Progression.current(s, track);
+			List<Long> mine = s.built().get(track);
+			if (step == null || mine == null || mine.isEmpty()) {
+				continue;
+			}
+			String job = s.style() + "/" + step.building();
+			Template t = Template.get(job);
+			if (t == null || t.anchored) {
+				continue; // the dock lies by the water, outside
+			}
+			Map<Long, Integer> highestBuilt = new HashMap<>();
+			for (long p : mine) {
+				BlockPos q = BlockPos.of(p);
+				if (!level.getBlockState(q).isAir()) {
+					highestBuilt.merge(BlockPos.asLong(q.getX(), 0, q.getZ()), q.getY(), Math::max);
+				}
+			}
+			int lift = lift(s, job);
+			Map<Long, Integer> highestT = new HashMap<>();
+			Set<Long> standing = new HashSet<>();
+			for (Template.Placement p : basePlacements(s, job)) {
+				if (p.state().isAir()) {
+					continue;
+				}
+				BlockPos q = s.heart().offset(p.offset());
+				long col = BlockPos.asLong(q.getX(), 0, q.getZ());
+				highestT.merge(col, p.offset().getY(), Math::max);
+				if (p.offset().getY() - lift >= -1 && !p.state().is(Blocks.COARSE_DIRT)) {
+					standing.add(col); // what stands on the ground (a road lies in it at y -1); not the moat, a cellar, a shaft
+				}
+			}
+			int room = track.equals(Progression.ROADS) || track.equals("lamps") ? CLEAR_ROAD
+					: track.equals(Progression.WALLS) || track.equals(Progression.GATE) ? CLEAR_WALL : CLEAR_BUILDING;
+			for (long col : standing) {
+				Integer hb = highestBuilt.get(col), ht = highestT.get(col);
+				if (hb == null || ht == null) {
+					continue;
+				}
+				int foot = hb - ht + lift;
+				int sx = BlockPos.getX(col) - x0, sz = BlockPos.getZ(col) - z0;
+				for (int dz = -CLEAR_REACH; dz <= CLEAR_REACH; dz++) {
+					for (int dx = -CLEAR_REACH; dx <= CLEAR_REACH; dx++) {
+						int cx = sx + dx, cz = sz + dz;
+						if (cx < 0 || cz < 0 || cx >= w || cz >= d) {
+							continue;
+						}
+						int i = cz * w + cx;
+						int dist = Math.max(Math.abs(dx), Math.abs(dz));
+						if (dist == 0) {
+							source[i] = true;
+							continue;
+						}
+						cap[i] = Math.min(cap[i], foot - 1 + Math.max(0, dist - room));
+						if (room == CLEAR_BUILDING && dist <= 1) {
+							keep[i] = Math.max(keep[i], foot - 1); // the ground that carries the building stays
+						}
+					}
+				}
+			}
+		}
+		Set<Long> leave = new HashSet<>(moatColumns(s));
+		leave.addAll(doorApproaches(level, s));
+		leave.addAll(RoadLink.wayOutColumns(s));
+		Set<Long> cut = new HashSet<>();
+		BlockState surface = SiteWork.surface(level, s.heart());
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < w * d; i++) {
+			if (source[i] || cap[i] == Integer.MAX_VALUE) {
+				continue;
+			}
+			int x = x0 + i % w, z = z0 + i / w;
+			long col = BlockPos.asLong(x, 0, z);
+			if (leave.contains(col) || !level.isLoaded(pos.set(x, 0, z))) {
+				continue;
+			}
+			int limit = Math.max(cap[i], keep[i]);
+			int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+			boolean any = false;
+			List<BlockState> layers = new ArrayList<>(); // the land's own layers, top down, as they were cut away
+			boolean snowed = false;
+			for (int y = top; y > limit && y > top - 24; y--) {
+				pos.set(x, y, z);
+				if (nowBuilt.contains(pos.asLong())) {
+					break;
+				}
+				BlockState st = level.getBlockState(pos);
+				if (st.is(net.minecraft.tags.BlockTags.LOGS) || st.is(net.minecraft.tags.BlockTags.LEAVES)) {
+					SiteWork.removeTreeAt(level, pos.immutable(), nowBuilt);
+					st = level.getBlockState(pos);
+				}
+				if (!st.getFluidState().isEmpty()) {
+					break;
+				}
+				if (st.isAir()) {
+					continue;
+				}
+				if (!(SiteWork.natural(st) || SiteWork.earthwork(st) || st.canBeReplaced())) {
+					break; // something nobody planted that isn't land (a chest, a player's build): left alone
+				}
+				if (st.is(Blocks.SNOW)) {
+					snowed = true;
+				} else if (!st.canBeReplaced() && st.isSolid() && layers.size() < 3) {
+					layers.add(st);
+				}
+				level.setBlock(pos, Blocks.AIR.defaultBlockState(), NO_DROPS);
+				for (int up = 1; up <= 2; up++) { // flowers and grass on it go too
+					BlockPos above = pos.above(up);
+					if (!nowBuilt.contains(above.asLong()) && level.getBlockState(above).canBeReplaced() && !level.getBlockState(above).isAir()
+							&& level.getBlockState(above).getFluidState().isEmpty()) {
+						level.setBlock(above, Blocks.AIR.defaultBlockState(), NO_DROPS);
+					}
+				}
+				any = true;
+			}
+			if (any) {
+				// the new ground gets the layers that lay on top before (grass on earth, sand on sandstone, red sand on
+				// terracotta), so a cut shows the land as it is, not the stone under it (field test: stone and andesite
+				// patches in deserts and meadows); where the land was bare rock it stays rock
+				int ny = limit;
+				while (ny > limit - 6 && level.getBlockState(pos.set(x, ny, z)).isAir()) {
+					ny--;
+				}
+				for (int k = 0; k < layers.size(); k++) {
+					BlockState want = layers.get(k);
+					pos.set(x, ny - k, z);
+					BlockState here = level.getBlockState(pos);
+					if (nowBuilt.contains(pos.asLong()) || !SiteWork.natural(here) || !here.getFluidState().isEmpty() || !here.isSolid()
+							|| want.is(net.minecraft.tags.BlockTags.BASE_STONE_OVERWORLD)) {
+						break;
+					}
+					if (here != want) {
+						level.setBlock(pos, want, NO_DROPS);
+					}
+				}
+				BlockPos topNow = new BlockPos(x, ny, z);
+				if (level.getBlockState(topNow).is(Blocks.DIRT) && level.getBlockState(topNow.above()).isAir()) {
+					level.setBlock(topNow, surface, NO_DROPS); // the new ground gets its turf back
+				}
+				if (snowed && level.getBlockState(topNow.above()).isAir() && level.getBlockState(topNow).isSolid()) {
+					level.setBlock(topNow.above(), Blocks.SNOW.defaultBlockState(), NO_DROPS);
+				}
+				cut.add(col);
+			}
+		}
+		return cut;
+	}
+
+	/**
 	 * The ground just outside every door the settlement built (10 blocks straight out, 3 wide; 5 wide for the first
 	 * 2): the step and the way up or down to it. Site grading and smoothing leave it alone, or a later upgrade of the main
 	 * building would grade away the land in front of a raised house and leave its door hanging (field test).
@@ -1135,11 +1365,14 @@ public final class Settlements {
 			mask.append(on ? '1' : '0');
 		}
 		int dy = lift(s, job);
-		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy;
+		String track = builtTrack(job); // "wall_3" is the walls track, "road_2" the roads
+		boolean red = (track.equals(Progression.ROADS) || track.equals(Progression.WALLS) || track.equals(Progression.GATE)) && redLand(s);
+		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy + (red ? "|red" : "");
 		return PLACEMENTS.computeIfAbsent(key, k -> {
 			List<Template.Placement> all = new ArrayList<>();
 			for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
-				all.add(dy == 0 ? p : new Template.Placement(p.offset().above(dy), p.state(), p.segment(), p.anchor()));
+				BlockState st = red ? reddened(p.state()) : p.state();
+				all.add(dy == 0 && !red ? p : new Template.Placement(p.offset().above(dy), st, p.segment(), p.anchor()));
 			}
 			// blocks that hang on others (ladders, torches, banners, doors, beds...) come after the solid ones
 			all.sort(java.util.Comparator.comparingInt((Template.Placement p) -> attached(p.state()) ? 1 : 0));
@@ -1156,10 +1389,54 @@ public final class Settlements {
 		});
 	}
 
+	private static final Map<UUID, Boolean> RED = new HashMap<>();
+
+	/**
+	 * A desert settlement on red land (badlands, wooded badlands): its walls, gate and roads are of red sandstone,
+	 * like the red walls of Marrakech, not yellow on red land (user, 2026-11-18).
+	 */
+	static boolean redLand(Settlement s) {
+		if (!"arid".equals(s.style()) || server == null) {
+			return false;
+		}
+		return RED.computeIfAbsent(s.id(), k -> {
+			ServerLevel level = server.overworld();
+			BlockState top = SiteWork.surface(level, s.heart());
+			BlockState layer = SiteWork.strata(level, s.heart()).get(Integer.MIN_VALUE);
+			return top.is(Blocks.RED_SAND) || top.is(net.minecraft.tags.BlockTags.TERRACOTTA) || layer != null && layer.is(net.minecraft.tags.BlockTags.TERRACOTTA);
+		});
+	}
+
+	/** The red sandstone twin of a sandstone block, with the same shape (stairs facing, slab type, wall sides). */
+	static BlockState reddened(BlockState st) {
+		String path = BuiltInRegistries.BLOCK.getKey(st.getBlock()).getPath();
+		if (!path.contains("sandstone") || path.contains("red_sandstone")) {
+			return st;
+		}
+		Identifier id = Identifier.withDefaultNamespace(path.replace("sandstone", "red_sandstone"));
+		if (!BuiltInRegistries.BLOCK.containsKey(id)) {
+			return st;
+		}
+		BlockState out = BuiltInRegistries.BLOCK.getValue(id).defaultBlockState();
+		for (net.minecraft.world.level.block.state.properties.Property<?> p : st.getProperties()) {
+			if (out.hasProperty(p)) {
+				out = copyProperty(out, st, p);
+			}
+		}
+		return out;
+	}
+
+	private static <T extends Comparable<T>> BlockState copyProperty(BlockState to, BlockState from,
+			net.minecraft.world.level.block.state.properties.Property<T> p) {
+		return to.setValue(p, from.getValue(p));
+	}
+
 	/** How far above or below the square an add-on's plot may lie. */
 	static final int LIFT_LIMIT = 7;
 	/** Per job: columns its land shaping filled up (made ground), for {@link SiteWork#dressFaces}. */
 	private static final Map<String, Set<Long>> FILLED = new HashMap<>();
+	/** Columns a job's ground work changed (cut or filled), per settlement and job: only there are faces reshaped. */
+	private static final Map<String, Set<Long>> TOUCHED = new HashMap<>();
 	/** Per job: columns in front of other buildings' doors that its land shaping leaves alone. */
 	private static final Map<String, Set<Long>> RAMPS = new HashMap<>();
 	/** (RAMPS: per job, the columns straight out from its own doors, shaped as an earth ramp.) */
@@ -1625,6 +1902,50 @@ public final class Settlements {
 				}
 			}
 		}
+		// smooth, walkable roads (user, 2026-11-18: inside the gate the road went 118, 119, 118, ... with holes): every
+		// free column takes the rounded mean of the road around it, so ripples along the road and steps across its width
+		// go; then the closing passes keep it within a block of its neighbours and its fixed ends again
+		for (int pass = 0; pass < 10; pass++) {
+			Map<Long, Integer> next = new HashMap<>(h);
+			for (long c : g.keySet()) {
+				if (fixed.contains(c)) {
+					continue;
+				}
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				int sum = 0, count = 0;
+				for (int dx = -1; dx <= 1; dx++) {
+					for (int dz = -1; dz <= 1; dz++) {
+						Integer v = h.get(BlockPos.asLong(x + dx, 0, z + dz));
+						if (v != null) {
+							sum += v;
+							count++;
+						}
+					}
+				}
+				int mean = Math.floorDiv(2 * sum + count, 2 * count);
+				next.put(c, Math.min(capHigh.get(c), Math.max(capLow.get(c), mean)));
+			}
+			h = next;
+		}
+		for (int pass = 0; pass < 12; pass++) {
+			for (long c : g.keySet()) {
+				if (fixed.contains(c)) {
+					continue;
+				}
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				int lo = Integer.MIN_VALUE, hi = Integer.MAX_VALUE;
+				for (int[] d : four) {
+					Integer n = h.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
+					if (n != null) {
+						lo = Math.max(lo, n - 1);
+						hi = Math.min(hi, n + 1);
+					}
+				}
+				if (lo <= hi) {
+					h.put(c, Math.max(lo, Math.min(hi, h.get(c))));
+				}
+			}
+		}
 		Map<Long, Integer> out = new HashMap<>();
 		for (Template.Placement p : base) {
 			BlockPos col = s.heart().offset(p.anchor());
@@ -1939,8 +2260,13 @@ public final class Settlements {
 			if (keepClear.contains(colKey)) {
 				continue;
 			}
+			int colX = s.heart().getX() + c.dx(), colZ = s.heart().getZ() + c.dz();
+			int before = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, colX, colZ);
 			if (SiteWork.clear(level, base, c, allBuilt, SiteWork.surface(level, s.heart()), loose, bank || !c.pad() && ramps.contains(colKey), roadBlocks)) {
 				FILLED.computeIfAbsent(s.id() + "|" + s.job(), k -> new HashSet<>()).add(colKey);
+			}
+			if (level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, colX, colZ) != before) {
+				TOUCHED.computeIfAbsent(s.id() + "|" + s.job(), k -> new HashSet<>()).add(colKey);
 			}
 		}
 		// phase 2: place the blocks
@@ -2040,9 +2366,18 @@ public final class Settlements {
 						Math.max(ringA.getX(), ringB.getX()), Math.max(ringA.getZ(), ringB.getZ()), nowBuilt, moatColumns(done), SiteWork.surface(level, s.heart()));
 			}
 			smoothGround(level, done);
+			// room around everything built: no hill leans on a wall, lies on a road or buries a building (user, 2026-11-18)
+			Set<Long> touched = new HashSet<>(clearance(level, done, nowBuilt));
+			Set<Long> touchedByJob = TOUCHED.remove(s.id() + "|" + s.job());
+			if (touchedByJob != null) {
+				touched.addAll(touchedByJob);
+			}
 			// made ground whose side was later left standing 3 or more blocks high (a neighbour column cut away after it
 			// was filled) gets a masonry face like every other terrace wall
 			Set<Long> filled = FILLED.remove(s.id() + "|" + s.job());
+			if (filled != null) {
+				touched.addAll(filled);
+			}
 			if (filled != null) {
 				SiteWork.dressFaces(level, filled, nowBuilt, SiteWork.surface(level, s.heart()));
 			}
@@ -2061,9 +2396,10 @@ public final class Settlements {
 					SiteWork.dropFloating(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
 							nowBuilt);
 					SiteWork.roughFaces(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
-							nowBuilt, SiteWork.surface(level, s.heart()));
+							nowBuilt, SiteWork.surface(level, s.heart()), touched);
 				}
 			}
+			carryRoads(level, done, SiteWork.surface(level, s.heart()));
 			if (s.jobTrack().equals(Progression.GATE) && !moatColumns(done).isEmpty()) {
 				SiteWork.sealDitch(level, moatColumns(done), nowBuilt, SiteWork.surface(level, s.heart()));
 			}

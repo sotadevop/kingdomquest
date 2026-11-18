@@ -96,17 +96,89 @@ final class RoadLink {
 		}
 		Settlements.putState(server, from.withName(PREFIX + key, end.getX() + "," + end.getY() + "," + end.getZ()));
 		List<BlockPos> line = new ArrayList<>();
-		int dx = end.getX() - start.getX();
-		int dz = end.getZ() - start.getZ();
-		int steps = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
-		for (int i = 0; i <= steps; i++) {
-			line.add(new BlockPos(start.getX() + Math.round((float) dx * i / steps), from.heart().getY(), start.getZ() + Math.round((float) dz * i / steps)));
+		for (BlockPos[] leg : legs(from, start, end)) {
+			int dx = leg[1].getX() - leg[0].getX();
+			int dz = leg[1].getZ() - leg[0].getZ();
+			int n = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
+			for (int i = line.isEmpty() ? 0 : 1; i <= n; i++) {
+				line.add(new BlockPos(leg[0].getX() + Math.round((float) dx * i / n), from.heart().getY(), leg[0].getZ() + Math.round((float) dz * i / n)));
+			}
 		}
+		int steps = line.size() - 1;
 		JOBS.put(id, new Job(from.owner(), from.id().toString(), key, line, new int[] {0}, tier(from), null, null));
 		ServerPlayer p = player != null ? player : server.getPlayerList().getPlayer(from.owner());
 		if (p != null) {
 			People.say(p, "Architect", "My workers will build a road to " + name + ". It's " + steps + " blocks long.");
 		}
+	}
+
+	/**
+	 * The way of a road out of the gate (user, 2026-11-18: a road to a village ran straight back over the drawbridge,
+	 * through the gate and the town, hanging over the moat): first 12 blocks straight away from the gate, then to the
+	 * end, around the castle (its ring and moat with 10 to spare) by one or two of its corners if the straight way
+	 * would cross it. Legs as {from, to}.
+	 */
+	static List<BlockPos[]> legs(Settlement s, BlockPos start, BlockPos end) {
+		Rotation turn = Rotation.values()[s.rotation()];
+		BlockPos out = Template.rotate(new BlockPos(0, 0, 1), turn);
+		BlockPos first = start.offset(out.getX() * 12, 0, out.getZ() * 12);
+		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(-63 - 22, 0, -56 - 22), turn));
+		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(69 + 22, 0, 40 + 22), turn));
+		int x0 = Math.min(a.getX(), b.getX()), x1 = Math.max(a.getX(), b.getX());
+		int z0 = Math.min(a.getZ(), b.getZ()), z1 = Math.max(a.getZ(), b.getZ());
+		int[] box = {x0 + 12, z0 + 12, x1 - 12, z1 - 12}; // what the road must not cross: the ring and moat, 10 to spare
+		List<BlockPos[]> legs = new ArrayList<>();
+		legs.add(new BlockPos[] {start, first});
+		if (!crosses(first, end, box)) {
+			legs.add(new BlockPos[] {first, end});
+			return legs;
+		}
+		BlockPos[] corners = {new BlockPos(x0, start.getY(), z0), new BlockPos(x1, start.getY(), z0), new BlockPos(x1, start.getY(), z1),
+				new BlockPos(x0, start.getY(), z1)};
+		List<BlockPos> best = null;
+		double bestLen = Double.MAX_VALUE;
+		for (int i = 0; i < 4; i++) {
+			for (int j = -1; j < 4; j++) { // one corner (j = -1) or two neighbouring corners
+				if (j >= 0 && Math.abs(i - j) != 1 && Math.abs(i - j) != 3) {
+					continue;
+				}
+				List<BlockPos> via = j < 0 ? List.of(corners[i]) : List.of(corners[i], corners[j]);
+				List<BlockPos> path = new ArrayList<>();
+				path.add(first);
+				path.addAll(via);
+				path.add(end);
+				boolean ok = true;
+				double len = 0;
+				for (int k = 0; k + 1 < path.size() && ok; k++) {
+					ok = !crosses(path.get(k), path.get(k + 1), box);
+					len += Math.sqrt(path.get(k).distSqr(path.get(k + 1)));
+				}
+				if (ok && len < bestLen) {
+					bestLen = len;
+					best = path;
+				}
+			}
+		}
+		if (best == null) {
+			legs.add(new BlockPos[] {first, end});
+			return legs;
+		}
+		for (int k = 0; k + 1 < best.size(); k++) {
+			legs.add(new BlockPos[] {best.get(k), best.get(k + 1)});
+		}
+		return legs;
+	}
+
+	/** Whether the straight way from a to b passes through the box {x0, z0, x1, z1}. */
+	private static boolean crosses(BlockPos a, BlockPos b, int[] box) {
+		int n = Math.max(1, Math.max(Math.abs(b.getX() - a.getX()), Math.abs(b.getZ() - a.getZ())));
+		for (int i = 0; i <= n; i++) {
+			double x = a.getX() + (double) (b.getX() - a.getX()) * i / n, z = a.getZ() + (double) (b.getZ() - a.getZ()) * i / n;
+			if (x > box[0] && x < box[2] && z > box[1] && z < box[3]) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The village roads reached cobblestone: every road out of this settlement is rebuilt at the better tier. */
