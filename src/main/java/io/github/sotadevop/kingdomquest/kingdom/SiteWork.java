@@ -308,7 +308,10 @@ public final class SiteWork {
 				}
 			}
 		}
-		Block best = count.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(Blocks.SAND);
+		// no natural shore near (a settlement reclaimed out of the sea): a sand beach, but a mushroom island keeps
+		// its mycelium down to the water like the real ones
+		Block best = count.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey)
+				.orElse(surface.is(Blocks.MYCELIUM) ? Blocks.MYCELIUM : Blocks.SAND);
 		BlockState b = best.defaultBlockState();
 		if (b.is(Blocks.GRASS_BLOCK) || b.is(Blocks.DIRT) || b.is(Blocks.PODZOL) || b.is(Blocks.MYCELIUM) || b.is(Blocks.SNOW_BLOCK) || b.is(Blocks.COARSE_DIRT)) {
 			return surface;
