@@ -375,8 +375,6 @@ final class RoadLink {
 		return out;
 	}
 
-	/** The centre line of the last way-out road (for finding what broke it). */
-	private static final Map<UUID, List<BlockPos>> LAID = new HashMap<>();
 	/** Settlements whose owner was told this session that no road out could be laid (said once). */
 	private static final Set<UUID> TOLD = new java.util.HashSet<>();
 
@@ -471,19 +469,23 @@ final class RoadLink {
 		if (FieldTest.spread(level, heart, reach, walk, Set.of(), 300_000)) {
 			return; // the gate already opens onto land that leads away
 		}
-		if (LAID.containsKey(s.id())) { // a road was laid before and is no longer walkable: where is it broken?
-			StringBuilder why = new StringBuilder();
-			List<BlockPos> line = LAID.get(s.id());
-			for (int i = 0; i < line.size() && why.length() < 600; i++) {
-				BlockPos b = line.get(i);
-				BlockState at = level.getBlockState(b), a1 = level.getBlockState(b.above()), a2 = level.getBlockState(b.above(2));
-				if (!(at.is(Blocks.DIRT_PATH) || at.is(Blocks.COARSE_DIRT) || at.is(Blocks.GRAVEL) || at.is(Blocks.COBBLESTONE) || at.is(Blocks.MOSSY_COBBLESTONE))
-						|| !a1.getCollisionShape(level, b.above()).isEmpty() || !a2.getCollisionShape(level, b.above(2)).isEmpty()) {
-					why.append(String.format(" #%d (%d,%d,%d) %s/%s/%s", i, b.getX() - heart.getX(), b.getY() - heart.getY(), b.getZ() - heart.getZ(),
-							at.getBlock().getName().getString(), a1.getBlock().getName().getString(), a2.getBlock().getName().getString()));
+		// a road laid before that a later build covered or cut (the gate's slopes, a bank): laid again where it was
+		List<BlockPos> before = storedLine(s);
+		if (!before.isEmpty()) {
+			lay(level, before, col -> !builtCols.contains(col) && !(BlockPos.getX(col) >= bx0 && BlockPos.getX(col) <= bx1 && BlockPos.getZ(col) >= bz0
+					&& BlockPos.getZ(col) <= bz1), built, SiteWork.subsoil(SiteWork.surface(level, heart)), tier(s));
+			Set<Long> again = new java.util.HashSet<>();
+			java.util.ArrayDeque<long[]> q2 = new java.util.ArrayDeque<>();
+			for (int dy = -3; dy <= 6; dy++) {
+				int y = h[startCell] + 1 + dy;
+				if (!Double.isNaN(FieldTest.feet(level, start.getX(), y, start.getZ(), false)) && again.add(BlockPos.asLong(start.getX(), y, start.getZ()))) {
+					q2.add(new long[] {BlockPos.asLong(start.getX(), y, start.getZ())});
 				}
 			}
-			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out: the last road is broken at{}", why.length() == 0 ? " no cell (it ends cut off)" : why);
+			if (FieldTest.spread(level, heart, again, q2, Set.of(), 300_000)) {
+				io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: the road was covered by a build and is laid again", s.name());
+				return;
+			}
 		}
 		// open land: every column from which one can walk out to 100 blocks away
 		List<Long> edge = new ArrayList<>();
@@ -592,7 +594,8 @@ final class RoadLink {
 		}
 		if (goal < 0) {
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-			if (owner != null && TOLD.add(s.id())) {
+			// said once, and only when the gate is finished: before that the land may still change
+			if (owner != null && s.level(Progression.GATE) >= Progression.GATE_STEPS.size() && TOLD.add(s.id())) {
 				People.say(owner, "Architect", "Outside the gate the land is closed in by water and cliffs, and no road can be laid down from it. "
 						+ "Make a way out by hand, or found the castle facing open land.");
 			}
@@ -616,47 +619,14 @@ final class RoadLink {
 		for (int i = 0; i < len; i++) {
 			road[i] = heights.get(i);
 		}
-		BlockState fill = SiteWork.subsoil(SiteWork.surface(level, heart));
-		int tier = tier(s);
+		List<BlockPos> line = new ArrayList<>();
 		for (int i = 0; i < len; i++) {
-			int c = path.get(i);
-			BlockPos p = new BlockPos(x0 + c / n, road[i], z0 + c % n);
-			int prev = path.get(Math.max(0, i - 1)), next = path.get(Math.min(len - 1, i + 1));
-			boolean alongX = Math.abs(next / n - prev / n) >= Math.abs(next % n - prev % n);
-			Direction side = alongX ? Direction.SOUTH : Direction.EAST;
-			for (int w = -1; w <= 1; w++) {
-				BlockPos cell = p.relative(side, w);
-				int ci = cell.getX() - x0, ck = cell.getZ() - z0;
-				if (ci < 0 || ck < 0 || ci >= n || ck >= n || !dig[ci * n + ck] || builtCols.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
-					continue;
-				}
-				// cut: the land above the road goes (trees whole), headroom 3
-				int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, cell.getX(), cell.getZ());
-				for (int y = Math.max(top, cell.getY() + 3); y > cell.getY(); y--) {
-					BlockPos a = new BlockPos(cell.getX(), y, cell.getZ());
-					BlockState st = level.getBlockState(a);
-					if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
-						SiteWork.removeTreeAt(level, a, built);
-					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st)) && st.getFluidState().isEmpty()) {
-						level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
-					}
-				}
-				// fill: earth under the road down to the land; stone through water to the bed
-				for (int y = cell.getY() - 1, d = 0; d < 48 && y > level.getMinY(); y--, d++) {
-					BlockPos b = new BlockPos(cell.getX(), y, cell.getZ());
-					BlockState st = level.getBlockState(b);
-					boolean wet = !st.getFluidState().isEmpty();
-					if (!(st.isAir() || st.canBeReplaced() || wet || st.is(BlockTags.LEAVES))) {
-						break;
-					}
-					level.setBlock(b, wet ? Blocks.COBBLESTONE.defaultBlockState() : fill, Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
-				}
-				pave(level, cell, w, tier, false);
-			}
-			if (tier >= 2 && i % 24 == 12) {
-				post(level, p.relative(side, 2));
-			}
+			line.add(new BlockPos(x0 + path.get(i) / n, road[i], z0 + path.get(i) % n));
 		}
+		lay(level, line, col -> {
+			int ci = BlockPos.getX(col) - x0, ck = BlockPos.getZ(col) - z0;
+			return ci >= 0 && ck >= 0 && ci < n && ck < n && dig[ci * n + ck] && !builtCols.contains(col);
+		}, built, SiteWork.subsoil(SiteWork.surface(level, heart)), tier(s));
 		StringBuilder trace = new StringBuilder();
 		for (int i = 0; i < len; i++) {
 			int c = path.get(i);
@@ -693,11 +663,7 @@ final class RoadLink {
 			}
 			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out check: out {}, walked {} of {} road cells{}", out, last + 1, len, at);
 		}
-		List<BlockPos> laid = new ArrayList<>();
-		for (int i = 0; i < len; i++) {
-			laid.add(new BlockPos(x0 + path.get(i) / n, road[i], z0 + path.get(i) % n));
-		}
-		LAID.put(s.id(), laid);
+		List<BlockPos> laid = line;
 		// stored with the settlement, so site grading, smoothing and later builds leave the road alone (also after a restart)
 		StringBuilder enc = new StringBuilder();
 		for (BlockPos b : laid) {
@@ -716,6 +682,63 @@ final class RoadLink {
 		}
 		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: road of {} blocks from {} to {}", s.name(), len, start,
 				new BlockPos(x0 + goal / kk / n, road[len - 1], z0 + goal / kk % n));
+	}
+
+	/** The centre line of the settlement's way-out road as stored, empty if it has none. */
+	private static List<BlockPos> storedLine(Settlement s) {
+		String v = s.names().get(WAY_OUT_KEY);
+		List<BlockPos> out = new ArrayList<>();
+		if (v != null && !v.isEmpty()) {
+			for (String cell : v.split(";")) {
+				String[] p = cell.split(",");
+				out.add(new BlockPos(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])));
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Lays a road 3 wide along {@code line} (centre cells at road height): the land above goes (trees whole, headroom
+	 * 3), earth is filled under it down to the land, stone through water, then the road surface. Only columns
+	 * {@code mayDig} accepts (keys x,0,z) are touched.
+	 */
+	private static void lay(ServerLevel level, List<BlockPos> line, java.util.function.LongPredicate mayDig, Set<Long> built, BlockState fill, int tier) {
+		int len = line.size();
+		for (int i = 0; i < len; i++) {
+			BlockPos p = line.get(i);
+			BlockPos prev = line.get(Math.max(0, i - 1)), next = line.get(Math.min(len - 1, i + 1));
+			boolean alongX = Math.abs(next.getX() - prev.getX()) >= Math.abs(next.getZ() - prev.getZ());
+			Direction side = alongX ? Direction.SOUTH : Direction.EAST;
+			for (int w = -1; w <= 1; w++) {
+				BlockPos cell = p.relative(side, w);
+				if (!mayDig.test(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
+					continue;
+				}
+				int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, cell.getX(), cell.getZ());
+				for (int y = Math.max(top, cell.getY() + 3); y > cell.getY(); y--) {
+					BlockPos a = new BlockPos(cell.getX(), y, cell.getZ());
+					BlockState st = level.getBlockState(a);
+					if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
+						SiteWork.removeTreeAt(level, a, built);
+					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st)) && st.getFluidState().isEmpty()) {
+						level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+					}
+				}
+				for (int y = cell.getY() - 1, d = 0; d < 48 && y > level.getMinY(); y--, d++) {
+					BlockPos b = new BlockPos(cell.getX(), y, cell.getZ());
+					BlockState st = level.getBlockState(b);
+					boolean wet = !st.getFluidState().isEmpty();
+					if (!(st.isAir() || st.canBeReplaced() || wet || st.is(BlockTags.LEAVES))) {
+						break;
+					}
+					level.setBlock(b, wet ? Blocks.COBBLESTONE.defaultBlockState() : fill, Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
+				}
+				pave(level, cell, w, tier, false);
+			}
+			if (tier >= 2 && i % 24 == 12) {
+				post(level, p.relative(side, 2));
+			}
+		}
 	}
 
 	/** A min-heap of longs (cost in the high half, state in the low half) without boxing. */
