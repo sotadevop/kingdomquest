@@ -585,6 +585,64 @@ public final class Settlements {
 				Math.max(a.getZ(), b.getZ()), all, roads, SiteWork.surface(level, s.heart()), keep);
 	}
 
+	/**
+	 * Roads and lamps never hang: where the ground under a road block or a lamp post (or the block of land it stands on)
+	 * was taken away by later site work, earth is put back under it down to solid ground (12 blocks at most, never in the
+	 * moat or water; deeper than that it is a ravine and left as it is). Field test, 2026-11-18: roads over air and lamps
+	 * on hanging turf after the room around buildings was cut.
+	 */
+	static void carryRoads(ServerLevel level, Settlement s, BlockState surface) {
+		Set<Long> all = new HashSet<>();
+		s.built().values().forEach(all::addAll);
+		Map<Long, Integer> lowest = new HashMap<>();
+		for (String track : List.of(Progression.ROADS, "lamps")) {
+			for (long p : s.built().getOrDefault(track, List.of())) {
+				BlockPos q = BlockPos.of(p);
+				if (!level.getBlockState(q).isAir()) {
+					lowest.merge(BlockPos.asLong(q.getX(), 0, q.getZ()), q.getY(), Math::min);
+				}
+			}
+		}
+		Set<Long> moat = moatColumns(s);
+		BlockState fill = SiteWork.subsoil(surface);
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (Map.Entry<Long, Integer> e : lowest.entrySet()) {
+			if (moat.contains(e.getKey())) {
+				continue;
+			}
+			int x = BlockPos.getX(e.getKey()), z = BlockPos.getZ(e.getKey());
+			int y = e.getValue() - 1;
+			int land = 0; // a block or two of land it stands on may itself hang
+			while (land < 2 && y > e.getValue() - 4) {
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (st.isAir() || st.canBeReplaced() || !SiteWork.natural(st) || all.contains(pos.asLong())) {
+					break;
+				}
+				land++;
+				y--;
+			}
+			List<BlockPos> gap = new ArrayList<>();
+			boolean held = false;
+			for (int down = 0; down < 12; down++, y--) {
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (!st.getFluidState().isEmpty()) {
+					break;
+				}
+				if (st.isAir() || st.canBeReplaced() && !all.contains(pos.asLong())) {
+					gap.add(pos.immutable());
+					continue;
+				}
+				held = true;
+				break;
+			}
+			if (held) {
+				for (BlockPos g : gap) {
+					level.setBlock(g, fill, NO_DROPS);
+				}
+			}
+		}
+	}
+
 	/** How much level ground stays around each kind of thing built before the land may rise again (user: 3 blocks). */
 	static final int CLEAR_BUILDING = 3, CLEAR_WALL = 2, CLEAR_ROAD = 1, CLEAR_REACH = 14;
 
@@ -688,6 +746,8 @@ public final class Settlements {
 			int limit = Math.max(cap[i], keep[i]);
 			int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
 			boolean any = false;
+			List<BlockState> layers = new ArrayList<>(); // the land's own layers, top down, as they were cut away
+			boolean snowed = false;
 			for (int y = top; y > limit && y > top - 24; y--) {
 				pos.set(x, y, z);
 				if (nowBuilt.contains(pos.asLong())) {
@@ -707,6 +767,11 @@ public final class Settlements {
 				if (!(SiteWork.natural(st) || SiteWork.earthwork(st) || st.canBeReplaced())) {
 					break; // something nobody planted that isn't land (a chest, a player's build): left alone
 				}
+				if (st.is(Blocks.SNOW)) {
+					snowed = true;
+				} else if (!st.canBeReplaced() && st.isSolid() && layers.size() < 3) {
+					layers.add(st);
+				}
 				level.setBlock(pos, Blocks.AIR.defaultBlockState(), NO_DROPS);
 				for (int up = 1; up <= 2; up++) { // flowers and grass on it go too
 					BlockPos above = pos.above(up);
@@ -717,9 +782,31 @@ public final class Settlements {
 				any = true;
 			}
 			if (any) {
-				BlockPos topNow = new BlockPos(x, limit, z);
+				// the new ground gets the layers that lay on top before (grass on earth, sand on sandstone, red sand on
+				// terracotta), so a cut shows the land as it is, not the stone under it (field test: stone and andesite
+				// patches in deserts and meadows); where the land was bare rock it stays rock
+				int ny = limit;
+				while (ny > limit - 6 && level.getBlockState(pos.set(x, ny, z)).isAir()) {
+					ny--;
+				}
+				for (int k = 0; k < layers.size(); k++) {
+					BlockState want = layers.get(k);
+					pos.set(x, ny - k, z);
+					BlockState here = level.getBlockState(pos);
+					if (nowBuilt.contains(pos.asLong()) || !SiteWork.natural(here) || !here.getFluidState().isEmpty() || !here.isSolid()
+							|| want.is(net.minecraft.tags.BlockTags.BASE_STONE_OVERWORLD)) {
+						break;
+					}
+					if (here != want) {
+						level.setBlock(pos, want, NO_DROPS);
+					}
+				}
+				BlockPos topNow = new BlockPos(x, ny, z);
 				if (level.getBlockState(topNow).is(Blocks.DIRT) && level.getBlockState(topNow.above()).isAir()) {
 					level.setBlock(topNow, surface, NO_DROPS); // the new ground gets its turf back
+				}
+				if (snowed && level.getBlockState(topNow.above()).isAir() && level.getBlockState(topNow).isSolid()) {
+					level.setBlock(topNow.above(), Blocks.SNOW.defaultBlockState(), NO_DROPS);
 				}
 				cut.add(col);
 			}
@@ -2311,6 +2398,7 @@ public final class Settlements {
 							nowBuilt, SiteWork.surface(level, s.heart()), touched);
 				}
 			}
+			carryRoads(level, done, SiteWork.surface(level, s.heart()));
 			if (s.jobTrack().equals(Progression.GATE) && !moatColumns(done).isEmpty()) {
 				SiteWork.sealDitch(level, moatColumns(done), nowBuilt, SiteWork.surface(level, s.heart()));
 			}

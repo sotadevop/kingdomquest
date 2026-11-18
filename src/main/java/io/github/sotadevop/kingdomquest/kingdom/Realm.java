@@ -49,6 +49,8 @@ final class Realm {
 		JsonObject j = new JsonObject();
 		j.addProperty("empire", empire(server, player));
 		j.addProperty("here", here.id().toString());
+		j.addProperty("lord", player.getUUID().equals(here.owner())); // only the lord changes how his people look
+		j.addProperty("solo", server.isSingleplayer()); // own skins from the skins folder: single player only
 		j.addProperty("hx", here.heart().getX());
 		j.addProperty("hz", here.heart().getZ());
 		j.addProperty("px", (int) player.getX());
@@ -251,8 +253,11 @@ final class Realm {
 			}
 			case "realm_skin" -> {
 				Entity e = server.overworld().getEntity(UUID.fromString(a[1]));
-				if (e instanceof KingdomNpc npc && (player.getUUID().equals(npc.lord()) || People.role(npc).contains(here.id().toString()))) {
-					npc.setSkin(Integer.parseInt(a[2]));
+				int skin = Integer.parseInt(a[2]);
+				boolean own = KingdomNpc.skinBase(skin) >= KingdomNpc.CUSTOM_SKIN;
+				if (e instanceof KingdomNpc npc && player.getUUID().equals(here.owner()) && (!own || server.isSingleplayer())
+						&& (player.getUUID().equals(npc.lord()) || People.role(npc).contains(here.id().toString()))) {
+					npc.setSkin(skin);
 				}
 			}
 			default -> {

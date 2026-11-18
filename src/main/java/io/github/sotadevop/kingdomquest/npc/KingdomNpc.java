@@ -130,8 +130,28 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		}
 	}
 
+	/**
+	 * A look: bits 0-23 the skin (0-8 the vanilla default skins, {@link #CUSTOM_SKIN} and up a PNG from the client's
+	 * skins folder, single player only), bits 24-25 the arms (0 as the skin is made, 1 wide, 2 slim).
+	 */
 	public void setSkin(int skin) {
-		this.entityData.set(SKIN, Math.floorMod(skin, 9));
+		int base = skinBase(skin);
+		if (base < CUSTOM_SKIN) {
+			base = Math.floorMod(base, 9);
+		}
+		int arms = skinArms(skin);
+		this.entityData.set(SKIN, base | (arms == 3 ? 0 : arms) << 24);
+	}
+
+	/** First id of a skin from the skins folder (1000 + a hash of its file name). */
+	public static final int CUSTOM_SKIN = 1000;
+
+	public static int skinBase(int skin) {
+		return skin & 0xFFFFFF;
+	}
+
+	public static int skinArms(int skin) {
+		return skin >>> 24 & 3;
 	}
 
 	public int tier() {

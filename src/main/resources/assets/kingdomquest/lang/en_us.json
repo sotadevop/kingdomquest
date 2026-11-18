@@ -250,5 +250,22 @@
 	"kingdomquest.realm.no_animals": "No animals here yet.",
 	"kingdomquest.build.where": "%s is ready at %s %s %s (%s).",
 	"kingdomquest.link.too_far": "That place is more than 1200 blocks away.",
-	"kingdomquest.found.steep": "Careful: the land here differs by %s blocks. Buildings will step down the slope and the walls will follow the hills."
+	"kingdomquest.found.steep": "Careful: the land here differs by %s blocks. Buildings will step down the slope and the walls will follow the hills.",
+	"kingdomquest.realm.arms.0": "Arms: as made",
+	"kingdomquest.realm.arms.1": "Arms: wide",
+	"kingdomquest.realm.arms.2": "Arms: slim",
+	"kingdomquest.realm.arms_hint": "As made: slim or wide as the skin is drawn. Wide: 4 pixel arms. Slim: 3 pixel arms.",
+	"kingdomquest.realm.add_skins": "Open the skins folder. Put 64x64 skin PNGs there, or drop them onto this window.",
+	"kingdomquest.realm.as_list": "List",
+	"kingdomquest.realm.as_cards": "Cards",
+	"kingdomquest.realm.folder_failed": "Could not open the folder: %s",
+	"kingdomquest.realm.skins_added": "Added %s skin(s)",
+	"kingdomquest.realm.col_name": "Name",
+	"kingdomquest.realm.col_role": "Work",
+	"kingdomquest.realm.col_kind": "Kind",
+	"kingdomquest.realm.col_where": "Where",
+	"kingdomquest.realm.change_look": "Change look",
+	"kingdomquest.realm.pick_for": "Choose a look for %s",
+	"kingdomquest.realm.drop_hint": "Drop 64x64 skin PNGs here",
+	"kingdomquest.realm.solo_only": "Own skins: single player only"
 }

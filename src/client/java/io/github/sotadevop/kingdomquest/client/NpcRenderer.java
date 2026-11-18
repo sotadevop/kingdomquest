@@ -1,23 +1,38 @@
 package io.github.sotadevop.kingdomquest.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import io.github.sotadevop.kingdomquest.npc.KingdomNpc;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.resources.Identifier;
 
-/** Draws KingdomQuest NPCs with the player model and one of the nine vanilla default skins. */
+/**
+ * Draws KingdomQuest NPCs with the player model: one of the nine vanilla default skins or (single player) a skin from
+ * the skins folder, with wide or slim arms. Slim people are drawn by a second renderer with the slim player model.
+ */
 public class NpcRenderer extends HumanoidMobRenderer<KingdomNpc, NpcRenderer.State, HumanoidModel<NpcRenderer.State>> {
-	private static final String[] SKINS = {"steve", "alex", "ari", "efe", "kai", "makena", "noor", "sunny", "zuri"};
+	static final String[] SKINS = {"steve", "alex", "ari", "efe", "kai", "makena", "noor", "sunny", "zuri"};
 
 	public static class State extends HumanoidRenderState {
 		int skin;
+		boolean slim;
 	}
 
+	/** The slim twin (null in the twin itself). */
+	private final NpcRenderer slimTwin;
+
 	public NpcRenderer(EntityRendererProvider.Context ctx) {
-		super(ctx, new HumanoidModel<>(ctx.bakeLayer(ModelLayers.PLAYER)), 0.5f);
+		this(ctx, false);
+	}
+
+	private NpcRenderer(EntityRendererProvider.Context ctx, boolean slim) {
+		super(ctx, new HumanoidModel<>(ctx.bakeLayer(slim ? ModelLayers.PLAYER_SLIM : ModelLayers.PLAYER)), 0.5f);
+		this.slimTwin = slim ? null : new NpcRenderer(ctx, true);
 	}
 
 	@Override
@@ -29,10 +44,46 @@ public class NpcRenderer extends HumanoidMobRenderer<KingdomNpc, NpcRenderer.Sta
 	public void extractRenderState(KingdomNpc npc, State state, float partialTick) {
 		super.extractRenderState(npc, state, partialTick);
 		state.skin = npc.skin();
+		state.slim = slim(npc.skin());
+	}
+
+	/** Whether a look has slim arms: as chosen, or as the skin is made (the vanilla skins are drawn wide by default). */
+	static boolean slim(int skin) {
+		int arms = KingdomNpc.skinArms(skin);
+		if (arms != 0) {
+			return arms == 2;
+		}
+		int base = KingdomNpc.skinBase(skin);
+		if (base >= KingdomNpc.CUSTOM_SKIN) {
+			CustomSkins.Skin s = CustomSkins.get(base);
+			return s != null && s.slim();
+		}
+		return false;
+	}
+
+	@Override
+	public void submit(State state, PoseStack pose, SubmitNodeCollector collector, CameraRenderState camera) {
+		if (state.slim && this.slimTwin != null) {
+			this.slimTwin.submit(state, pose, collector, camera);
+		} else {
+			super.submit(state, pose, collector, camera);
+		}
 	}
 
 	@Override
 	public Identifier getTextureLocation(State state) {
-		return Identifier.withDefaultNamespace("textures/entity/player/wide/" + SKINS[Math.floorMod(state.skin, SKINS.length)] + ".png");
+		return texture(state.skin, state.slim);
+	}
+
+	static Identifier texture(int skin, boolean slim) {
+		int base = KingdomNpc.skinBase(skin);
+		if (base >= KingdomNpc.CUSTOM_SKIN) {
+			Identifier own = CustomSkins.texture(base);
+			if (own != null) {
+				return own;
+			}
+			base = 0; // a skin this computer doesn't have
+		}
+		return Identifier.withDefaultNamespace("textures/entity/player/" + (slim ? "slim/" : "wide/") + SKINS[Math.floorMod(base, SKINS.length)] + ".png");
 	}
 }

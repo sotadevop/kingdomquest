@@ -7,14 +7,20 @@ import com.google.gson.JsonParser;
 import io.github.sotadevop.kingdomquest.kingdom.ActionPayload;
 import io.github.sotadevop.kingdomquest.kingdom.RealmPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import io.github.sotadevop.kingdomquest.npc.KingdomNpc;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.BlockPos;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.DyeColor;
 
 import java.util.ArrayList;
@@ -30,7 +36,6 @@ import java.util.List;
 public class RealmScreen extends Screen {
 	private static final int W = 440;
 	private static final int H = 280;
-	private static final int ROWS = 11;
 	private static final String[] TABS = {"kingdomquest.realm.map", "kingdomquest.realm.buildings", "kingdomquest.realm.people",
 			"kingdomquest.realm.animals"};
 	private static int lastTab;
@@ -61,10 +66,25 @@ public class RealmScreen extends Screen {
 	private final List<Button> themed = new ArrayList<>();
 	private final Layer land;
 	private final Layer plan;
+	/** The two layers painted once into textures (user, 2026-11-18: the map was laggy when drawn cell by cell every frame). */
+	private Identifier landTex;
+	private Identifier planTex;
+	private static int serial;
 	/** What the two maps show: {pixels per block, centre x, centre z} for the realm map and the settlement plan. */
 	private final double[][] view = new double[2][];
 	private int tab = lastTab;
-	private int page;
+	/** First row (or row of cards) shown in the people and animal lists; the mouse wheel moves it. */
+	private int scroll;
+	/** People as cards with their 3D figure instead of rows (user, 2026-11-18); remembered while the game runs. */
+	private static boolean cards;
+	/** The person whose look is being chosen (the skin picker is shown over the list), or null. */
+	private String picking;
+	private int pickScroll;
+	/** Arms for the chosen look: 0 as the skin is made, 1 wide, 2 slim. */
+	private int pickArms;
+	private String status;
+	/** Stand-in figures for the 3D views, one per look (not in the world). */
+	private final java.util.Map<Integer, KingdomNpc> models = new java.util.HashMap<>();
 	private String selA;
 	private String selB;
 	private EditBox empire;
@@ -97,7 +117,7 @@ public class RealmScreen extends Screen {
 		RealmScreen next = new RealmScreen(payload, heart);
 		if (r != null) {
 			next.tab = r.tab;
-			next.page = r.page;
+			next.scroll = r.scroll;
 			next.selA = r.selA;
 			next.selB = r.selB;
 			next.view[0] = r.view[0];
@@ -132,6 +152,47 @@ public class RealmScreen extends Screen {
 	}
 
 	@Override
+	public void removed() {
+		super.removed();
+		TextureManager tm = Minecraft.getInstance().getTextureManager();
+		for (Identifier id : new Identifier[] {this.landTex, this.planTex}) {
+			if (id != null) {
+				tm.release(id);
+			}
+		}
+		this.landTex = null;
+		this.planTex = null;
+	}
+
+	/** The layers' textures, painted when first needed (again after another screen was shown over this one). */
+	private void paintLayers() {
+		if (this.landTex == null && this.planTex == null) {
+			int n = ++serial; // each screen its own textures: a refreshed screen is built before the old one goes
+			this.landTex = paint(this.land, "realm/land_" + n);
+			this.planTex = paint(this.plan, "realm/plan_" + n);
+		}
+	}
+
+	/** Paints a layer into a texture once: a pixel per cell, unknown land transparent. */
+	private static Identifier paint(Layer l, String path) {
+		if (l == null || l.w() <= 0 || l.h() <= 0) {
+			return null;
+		}
+		NativeImage img = new NativeImage(l.w(), l.h(), true);
+		for (int j = 0; j < l.h(); j++) {
+			for (int i = 0; i < l.w(); i++) {
+				int c = l.px()[j * l.w() + i] & 0xFFFF;
+				img.setPixel(i, j, c == 0 ? 0 : argb(c));
+			}
+		}
+		Identifier id = Identifier.fromNamespaceAndPath("kingdomquest", path);
+		DynamicTexture tex = new DynamicTexture(() -> "kingdomquest " + path, img);
+		tex.upload();
+		Minecraft.getInstance().getTextureManager().register(id, tex);
+		return id;
+	}
+
+	@Override
 	protected void init() {
 		shown = this;
 		this.left = (this.width - W) / 2;
@@ -143,7 +204,8 @@ public class RealmScreen extends Screen {
 			Button b = Button.builder(Component.translatable(TABS[i]), btn -> {
 				this.tab = index;
 				lastTab = index;
-				this.page = 0;
+				this.scroll = 0;
+				this.picking = null;
 				this.rebuildWidgets();
 			}).bounds(this.left + 8 + i * (tabW + 2), this.top + 22, tabW, 18).build();
 			b.active = i != this.tab;
@@ -200,42 +262,154 @@ public class RealmScreen extends Screen {
 			}).bounds(this.left + 312, fy, 50, 18).build();
 			save.active = sel != null;
 			this.themed.add(this.addRenderableWidget(save));
-		} else if (this.tab == 2 || this.tab == 3) {
-			JsonArray list = arr(this.tab == 2 ? "people" : "animals");
-			int pages = Math.max(1, (list.size() + ROWS - 1) / ROWS);
-			this.page = Math.min(this.page, pages - 1);
-			Button prev = Button.builder(Component.literal("<"), b -> {
-				this.page--;
+		} else if (this.tab == 2 && this.picking != null) {
+			this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("gui.back"), b -> {
+				this.picking = null;
+				this.status = null;
 				this.rebuildWidgets();
-			}).bounds(this.left + 8, fy, 20, 18).build();
-			prev.active = this.page > 0;
-			Button next = Button.builder(Component.literal(">"), b -> {
-				this.page++;
+			}).bounds(this.left + 8, fy, 50, 18).build()));
+			this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.arms." + this.pickArms), b -> {
+				this.pickArms = (this.pickArms + 1) % 3;
 				this.rebuildWidgets();
-			}).bounds(this.left + 32, fy, 20, 18).build();
-			next.active = this.page < pages - 1;
-			this.themed.add(this.addRenderableWidget(prev));
-			this.themed.add(this.addRenderableWidget(next));
+			}).bounds(this.left + 62, fy, 96, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(
+					Component.translatable("kingdomquest.realm.arms_hint"))).build()));
+			if (solo()) {
+				this.themed.add(this.addRenderableWidget(Button.builder(Component.literal("+"), b -> openSkinFolder())
+						.bounds(this.left + 162, fy, 20, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(
+								Component.translatable("kingdomquest.realm.add_skins"))).build()));
+			}
+		} else if (this.tab == 2) {
+			this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable(cards ? "kingdomquest.realm.as_list" : "kingdomquest.realm.as_cards"), b -> {
+				cards = !cards;
+				this.scroll = 0;
+				this.rebuildWidgets();
+			}).bounds(this.left + 8, fy, 70, 18).build()));
 		}
 		this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 60, fy, 60, 18).build()));
 	}
 
-	private int rowY(int i) {
-		return this.top + 50 + i * 18;
+	private static final String[] LOOKS = {"Steve", "Alex", "Ari", "Efe", "Kai", "Makena", "Noor", "Sunny", "Zuri"};
+	private static final int ROW_H = 16;
+	private static final int CARD_GAP = 4;
+	private static final int CARD_H = 98;
+	private static final int CELL_W = 58;
+	private static final int CELL_H = 82;
+
+	private boolean lord() {
+		return this.data.has("lord") && this.data.get("lord").getAsBoolean();
 	}
 
-	private static final String[] LOOKS = {"Steve", "Alex", "Ari", "Efe", "Kai", "Makena", "Noor", "Sunny", "Zuri"};
-	private static final int LOOK_W = 84;
-
-	/** Left edge of the "look" field in a people row; a click on it gives that person the next look. */
-	private int lookX() {
-		return this.left + W - 8 - LOOK_W;
+	private boolean solo() {
+		return this.data.has("solo") && this.data.get("solo").getAsBoolean();
 	}
 
 	/** Guards all wear the same face and armor: their look is not changed one by one. */
 	private static boolean fixedLook(JsonObject person) {
 		return "Guard".equals(person.get("role").getAsString());
+	}
+
+	private boolean canChange(JsonObject person) {
+		return lord() && !fixedLook(person);
+	}
+
+	/** Rows of the list that fit under its header. */
+	private int listRows() {
+		return (mapH() - 14) / ROW_H;
+	}
+
+	private int rowTop(int i) {
+		return mapY0() + 14 + i * ROW_H;
+	}
+
+	private int cardCols() {
+		return Math.max(1, (mapW() + CARD_GAP) / (76 + CARD_GAP));
+	}
+
+	private int cardW() {
+		return (mapW() - (cardCols() - 1) * CARD_GAP) / cardCols();
+	}
+
+	private int cardRows() {
+		return Math.max(1, (mapH() + CARD_GAP) / (CARD_H + CARD_GAP));
+	}
+
+	/** Column edges of the list: name, role, where, look (the look column only for the lord's people). */
+	private int[] columns(boolean people) {
+		int lookW = people && lord() ? 78 : 0;
+		int whereW = 74;
+		int rest = mapW() - lookW - whereW - 12;
+		int nameW = rest * 11 / 20;
+		int x = mapX0() + 3;
+		return new int[] {x, x + nameW + 4, mapX0() + mapW() - lookW - whereW, mapX0() + mapW() - lookW, mapX0() + mapW()};
+	}
+
+	private KingdomNpc model(int skin) {
+		return this.models.computeIfAbsent(skin, k -> {
+			Minecraft mc = Minecraft.getInstance();
+			if (mc.level == null) {
+				return null;
+			}
+			KingdomNpc n = new KingdomNpc(KingdomNpc.TYPE, mc.level);
+			n.setSkin(k);
+			return n;
+		});
+	}
+
+	/** The looks to choose from: the nine vanilla skins and (single player) the skins in the folder. */
+	private List<int[]> looks() {
+		List<int[]> out = new ArrayList<>();
+		for (int i = 0; i < LOOKS.length; i++) {
+			out.add(new int[] {i});
+		}
+		if (solo()) {
+			for (CustomSkins.Skin sk : CustomSkins.all()) {
+				out.add(new int[] {sk.id()});
+			}
+		}
+		return out;
+	}
+
+	private String lookName(int base) {
+		if (base < LOOKS.length) {
+			return LOOKS[base];
+		}
+		CustomSkins.Skin sk = CustomSkins.get(base);
+		return sk == null ? "?" : sk.name();
+	}
+
+	private int pickCols() {
+		return Math.max(1, (mapW() - 8) / CELL_W);
+	}
+
+	private int pickRows() {
+		return Math.max(1, (mapH() - 16) / CELL_H);
+	}
+
+	private void openSkinFolder() {
+		try {
+			java.nio.file.Files.createDirectories(CustomSkins.folder());
+			com.mojang.blaze3d.Blaze3D.openPath(CustomSkins.folder());
+		} catch (java.io.IOException | RuntimeException e) {
+			this.status = Component.translatable("kingdomquest.realm.folder_failed", CustomSkins.folder().toString()).getString();
+		}
+	}
+
+	@Override
+	public void onFilesDrop(List<java.nio.file.Path> files) {
+		if (this.tab == 2 && solo()) {
+			int n = CustomSkins.add(files);
+			this.status = Component.translatable("kingdomquest.realm.skins_added", n).getString();
+		}
+	}
+
+	private JsonObject person(String uuid) {
+		for (JsonElement e : arr("people")) {
+			if (e.getAsJsonObject().get("uuid").getAsString().equals(uuid)) {
+				return e.getAsJsonObject();
+			}
+		}
+		return null;
 	}
 
 	// ---- map geometry ----
@@ -333,44 +507,19 @@ public class RealmScreen extends Screen {
 		return 0xFF000000 | r << 16 | gr << 8 | b;
 	}
 
-	/** Paints a layer into the map area: rows of cells, runs of one colour as one rectangle, never finer than 2 pixels. */
-	private void drawLayer(GuiGraphicsExtractor g, Layer l, double[] f) {
-		if (l == null) {
+	/** Draws a layer's texture where its land lies, cut to the map area. */
+	private void drawLayer(GuiGraphicsExtractor g, Layer l, Identifier tex, double[] f) {
+		if (l == null || tex == null) {
 			return;
 		}
-		int ax = mapX0();
-		int ay = mapY0();
-		int bx = ax + mapW();
-		int by = ay + mapH();
-		double cell = l.step() * f[0];
-		int stride = cell >= 2 ? 1 : (int) Math.ceil(2 / cell);
-		for (int j = 0; j < l.h(); j += stride) {
-			int y0 = Math.max(ay, sy(f, l.z0() + (double) j * l.step()));
-			int y1 = Math.min(by, sy(f, l.z0() + (double) (j + stride) * l.step()));
-			if (y1 <= y0) {
-				continue;
-			}
-			int last = 0;
-			int from = 0;
-			for (int i = 0; i <= l.w(); i += stride) {
-				int c = i < l.w() ? l.px()[j * l.w() + i] & 0xFFFF : -1;
-				if (c == last) {
-					continue;
-				}
-				int x = Math.max(ax, Math.min(bx, sx(f, l.x0() + (double) i * l.step())));
-				if (last > 0 && x > from) {
-					g.fill(from, y0, x, y1, argb(last));
-				}
-				last = c;
-				from = x;
-			}
-			if (last > 0) {
-				int x = Math.max(ax, Math.min(bx, sx(f, l.x0() + (double) l.w() * l.step())));
-				if (x > from) {
-					g.fill(from, y0, x, y1, argb(last));
-				}
-			}
+		int x0 = sx(f, l.x0()), y0 = sy(f, l.z0());
+		int x1 = sx(f, l.x0() + (double) l.w() * l.step()), y1 = sy(f, l.z0() + (double) l.h() * l.step());
+		if (x1 <= x0 || y1 <= y0) {
+			return;
 		}
+		g.enableScissor(mapX0(), mapY0(), mapX0() + mapW(), mapY0() + mapH());
+		g.blit(tex, x0, y0, x1, y1, 0f, 1f, 0f, 1f);
+		g.disableScissor();
 	}
 
 	/** Text on the map with a dark plate behind it, only if it lies inside the map area. */
@@ -428,9 +577,10 @@ public class RealmScreen extends Screen {
 		if (this.tab <= 1) {
 			g.fill(mapX0(), mapY0(), mapX0() + mapW(), mapY0() + mapH(), 0xFF14181C);
 			double[] f = view(this.tab);
-			drawLayer(g, this.land, f);
+			paintLayers();
+			drawLayer(g, this.land, this.landTex, f);
 			if (this.tab == 1) {
-				drawLayer(g, this.plan, f);
+				drawLayer(g, this.plan, this.planTex, f);
 			}
 		}
 	}
@@ -446,8 +596,8 @@ public class RealmScreen extends Screen {
 		switch (this.tab) {
 			case 0 -> drawMap(g, mouseX, mouseY, t);
 			case 1 -> drawPlot(g, mouseX, mouseY, t);
-			case 2 -> drawList(g, arr("people"), true, t);
-			default -> drawList(g, arr("animals"), false, t);
+			case 2 -> drawList(g, arr("people"), true, t, mouseX, mouseY);
+			default -> drawList(g, arr("animals"), false, t, mouseX, mouseY);
 		}
 	}
 
@@ -598,45 +748,182 @@ public class RealmScreen extends Screen {
 		return dist + "m " + names[i];
 	}
 
-	private void drawList(GuiGraphicsExtractor g, JsonArray list, boolean people, Theme t) {
+	private void drawList(GuiGraphicsExtractor g, JsonArray list, boolean people, Theme t, int mouseX, int mouseY) {
+		if (people && this.picking != null) {
+			drawPicker(g, t, mouseX, mouseY);
+			return;
+		}
 		if (list.isEmpty()) {
-			g.text(this.font, Component.translatable(people ? "kingdomquest.realm.no_people" : "kingdomquest.realm.no_animals"), mapX0(), rowY(0),
+			g.text(this.font, Component.translatable(people ? "kingdomquest.realm.no_people" : "kingdomquest.realm.no_animals"), mapX0() + 3, mapY0() + 3,
 					t.secondary(), false);
 			return;
 		}
-		for (int i = 0; i < ROWS; i++) {
-			int idx = this.page * ROWS + i;
+		if (people && cards) {
+			drawCards(g, list, t, mouseX, mouseY);
+			return;
+		}
+		int[] c = columns(people);
+		g.text(this.font, Component.translatable("kingdomquest.realm.col_name"), c[0], mapY0() + 3, t.heading(), false);
+		g.text(this.font, Component.translatable(people ? "kingdomquest.realm.col_role" : "kingdomquest.realm.col_kind"), c[1], mapY0() + 3, t.heading(), false);
+		g.text(this.font, Component.translatable("kingdomquest.realm.col_where"), c[2], mapY0() + 3, t.heading(), false);
+		int rows = listRows();
+		this.scroll = Math.max(0, Math.min(this.scroll, list.size() - rows));
+		JsonObject hover = null;
+		for (int i = 0; i < rows; i++) {
+			int idx = this.scroll + i;
 			if (idx >= list.size()) {
 				break;
 			}
 			JsonObject o = list.get(idx).getAsJsonObject();
-			int y = rowY(i);
-			g.text(this.font, Text.fit(this.font, o.get("name").getAsString(), 120), mapX0(), y, t.text(), false);
-			g.text(this.font, Text.fit(this.font, people ? o.get("role").getAsString() : o.get("type").getAsString(), 100), mapX0() + 126, y,
+			int y = rowTop(i);
+			boolean over = mouseX >= mapX0() && mouseX < mapX0() + mapW() && mouseY >= y && mouseY < y + ROW_H;
+			if (over) {
+				hover = o;
+			}
+			g.fill(mapX0(), y, mapX0() + mapW(), y + ROW_H - 1, over ? 0x30FFFFFF : (idx % 2 == 0 ? 0x10FFFFFF : 0));
+			int ty = y + 4;
+			g.text(this.font, Text.fit(this.font, o.get("name").getAsString(), c[1] - c[0] - 6), c[0], ty, t.text(), false);
+			g.text(this.font, Text.fit(this.font, people ? o.get("role").getAsString() : o.get("type").getAsString(), c[2] - c[1] - 6), c[1], ty,
 					t.secondary(), false);
-			int x = o.get("x").getAsInt();
-			int z = o.get("z").getAsInt();
-			g.text(this.font, x + " " + o.get("y").getAsInt() + " " + z + "  " + direction(x, z), mapX0() + 230, y, t.secondary(), false);
-			if (people && !fixedLook(o)) {
-				// drawn and clicked by the screen itself (the small buttons that were here could not be pressed)
-				String look = Component.translatable("kingdomquest.realm.look").getString() + ": "
-						+ LOOKS[Math.floorMod(o.get("skin").getAsInt(), LOOKS.length)] + " >";
-				g.fill(lookX(), y - 3, lookX() + LOOK_W, y + 11, t.secondary() & 0x00FFFFFF | 0x38000000);
-				g.text(this.font, Text.fit(this.font, look, LOOK_W - 6), lookX() + 4, y, t.text(), false);
+			g.text(this.font, Text.fit(this.font, direction(o.get("x").getAsInt(), o.get("z").getAsInt()), c[3] - c[2] - 4), c[2], ty, t.secondary(), false);
+			if (people && canChange(o)) {
+				boolean on = mouseX >= c[3] && mouseX < c[4] && over;
+				Ui.roundedFill(g, c[3], y + 1, c[4] - c[3] - 2, ROW_H - 3, 2, on ? 0x60FFFFFF : 0x30FFFFFF);
+				g.text(this.font, Text.fit(this.font, Component.translatable("kingdomquest.realm.change_look").getString(), c[4] - c[3] - 8), c[3] + 4, ty,
+						t.text(), false);
 			}
 		}
+		scrollBar(g, list.size(), rows, this.scroll);
+		if (hover != null) {
+			g.setTooltipForNextFrame(this.font, Component.literal(hover.get("x").getAsInt() + " " + hover.get("y").getAsInt() + " " + hover.get("z").getAsInt()),
+					mouseX, mouseY);
+		}
+	}
+
+	private void scrollBar(GuiGraphicsExtractor g, int total, int shown, int first) {
+		if (total <= shown) {
+			return;
+		}
+		int x = mapX0() + mapW() + 1;
+		int h = mapH();
+		int barH = Math.max(10, h * shown / total);
+		int y = mapY0() + (h - barH) * first / Math.max(1, total - shown);
+		g.fill(x, mapY0(), x + 2, mapY0() + h, 0x30FFFFFF);
+		g.fill(x, y, x + 2, y + barH, 0xC0FFFFFF);
+	}
+
+	/** People as cards: their figure (turning to the mouse), name, work and the button for a new look. */
+	private void drawCards(GuiGraphicsExtractor g, JsonArray list, Theme t, int mouseX, int mouseY) {
+		int cols = cardCols(), rows = cardRows(), w = cardW();
+		int totalRows = (list.size() + cols - 1) / cols;
+		this.scroll = Math.max(0, Math.min(this.scroll, totalRows - rows));
+		for (int r = 0; r < rows; r++) {
+			for (int col = 0; col < cols; col++) {
+				int idx = (this.scroll + r) * cols + col;
+				if (idx >= list.size()) {
+					break;
+				}
+				JsonObject o = list.get(idx).getAsJsonObject();
+				int x = mapX0() + col * (w + CARD_GAP);
+				int y = mapY0() + r * (CARD_H + CARD_GAP);
+				boolean over = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + CARD_H;
+				Ui.roundedFill(g, x, y, w, CARD_H, 3, over ? 0x40FFFFFF : 0x22FFFFFF);
+				KingdomNpc m = model(o.get("skin").getAsInt());
+				if (m != null) {
+					InventoryScreen.extractEntityInInventoryFollowsMouse(g, x + 2, y + 2, x + w - 2, y + 62, 28, 0.0625f, mouseX, mouseY, m);
+				}
+				g.text(this.font, Text.fit(this.font, o.get("name").getAsString(), w - 6), x + 3, y + 64, t.text(), false);
+				g.text(this.font, Text.fit(this.font, o.get("role").getAsString(), w - 6), x + 3, y + 74, t.secondary(), false);
+				if (canChange(o)) {
+					boolean on = over && mouseY >= y + CARD_H - 14;
+					Ui.roundedFill(g, x + 2, y + CARD_H - 14, w - 4, 12, 2, on ? 0x70FFFFFF : 0x38FFFFFF);
+					g.text(this.font, Text.fit(this.font, Component.translatable("kingdomquest.realm.change_look").getString(), w - 10), x + 5, y + CARD_H - 12,
+							t.text(), false);
+				}
+			}
+		}
+		scrollBar(g, totalRows, rows, this.scroll);
+	}
+
+	/** The skin picker over the people list: every look as a 3D figure; a click gives it to the person. */
+	private void drawPicker(GuiGraphicsExtractor g, Theme t, int mouseX, int mouseY) {
+		JsonObject p = person(this.picking);
+		String who = p == null ? "" : p.get("name").getAsString();
+		g.text(this.font, Text.fit(this.font, Component.translatable("kingdomquest.realm.pick_for", who).getString(), mapW() - 6), mapX0() + 3, mapY0() + 3,
+				t.heading(), false);
+		List<int[]> looks = looks();
+		int cols = pickCols(), rows = pickRows();
+		int totalRows = (looks.size() + cols - 1) / cols;
+		this.pickScroll = Math.max(0, Math.min(this.pickScroll, totalRows - rows));
+		int current = p == null ? -1 : KingdomNpc.skinBase(p.get("skin").getAsInt());
+		for (int r = 0; r < rows; r++) {
+			for (int col = 0; col < cols; col++) {
+				int idx = (this.pickScroll + r) * cols + col;
+				if (idx >= looks.size()) {
+					break;
+				}
+				int base = looks.get(idx)[0];
+				int x = mapX0() + 4 + col * CELL_W;
+				int y = mapY0() + 16 + r * CELL_H;
+				boolean over = mouseX >= x && mouseX < x + CELL_W - 4 && mouseY >= y && mouseY < y + CELL_H - 4;
+				Ui.roundedFill(g, x, y, CELL_W - 4, CELL_H - 4, 3, base == current ? 0x50FFD040 : over ? 0x40FFFFFF : 0x22FFFFFF);
+				KingdomNpc m = model(base | this.pickArms << 24);
+				if (m != null) {
+					InventoryScreen.extractEntityInInventoryFollowsMouse(g, x + 2, y + 2, x + CELL_W - 6, y + CELL_H - 18, 30, 0.0625f, mouseX, mouseY, m);
+				}
+				g.text(this.font, Text.fit(this.font, lookName(base), CELL_W - 8), x + 2, y + CELL_H - 15, t.text(), false);
+			}
+		}
+		scrollBar(g, totalRows, rows, this.pickScroll);
+		String hint = this.status != null ? this.status
+				: solo() ? Component.translatable("kingdomquest.realm.drop_hint").getString() : Component.translatable("kingdomquest.realm.solo_only").getString();
+		g.text(this.font, Text.fit(this.font, hint, W - 260), this.left + 188, this.top + H - 19, t.secondary(), false);
 	}
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (this.tab == 2 && event.x() >= lookX() && event.x() <= lookX() + LOOK_W) {
+		double mx = event.x(), my = event.y();
+		if (this.tab == 2 && this.picking != null && inMap(mx, my)) {
+			List<int[]> looks = looks();
+			int col = (int) Math.floor((mx - mapX0() - 4) / CELL_W);
+			int row = (int) Math.floor((my - mapY0() - 16) / CELL_H);
+			int idx = (this.pickScroll + row) * pickCols() + col;
+			if (col >= 0 && col < pickCols() && row >= 0 && row < pickRows() && idx < looks.size() && my >= mapY0() + 16) {
+				send("realm_skin|" + this.picking + "|" + (looks.get(idx)[0] | this.pickArms << 24));
+				this.picking = null;
+				this.status = null;
+				this.rebuildWidgets();
+				return true;
+			}
+		} else if (this.tab == 2 && inMap(mx, my)) {
 			JsonArray list = arr("people");
-			for (int i = 0; i < ROWS && this.page * ROWS + i < list.size(); i++) {
-				JsonObject p = list.get(this.page * ROWS + i).getAsJsonObject();
-				if (event.y() >= rowY(i) - 3 && event.y() <= rowY(i) + 11 && !fixedLook(p)) {
-					send("realm_skin|" + p.get("uuid").getAsString() + "|" + (p.get("skin").getAsInt() + 1));
-					return true;
+			JsonObject hit = null;
+			if (cards) {
+				int w = cardW();
+				int col = (int) Math.floor((mx - mapX0()) / (w + CARD_GAP));
+				int row = (int) Math.floor((my - mapY0()) / (CARD_H + CARD_GAP));
+				int y = mapY0() + row * (CARD_H + CARD_GAP);
+				int idx = (this.scroll + row) * cardCols() + col;
+				if (col >= 0 && col < cardCols() && row >= 0 && row < cardRows() && idx < list.size() && my >= y + CARD_H - 14 && my < y + CARD_H) {
+					hit = list.get(idx).getAsJsonObject();
 				}
+			} else {
+				int[] c = columns(true);
+				int row = (int) Math.floor((my - rowTop(0)) / ROW_H);
+				int idx = this.scroll + row;
+				if (mx >= c[3] && row >= 0 && row < listRows() && idx < list.size()) {
+					hit = list.get(idx).getAsJsonObject();
+				}
+			}
+			if (hit != null && canChange(hit)) {
+				this.picking = hit.get("uuid").getAsString();
+				this.pickScroll = 0;
+				int arms = KingdomNpc.skinArms(hit.get("skin").getAsInt());
+				this.pickArms = arms == 3 ? 0 : arms;
+				this.status = null;
+				CustomSkins.rescan();
+				this.rebuildWidgets();
+				return true;
 			}
 		}
 		if (this.tab == 0 && inMap(event.x(), event.y())) {
@@ -672,6 +959,16 @@ public class RealmScreen extends Screen {
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
 		if (this.tab <= 1 && inMap(mouseX, mouseY) && scrollY != 0) {
 			zoom(scrollY > 0 ? 1.25 : 0.8, mouseX, mouseY);
+			return true;
+		}
+		if (this.tab >= 2 && inMap(mouseX, mouseY) && scrollY != 0) {
+			if (this.picking != null) {
+				this.pickScroll += scrollY > 0 ? -1 : 1;
+			} else {
+				this.scroll += (scrollY > 0 ? -1 : 1) * (cards && this.tab == 2 ? 1 : 3);
+			}
+			this.scroll = Math.max(0, this.scroll);
+			this.pickScroll = Math.max(0, this.pickScroll);
 			return true;
 		}
 		return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
