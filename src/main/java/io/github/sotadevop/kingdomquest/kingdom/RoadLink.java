@@ -512,7 +512,7 @@ final class RoadLink {
 		// rises or falls at most one block per block and lies at most DEPTH above or below the land (deeper cuts and
 		// higher banks aren't built), so a steep hillside is crossed on a long slanting road instead of a stair.
 		// Cost per column: the earth moved there, water costs a causeway.
-		final int depth = 10, kk = depth * 2 + 1;
+		final int depth = 16, kk = depth * 2 + 1;
 		int[] land = new int[n * n];
 		int[] floor = new int[n * n];
 		for (int c = 0; c < n * n; c++) {
