@@ -355,6 +355,7 @@ final class RoadLink {
 	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
 	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
 	static final String WAY_OUT_KEY = "wayout";
+	private static final String WAIT_KEY = "wayout_wait";
 
 	/** The columns of the settlement's way-out road (3 wide, and one more each side for its banks), empty if it has none. */
 	static Set<Long> wayOutColumns(Settlement s) {
@@ -440,6 +441,9 @@ final class RoadLink {
 		// through doors and under trees, no swimming)? Then nothing is needed.
 		Set<Long> reach = new java.util.HashSet<>();
 		if (walksOut(level, heart, reach)) {
+			if ("1".equals(s.names().get(WAIT_KEY))) {
+				Settlements.putState(server, s.withName(WAIT_KEY, ""));
+			}
 			return;
 		}
 		// a road laid before that a later build covered or cut (a slope, a bank): laid again where it was
@@ -452,6 +456,12 @@ final class RoadLink {
 				io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: the road was covered by a build and is laid again", s.name());
 				return;
 			}
+		}
+		// shut in after one build may be passing (the drawbridge up, a ramp not yet built): a new road only when it
+		// is still so after the next build (field test: a 55 block road for a forest castle that was open again)
+		if (!"1".equals(s.names().get(WAIT_KEY))) {
+			Settlements.putState(server, s.withName(WAIT_KEY, "1"));
+			return;
 		}
 		// the road starts where one can get to outside the walls, as near the gate's exit as there is
 		long best = Long.MAX_VALUE;
@@ -653,7 +663,7 @@ final class RoadLink {
 		}
 		Settlement current = Settlements.byHeart(server, heart);
 		if (current != null) {
-			Settlements.putState(server, current.withName(WAY_OUT_KEY, enc.toString()));
+			Settlements.putState(server, current.withName(WAY_OUT_KEY, enc.toString()).withName(WAIT_KEY, ""));
 		}
 		int mid = path.get(len / 2);
 		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
