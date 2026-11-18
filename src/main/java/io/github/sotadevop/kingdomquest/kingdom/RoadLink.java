@@ -384,15 +384,20 @@ final class RoadLink {
 		for (long b : built) {
 			builtCols.add(BlockPos.asLong(BlockPos.getX(b), 0, BlockPos.getZ(b)));
 		}
+		// every column: the height one walks on (built floors, roads and landings count), water, a fence or wall top
+		// one can't step onto, and whether a road may be dug there (natural, outside the ring and its moat, not built)
 		int[] h = new int[n * n];
 		boolean[] water = new boolean[n * n];
-		boolean[] blocked = new boolean[n * n];
+		boolean[] wall = new boolean[n * n];
+		boolean[] unloaded = new boolean[n * n];
+		boolean[] inRing = new boolean[n * n];
+		boolean[] dig = new boolean[n * n];
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int i = 0; i < n; i++) {
 			for (int k = 0; k < n; k++) {
 				int x = x0 + i, z = z0 + k, c = i * n + k;
-				if (!level.isLoaded(pos.set(x, 0, z)) || x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1 || builtCols.contains(BlockPos.asLong(x, 0, z))) {
-					blocked[c] = true;
+				if (!level.isLoaded(pos.set(x, 0, z))) {
+					unloaded[c] = true;
 					continue;
 				}
 				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
@@ -402,7 +407,10 @@ final class RoadLink {
 				}
 				h[c] = y;
 				water[c] = !st.getFluidState().isEmpty();
-				blocked[c] = !water[c] && !SiteWork.natural(st); // someone's floor or roof: not ours to dig
+				net.minecraft.world.phys.shapes.VoxelShape shape = st.getCollisionShape(level, pos);
+				wall[c] = !water[c] && !shape.isEmpty() && shape.max(Direction.Axis.Y) > 1.0;
+				inRing[c] = x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1;
+				dig[c] = !inRing[c] && !builtCols.contains(BlockPos.asLong(x, 0, z)) && (water[c] || SiteWork.natural(st));
 			}
 		}
 		int si = start.getX() - x0, sk = start.getZ() - z0;
@@ -410,7 +418,6 @@ final class RoadLink {
 			return;
 		}
 		int startCell = si * n + sk;
-		blocked[startCell] = false;
 		{ // the road starts on whatever is at the gate's exit now: the landing the gate built, or the land
 			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, start.getX(), start.getZ()) - 1;
 			BlockState st = level.getBlockState(pos.set(start.getX(), y, start.getZ()));
@@ -419,6 +426,8 @@ final class RoadLink {
 			}
 			h[startCell] = y;
 			water[startCell] = !st.getFluidState().isEmpty();
+			wall[startCell] = false;
+			unloaded[startCell] = false;
 		}
 		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 		// open land: every column from which the edge of the area can be walked to (one up, three down, no swimming)
@@ -426,7 +435,7 @@ final class RoadLink {
 		java.util.ArrayDeque<Integer> queue = new java.util.ArrayDeque<>();
 		for (int i = 0; i < n; i++) {
 			for (int c : new int[] {i * n, i * n + n - 1, i, (n - 1) * n + i}) {
-				if (!blocked[c] && !water[c] && !open[c]) {
+				if (!unloaded[c] && !water[c] && !wall[c] && !open[c]) {
 					open[c] = true;
 					queue.add(c);
 				}
@@ -441,7 +450,7 @@ final class RoadLink {
 					continue;
 				}
 				int a = ai * n + ak;
-				if (!open[a] && !blocked[a] && !water[a] && h[b] - h[a] <= 1 && h[a] - h[b] <= 3) {
+				if (!open[a] && !unloaded[a] && !water[a] && !wall[a] && h[b] - h[a] <= 1 && h[a] - h[b] <= 3) {
 					open[a] = true;
 					queue.add(a);
 				}
@@ -502,10 +511,15 @@ final class RoadLink {
 			}
 			for (int[] d : dirs) {
 				int bi = ai + d[0], bk = ak + d[1];
-				if (bi < 0 || bk < 0 || bi >= n || bk >= n || blocked[bi * n + bk]) {
+				if (bi < 0 || bk < 0 || bi >= n || bk >= n) {
 					continue;
 				}
 				int b = bi * n + bk;
+				// built ground outside the ring (a landing, a road) can be walked over as it is, at its own height
+				boolean over = !dig[b] && !unloaded[b] && !inRing[b] && !water[b] && !wall[b];
+				if (!dig[b] && !over) {
+					continue;
+				}
 				boolean again = false;
 				for (int t = 0; t < nr && !again; t++) {
 					int ri = recent[t] / n, rk = recent[t] % n;
@@ -516,7 +530,7 @@ final class RoadLink {
 				}
 				for (int rb = ra - 1; rb <= ra + 1; rb++) {
 					int off = rb - land[b];
-					if (off < -depth || off > depth || rb < floor[b]) {
+					if (off < -depth || off > depth || rb < floor[b] || over && off != 0) {
 						continue;
 					}
 					int nb = b * kk + off + depth;
@@ -566,7 +580,7 @@ final class RoadLink {
 			for (int w = -1; w <= 1; w++) {
 				BlockPos cell = p.relative(side, w);
 				int ci = cell.getX() - x0, ck = cell.getZ() - z0;
-				if (ci < 0 || ck < 0 || ci >= n || ck >= n || (w != 0 && blocked[ci * n + ck]) || builtCols.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
+				if (ci < 0 || ck < 0 || ci >= n || ck >= n || !dig[ci * n + ck] || builtCols.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
 					continue;
 				}
 				// cut: the land above the road goes (trees whole), headroom 3
