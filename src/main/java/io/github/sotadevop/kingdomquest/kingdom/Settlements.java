@@ -555,6 +555,7 @@ public final class Settlements {
 		BlockPos h = s.heart();
 		Set<Long> keep = new HashSet<>(moatColumns(s));
 		keep.addAll(doorApproaches(level, s));
+		keep.addAll(RoadLink.wayOutColumns(s)); // the road out of the gate isn't graded back up
 		SiteWork.grade(level, h, h.getX() + x0 - 6, h.getZ() + z0 - 6, h.getX() + x1 + 6, h.getZ() + z1 + 6, plan::at, all, roads,
 				keep, SiteWork.surface(level, h));
 	}
@@ -579,6 +580,7 @@ public final class Settlements {
 		Set<Long> roads = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		Set<Long> keep = new HashSet<>(moatColumns(s));
 		keep.addAll(doorApproaches(level, s));
+		keep.addAll(RoadLink.wayOutColumns(s)); // the road out of the gate isn't graded back up
 		SiteWork.smooth(level, s.heart(), Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()),
 				Math.max(a.getZ(), b.getZ()), all, roads, SiteWork.surface(level, s.heart()), keep);
 	}
@@ -1900,6 +1902,7 @@ public final class Settlements {
 		// main building's plot covers the whole square and flattened the land in front of raised houses)
 		Set<Long> keepClear = index < cols ? PROTECTED.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
 			Set<Long> out = doorApproaches(level, s, s.jobTrack());
+			out.addAll(RoadLink.wayOutColumns(s));
 			for (Template.Placement p : list) {
 				BlockPos q = s.heart().offset(p.offset());
 				out.remove(BlockPos.asLong(q.getX(), 0, q.getZ()));

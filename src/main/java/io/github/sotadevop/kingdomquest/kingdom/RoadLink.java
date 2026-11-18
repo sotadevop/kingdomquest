@@ -354,6 +354,27 @@ final class RoadLink {
 	private static final int OUT_RADIUS = 150;
 	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
 	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
+	static final String WAY_OUT_KEY = "wayout";
+
+	/** The columns of the settlement's way-out road (3 wide, and one more each side for its banks), empty if it has none. */
+	static Set<Long> wayOutColumns(Settlement s) {
+		String v = s.names().get(WAY_OUT_KEY);
+		if (v == null || v.isEmpty()) {
+			return Set.of();
+		}
+		Set<Long> out = new java.util.HashSet<>();
+		for (String cell : v.split(";")) {
+			String[] p = cell.split(",");
+			int x = Integer.parseInt(p[0]), z = Integer.parseInt(p[2]);
+			for (int dx = -2; dx <= 2; dx++) {
+				for (int dz = -2; dz <= 2; dz++) {
+					out.add(BlockPos.asLong(x + dx, 0, z + dz));
+				}
+			}
+		}
+		return out;
+	}
+
 	/** The centre line of the last way-out road (for finding what broke it). */
 	private static final Map<UUID, List<BlockPos>> LAID = new HashMap<>();
 	/** Settlements whose owner was told this session that no road out could be laid (said once). */
@@ -642,7 +663,7 @@ final class RoadLink {
 			trace.append(String.format(" (%d,%d) land %d road %d%s", x0 + c / n - heart.getX(), z0 + c % n - heart.getZ(), land[c] - heart.getY(),
 					road[i] - heart.getY(), water[c] ? " water" : ""));
 		}
-		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out path:{}", trace);
+		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.debug("Way out path:{}", trace);
 		{ // check: walk the finished road again and tell where it stops, if it does
 			Set<Long> again = new java.util.HashSet<>();
 			java.util.ArrayDeque<long[]> q2 = new java.util.ArrayDeque<>();
@@ -677,6 +698,15 @@ final class RoadLink {
 			laid.add(new BlockPos(x0 + path.get(i) / n, road[i], z0 + path.get(i) % n));
 		}
 		LAID.put(s.id(), laid);
+		// stored with the settlement, so site grading, smoothing and later builds leave the road alone (also after a restart)
+		StringBuilder enc = new StringBuilder();
+		for (BlockPos b : laid) {
+			enc.append(enc.length() == 0 ? "" : ";").append(b.getX()).append(',').append(b.getY()).append(',').append(b.getZ());
+		}
+		Settlement current = Settlements.byHeart(server, heart);
+		if (current != null) {
+			Settlements.putState(server, current.withName(WAY_OUT_KEY, enc.toString()));
+		}
 		int mid = path.get(len / 2);
 		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
