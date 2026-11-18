@@ -446,7 +446,7 @@ final class RoadLink {
 		List<BlockPos> before = storedLine(s);
 		if (!before.isEmpty()) {
 			lay(level, before, col -> !builtCols.contains(col) && !(BlockPos.getX(col) >= bx0 && BlockPos.getX(col) <= bx1 && BlockPos.getZ(col) >= bz0
-					&& BlockPos.getZ(col) <= bz1), built, SiteWork.subsoil(SiteWork.surface(level, heart)), tier(s));
+					&& BlockPos.getZ(col) <= bz1), built, SiteWork.surface(level, heart), tier(s));
 			reach.clear();
 			if (walksOut(level, heart, reach)) {
 				io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: the road was covered by a build and is laid again", s.name());
@@ -634,7 +634,7 @@ final class RoadLink {
 		lay(level, line, col -> {
 			int ci = BlockPos.getX(col) - x0, ck = BlockPos.getZ(col) - z0;
 			return ci >= 0 && ck >= 0 && ci < n && ck < n && dig[ci * n + ck] && !builtCols.contains(col);
-		}, built, SiteWork.subsoil(SiteWork.surface(level, heart)), tier(s));
+		}, built, SiteWork.surface(level, heart), tier(s));
 		StringBuilder trace = new StringBuilder();
 		for (int i = 0; i < len; i++) {
 			int c = path.get(i);
@@ -707,7 +707,8 @@ final class RoadLink {
 	 * 3), earth is filled under it down to the land, stone through water, then the road surface. Only columns
 	 * {@code mayDig} accepts (keys x,0,z) are touched.
 	 */
-	private static void lay(ServerLevel level, List<BlockPos> line, java.util.function.LongPredicate mayDig, Set<Long> built, BlockState fill, int tier) {
+	private static void lay(ServerLevel level, List<BlockPos> line, java.util.function.LongPredicate mayDig, Set<Long> built, BlockState surface, int tier) {
+		BlockState fill = SiteWork.subsoil(surface);
 		int len = line.size();
 		for (int i = 0; i < len; i++) {
 			BlockPos p = line.get(i);
@@ -744,6 +745,98 @@ final class RoadLink {
 				post(level, p.relative(side, 2));
 			}
 		}
+		finish(level, line, mayDig, surface);
+	}
+
+	/**
+	 * The look of a road through hilly land (agreed with the user): where it is cut 3 or more into the hill, the
+	 * sides of the cut are stone retaining walls; where it runs 2 or more above the land, its sides are stone down to
+	 * the land with a low wall on top as a railing; every 1-block step becomes a stair, so it is walked without jumping.
+	 * Stone matches the settlement's walls (sandstone in the desert, cobblestone in the snow, stone bricks elsewhere).
+	 */
+	private static void finish(ServerLevel level, List<BlockPos> line, java.util.function.LongPredicate mayDig, BlockState surface) {
+		BlockState wall = SiteWork.wallFor(surface);
+		BlockState rail = wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SANDSTONE_WALL.defaultBlockState()
+				: wall.is(Blocks.CUT_RED_SANDSTONE) ? Blocks.RED_SANDSTONE_WALL.defaultBlockState()
+				: wall.is(Blocks.COBBLESTONE) ? Blocks.COBBLESTONE_WALL.defaultBlockState() : Blocks.STONE_BRICK_WALL.defaultBlockState();
+		BlockState stair = wall.is(Blocks.SMOOTH_SANDSTONE) ? Blocks.SANDSTONE_STAIRS.defaultBlockState()
+				: wall.is(Blocks.CUT_RED_SANDSTONE) ? Blocks.RED_SANDSTONE_STAIRS.defaultBlockState()
+				: wall.is(Blocks.COBBLESTONE) ? Blocks.COBBLESTONE_STAIRS.defaultBlockState() : Blocks.STONE_BRICK_STAIRS.defaultBlockState();
+		int len = line.size();
+		// the road's own columns (3 wide): nothing of the finish goes there
+		Set<Long> onRoad = new java.util.HashSet<>();
+		Direction[] sides = new Direction[len];
+		for (int i = 0; i < len; i++) {
+			BlockPos p = line.get(i);
+			BlockPos prev = line.get(Math.max(0, i - 1)), next = line.get(Math.min(len - 1, i + 1));
+			sides[i] = Math.abs(next.getX() - prev.getX()) >= Math.abs(next.getZ() - prev.getZ()) ? Direction.SOUTH : Direction.EAST;
+			for (int w = -1; w <= 1; w++) {
+				BlockPos c = p.relative(sides[i], w);
+				onRoad.add(BlockPos.asLong(c.getX(), 0, c.getZ()));
+			}
+		}
+		BlockPos.MutableBlockPos q = new BlockPos.MutableBlockPos();
+		for (int i = 0; i < len; i++) {
+			BlockPos p = line.get(i);
+			int road = p.getY();
+			for (int w : new int[] {-2, 2}) {
+				BlockPos edge = p.relative(sides[i], w);
+				long col = BlockPos.asLong(edge.getX(), 0, edge.getZ());
+				if (onRoad.contains(col) || !mayDig.test(col)) {
+					continue;
+				}
+				int top = SiteWork.groundTop(level, edge.getX(), edge.getZ(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, edge.getX(), edge.getZ()));
+				if (top >= road + 3) {
+					// a cutting: the side that stands over the road is faced with stone (at most 10 up)
+					for (int y = road + 1; y <= Math.min(top, road + 10); y++) {
+						BlockState st = level.getBlockState(q.set(edge.getX(), y, edge.getZ()));
+						if (SiteWork.terrain(st) || SiteWork.earthwork(st)) {
+							level.setBlock(q, Math.floorMod(edge.getX() * 31 + y * 7 + edge.getZ() * 13, 5) == 0 ? mossyOf(wall) : wall, Block.UPDATE_CLIENTS);
+						}
+					}
+				} else if (top <= road - 2) {
+					// raised: a stone side down to the land and a low wall on top
+					for (int y = road; y > top && y > road - 40; y--) {
+						BlockState st = level.getBlockState(q.set(edge.getX(), y, edge.getZ()));
+						if (!(st.isAir() || st.canBeReplaced() || st.getBlock() instanceof LiquidBlock || SiteWork.natural(st))) {
+							break;
+						}
+						level.setBlock(q, Math.floorMod(edge.getX() * 31 + y * 7 + edge.getZ() * 13, 5) == 0 ? mossyOf(wall) : wall, Block.UPDATE_CLIENTS);
+					}
+					BlockState above = level.getBlockState(q.set(edge.getX(), road + 1, edge.getZ()));
+					if (above.isAir() || above.canBeReplaced()) {
+						level.setBlock(q, Block.updateFromNeighbourShapes(rail, level, q), Block.UPDATE_ALL);
+					}
+				}
+			}
+		}
+		// steps: a stair on the lower cell, facing up the road, over the road's width
+		for (int i = 0; i < len; i++) {
+			BlockPos p = line.get(i);
+			for (int j : new int[] {i + 1, i - 1}) {
+				if (j < 0 || j >= len || line.get(j).getY() != p.getY() + 1) {
+					continue;
+				}
+				BlockPos up = line.get(j);
+				Direction toward = up.getX() > p.getX() ? Direction.EAST : up.getX() < p.getX() ? Direction.WEST : up.getZ() > p.getZ() ? Direction.SOUTH : Direction.NORTH;
+				for (int w = -1; w <= 1; w++) {
+					BlockPos cell = p.relative(sides[i], w).above();
+					if (!mayDig.test(BlockPos.asLong(cell.getX(), 0, cell.getZ())) && w != 0) {
+						continue;
+					}
+					BlockState st = level.getBlockState(cell);
+					if (st.isAir() || st.canBeReplaced()) {
+						level.setBlock(cell, stair.setValue(StairBlock.FACING, toward), Block.UPDATE_ALL);
+					}
+				}
+				break; // one stair per cell
+			}
+		}
+	}
+
+	private static BlockState mossyOf(BlockState wall) {
+		return wall.is(Blocks.STONE_BRICKS) ? Blocks.MOSSY_STONE_BRICKS.defaultBlockState()
+				: wall.is(Blocks.COBBLESTONE) ? Blocks.MOSSY_COBBLESTONE.defaultBlockState() : wall;
 	}
 
 	/** A min-heap of longs (cost in the high half, state in the low half) without boxing. */

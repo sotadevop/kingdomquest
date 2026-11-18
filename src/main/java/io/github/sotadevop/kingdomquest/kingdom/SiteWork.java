@@ -58,8 +58,17 @@ public final class SiteWork {
 	 * deep drop the terraces step down to it, instead of stopping at the template's apron in a cliff.
 	 */
 	private static final int REACH = 14;
-	/** Over a deep drop the made ground steps down in terraces: a stone face this high, then a bench of earth. */
-	static final int TERRACE_STEP = 4;
+	/**
+	 * Over a deep drop the made ground steps down in terraces: a stone face this high, then a bench of earth. 3 with
+	 * benches 3 wide is a 1:1 slope (was 4: faces of 4 read as walls, user asked for smaller steps).
+	 */
+	static final int TERRACE_STEP = 3;
+	/**
+	 * A terrace bench is only made up where the land lies at most this far below it. Deeper (a cliff, a gorge), the
+	 * land stays as it is: before, the outermost bench was filled to the bottom and stood as a stone wall of 20-35
+	 * blocks on steep hills (field test: windswept hills, stony peaks, pale garden).
+	 */
+	static final int TERRACE_MAX_FILL = TERRACE_STEP + 2;
 	/** Width of each terrace bench (the flat strip of earth between two stone faces). */
 	static final int BENCH = 3;
 
@@ -592,6 +601,9 @@ public final class SiteWork {
 				break;
 			}
 			depth++;
+		}
+		if (terrace && depth > TERRACE_MAX_FILL) {
+			return false; // a bench over a cliff: the natural slope stays, no tower of stone
 		}
 		if (depth == 0 || !margin && !terrace && depth > 2 && (!bank || blocked) || terrace && blocked) {
 			return false; // outside the pad only dips are filled; a real drop stays natural and the pad ends in its wall
