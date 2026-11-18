@@ -2089,7 +2089,10 @@ def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=No
     else:
         bf = lambda x, y, z, i: blk
         sf = lambda x, y, z, i: st
-    top, low, zc, ridge = gable_roof(b, xl, xr, z1 + 1, z0 - 1, h, R["rises"], bf, sf, cap)
+    rises = R["rises"]
+    if rises[2] == 2 and (z1 - z0 + 3) // 2 >= 6:     # deep halls: steep only at the eaves, or the roof towers over the walls
+        rises = (1, 1, 2) + (1,) * 8
+    top, low, zc, ridge = gable_roof(b, xl, xr, z1 + 1, z0 - 1, h, rises, bf, sf, cap)
     peak = ridge
     # gables
     for xx in (x0, x1):
@@ -2539,7 +2542,7 @@ def motte(b, style):
         b.put(x, H, z1, "air")
 
 
-def pyramid_roof(b, xa, za, size, y, block, stair, rise=1, corners_up=False, finial=None):
+def pyramid_roof(b, xa, za, size, y, block, stair, rise=1, corners_up=False, finial=None, solid=False):
     """A square pyramid roof from (xa, za), size x size, eave at height y: rings of stairs climbing inward, rise 1 or
     2 per ring (2 = a steep spire, full blocks under each stair). corners_up turns the eave corners up (the Asian
     way). Returns the height of its top."""
@@ -2567,6 +2570,11 @@ def pyramid_roof(b, xa, za, size, y, block, stair, rise=1, corners_up=False, fin
                 b.put(x, h + rise - 1, z, stair, facing=f, **ST)
                 if corners_up and k == 0 and x in (lo_x, hi_x) and z in (lo_z, hi_z):
                     b.put(x, h + rise, z, stair, facing={"east": "west", "west": "east"}[f], **ST)
+        if solid:                               # no hollow attic nobody can reach
+            for x in range(lo_x + 1, hi_x):
+                for z in range(lo_z + 1, hi_z):
+                    for yy in range(h, h + rise):
+                        b.put(x, yy, z, block)
         h += rise
         k += 1
     return h
@@ -2579,6 +2587,79 @@ TURRET_ROOF = {
     "frozen": ("dark_oak_planks", "dark_oak_stairs", 1, False, ("dark_oak_fence", {})),
     "wild": ("spruce_planks", "spruce_stairs", 1, True, ("spruce_fence", {})),
 }
+
+
+def keep_cap(b, style, cx, cz, H):
+    """The keep's crown on its roof, 7x7 around (cx, cz), the place the citadel's donjon takes later: a timber-framed
+    room under a slate spire (German), a harled caphouse under slate (Scottish), a log room under shingles (Nordic),
+    an open pavilion under a two-tier roof with upturned corners (Southeast Asian), a dome on a drum with a zellige
+    band (Moorish). Each room has a doorway on the south side onto the roof."""
+    x0, x1, z0, z1 = cx - 3, cx + 3, cz - 3, cz + 3
+    y0 = H + 1
+    if style == "arid":
+        for x in range(cx - 2, cx + 3):
+            for z in range(cz - 2, cz + 3):
+                edge = x in (cx - 2, cx + 2) or z in (cz - 2, cz + 2)
+                for y in range(y0, y0 + 5):
+                    if edge:
+                        b.put(x, y, z, pick(ZELLIGE, x, y, z) if y == y0 + 4 else "smooth_sandstone",
+                              **({"facing": pick(("north", "east", "south", "west"), z, x, y)} if y == y0 + 4 else {}))
+        for y in (y0, y0 + 1):
+            b.put(cx, y, cz + 2, "air")
+        for y, r in ((y0 + 5, 2), (y0 + 6, 2), (y0 + 7, 1), (y0 + 8, 0)):     # the dome
+            for x in range(cx - r, cx + r + 1):
+                for z in range(cz - r, cz + r + 1):
+                    if r == 2 and abs(x - cx) == 2 and abs(z - cz) == 2:
+                        continue
+                    if abs(x - cx) == r or abs(z - cz) == r or r == 0:
+                        b.put(x, y, z, "smooth_sandstone")
+        b.put(cx, y0 + 9, cz, "lightning_rod", facing="up", powered="false", waterlogged="false")
+        return
+    if style == "wild":                         # open pavilion: posts, a rail, two roofs
+        for x, z in ((x0 + 1, z0 + 1), (x1 - 1, z0 + 1), (x0 + 1, z1 - 1), (x1 - 1, z1 - 1)):
+            for y in range(y0, y0 + 5):
+                b.put(x, y, z, "stripped_jungle_log", axis="y")
+        for x in range(x0 + 2, x1 - 1):
+            for z in (z0 + 1, z1 - 1):
+                if x != cx:
+                    b.put(x, y0, z, "bamboo_fence")
+        pyramid_roof(b, x0, z0, 7, y0 + 5, "spruce_planks", "spruce_stairs", 1, True, ("spruce_fence", {}), solid=True)
+        b.put(cx, y0 + 4, cz, "lantern", hanging="true", waterlogged="false")
+        return
+    wall = {"temperate": None, "highland": "harl", "frozen": "log"}[style]
+    RH = 6                                      # tall enough to stand clear of the turrets
+    for x in range(x0 + 1, x1):
+        for z in range(z0 + 1, z1):
+            edge = x in (x0 + 1, x1 - 1) or z in (z0 + 1, z1 - 1)
+            corner = x in (x0 + 1, x1 - 1) and z in (z0 + 1, z1 - 1)
+            for y in range(y0, y0 + RH):
+                if not edge:
+                    b.put(x, y, z, "air")
+                elif wall == "harl":
+                    b.put(x, y, z, QUOIN[y % 2] if corner else pick(("calcite", "diorite", "calcite", "calcite"), x, y, z))
+                elif wall == "log":
+                    b.put(x, y, z, "spruce_log" if y % 2 else "stripped_spruce_log",
+                          axis="y" if corner else "x" if z in (z0 + 1, z1 - 1) else "z")
+                else:                           # German framing: posts at corners and middles, white infill, a sill
+                    post = corner or x == cx or z == cz
+                    if post or y in (y0, y0 + RH - 1):
+                        b.put(x, y, z, "stripped_dark_oak_log", axis="y" if post else "x" if z in (z0 + 1, z1 - 1) else "z")
+                    else:
+                        b.put(x, y, z, "calcite")
+            if edge and not corner and (x == cx - 1 or z == cz - 1 or x == cx + 1 or z == cz + 1) and wall != "log":
+                for y in (y0 + 2, y0 + 4):
+                    b.put(x, y, z, "glass_pane", **(PANE_X if z in (z0 + 1, z1 - 1) else PANE_Z))
+    for y in (y0, y0 + 1):
+        b.put(cx, y, z1 - 1, "air")
+    if wall == "log":
+        for x in (cx - 1, cx + 1):
+            b.put(x, y0 + 1, z1 - 1, "glass_pane", **PANE_X)
+    for x in range(x0 + 2, x1 - 1):             # the room's ceiling
+        for z in range(z0 + 2, z1 - 1):
+            b.put(x, y0 + RH, z, "spruce_planks")
+    b.put(cx, y0 + RH - 1, cz, "lantern", hanging="true", waterlogged="false")
+    blk, st, rise, up, fin = TURRET_ROOF[style]
+    pyramid_roof(b, x0, z0, 7, y0 + RH, blk, st, rise, up, fin, solid=True)
 
 
 KEEP_TRIM = {"temperate": "polished_andesite", "frozen": "stone_bricks", "arid": "cut_sandstone", "highland": "polished_andesite",
@@ -2612,9 +2693,24 @@ def castle_keep(b, style, z_shift=0):
                 if edge:
                     loop = y in (3, 4, 8, 9) and ((x - x0) % 4 == 2 and z in (z0, z1) or (z - z0) % 4 == 2 and x in (x0, x1))
                     if loop:
-                        b.put(x, y, z, "iron_bars", **(PANE_X if z in (z0, z1) else PANE_Z))
+                        framed = style in ("temperate", "frozen", "wild") and y in (8, 9)
+                        b.put(x, y, z, "glass_pane" if framed else "iron_bars", **(PANE_X if z in (z0, z1) else PANE_Z))
                     else:
                         b.put(x, y, z, trim if y in (6, H - 1) else mat(x, y, z))
+                        if style == "highland" and 1 < y < H - 1 and y != 6:
+                            b.put(x, y, z, pick(("calcite", "diorite", "calcite", "calcite"), x, y, z))
+                        if style in ("temperate", "frozen", "wild") and 6 < y < H - 1:   # the upper storey in wood
+                            u = x - x0 if z in (z0, z1) else z - z0
+                            along = "x" if z in (z0, z1) else "z"
+                            if style == "frozen":
+                                b.put(x, y, z, "spruce_log" if y % 2 else "stripped_spruce_log", axis=along)
+                            elif u % 3 == 0:
+                                b.put(x, y, z, "stripped_dark_oak_log" if style == "temperate" else "stripped_jungle_log", axis="y")
+                            elif y == H - 2:
+                                b.put(x, y, z, "stripped_dark_oak_log" if style == "temperate" else "mangrove_planks",
+                                      **({"axis": along} if style == "temperate" else {}))
+                            else:
+                                b.put(x, y, z, "calcite" if style == "temperate" else pick(("bamboo_mosaic", "bamboo_planks"), x, y, z))
                         if style == "arid" and y in (6, H - 1):
                             b.put(x, y, z, pick(ZELLIGE, x, y, z), facing=pick(("north", "east", "south", "west"), z, x, y))
                 else:
@@ -2646,6 +2742,9 @@ def castle_keep(b, style, z_shift=0):
                 for y in range(0, T):
                     if edge:
                         b.put(x, y, z, trim if y in (6, H - 1, T - 1) else mat(x, y, z))
+                        corner = x in (tx, tx + 4) and z in (tz, tz + 4)
+                        if style == "highland" and y > 1 and y not in (6, H - 1, T - 1):
+                            b.put(x, y, z, QUOIN[y % 2] if corner else pick(("calcite", "diorite", "calcite", "calcite"), x, y, z))
                     elif y > H:
                         b.put(x, y, z, "air")
                 if edge:
@@ -2672,6 +2771,7 @@ def castle_keep(b, style, z_shift=0):
             b.put(px, T + 1, pz, wood + "_fence")
             b.put(px, T + 2, pz, wood + "_fence")
             b.put(px, T + 3, pz, "{color}_banner", rotation="0" if north else "8")
+    keep_cap(b, style, cx, (z0 + z1) // 2, H)
     # entrance: an archway three wide with a portcullis drawn up into it, steps, banners and lanterns
     for x in (cx - 1, cx, cx + 1):
         for y in (1, 2, 3):
