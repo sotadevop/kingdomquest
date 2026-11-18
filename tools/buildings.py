@@ -2708,7 +2708,10 @@ def nordic_inn(style, level):
         floor_y = gh + 1
         for x in range(x0, x1 + 1):
             for z in range(z0, z1 + 1):
-                b.put(x, floor_y, z, "spruce_planks" if x0 < x < x1 and z0 < z < fz or z == z1 else "spruce_log", axis="x")
+                if x0 < x < x1 and z0 < z < fz or z == z1:
+                    b.put(x, floor_y, z, "spruce_planks")
+                else:
+                    b.put(x, floor_y, z, "spruce_log", axis="x")
         logs(floor_y + 1, floor_y + 4)
         for x in (x0, x1):      # no crossing ends up here: the gallery runs past
             for y in range(floor_y + 1, floor_y + 5):
@@ -3106,7 +3109,10 @@ def wild_inn(style, level):
         floor_y = gh + 1
         for x in range(x0, x1 + 1):
             for z in range(z0, z1 + 1):
-                b.put(x, floor_y, z, "jungle_planks" if x0 < x < x1 and z0 < z < fz else "stripped_jungle_log", axis="x")
+                if x0 < x < x1 and z0 < z < fz:
+                    b.put(x, floor_y, z, "jungle_planks")
+                else:
+                    b.put(x, floor_y, z, "stripped_jungle_log", axis="x")
         woven(floor_y + 1, floor_y + 4)
         for wx in (24, 26, 30, 32):
             blind(wx, floor_y + 2, fz, "south")
