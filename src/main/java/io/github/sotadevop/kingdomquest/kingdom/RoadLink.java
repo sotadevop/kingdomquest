@@ -498,6 +498,16 @@ final class RoadLink {
 				open[c] |= feetY >= h[c] && feetY <= h[c] + 2; // standing on the column's top, not in a cave below it
 			}
 		}
+		// the old road (laid again above) still leads out from where it was cut off: a short link to it is enough
+		for (BlockPos b : before) {
+			int ci = b.getX() - x0, ck = b.getZ() - z0;
+			if (ci >= 0 && ck >= 0 && ci < n && ck < n) {
+				int c = ci * n + ck;
+				h[c] = b.getY();
+				water[c] = false;
+				open[c] = true;
+			}
+		}
 		// the cheapest road from the gate to the open land. The search runs over (column, road height): the road
 		// rises or falls at most one block per block and lies at most DEPTH above or below the land (deeper cuts and
 		// higher banks aren't built), so a steep hillside is crossed on a long slanting road instead of a stair.
@@ -585,7 +595,8 @@ final class RoadLink {
 		if (goal < 0) {
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			// said once, and only when the gate is finished: before that the land may still change
-			if (owner != null && s.level(Progression.GATE) >= Progression.GATE_STEPS.size() && TOLD.add(s.id())) {
+			if (owner != null && s.level(Progression.GATE) >= Progression.GATE_STEPS.size()
+					&& s.level(Settlement.MAIN) >= Progression.steps(Settlement.MAIN).size() && TOLD.add(s.id())) {
 				People.say(owner, "Architect", "Outside the gate the land is closed in by water and cliffs, and no road can be laid down from it. "
 						+ "Make a way out by hand, or found the castle facing open land.");
 			}
