@@ -354,6 +354,8 @@ final class RoadLink {
 	private static final int OUT_RADIUS = 150;
 	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
 	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
+	/** Settlements whose owner was told this session that no road out could be laid (said once). */
+	private static final Set<UUID> TOLD = new java.util.HashSet<>();
 
 	/**
 	 * Makes sure one can walk from the gate out into the open land. A wall closes the ring, so a gate that opens onto a
@@ -491,8 +493,9 @@ final class RoadLink {
 				break; // no reasonable road: leave the land as it is
 			}
 			int ai = a / n, ak = a % n;
-			// the road can't come back over itself: the last columns it ran through are not entered again
-			int[] recent = new int[16];
+			// the road can't come back over or beside itself (it is 3 wide): a column within 2 of where the road ran
+			// more than 3 steps ago is not entered, so a way down a cliff needs real room, not a spiral
+			int[] recent = new int[40];
 			int nr = 0;
 			for (int t = from[st]; t >= 0 && nr < recent.length; t = from[t]) {
 				recent[nr++] = t / kk;
@@ -504,8 +507,9 @@ final class RoadLink {
 				}
 				int b = bi * n + bk;
 				boolean again = false;
-				for (int t = 0; t < nr; t++) {
-					again |= recent[t] == b;
+				for (int t = 0; t < nr && !again; t++) {
+					int ri = recent[t] / n, rk = recent[t] % n;
+					again = t < 3 ? recent[t] == b : Math.abs(ri - bi) <= 2 && Math.abs(rk - bk) <= 2;
 				}
 				if (again) {
 					continue;
@@ -527,7 +531,7 @@ final class RoadLink {
 		}
 		if (goal < 0) {
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-			if (owner != null) {
+			if (owner != null && TOLD.add(s.id())) {
 				People.say(owner, "Architect", "Outside the gate the land is closed in by water and cliffs, and no road can be laid down from it. "
 						+ "Make a way out by hand, or found the castle facing open land.");
 			}
