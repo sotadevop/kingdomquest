@@ -2073,11 +2073,6 @@ public final class Settlements {
 				SiteWork.snowCover(level, Math.min(sa.getX(), sb.getX()), Math.min(sa.getZ(), sb.getZ()), Math.max(sa.getX(), sb.getX()),
 						Math.max(sa.getZ(), sb.getZ()), nowBuilt);
 			}
-			// from gate 3 the landing and the moat are where they stay; checked after every build, since any build's
-			// slopes and banks could cover the road
-			if (done.level(Progression.WALLS) >= 1 && done.level(Progression.GATE) >= 3) {
-				RoadLink.wayOut(server, done, nowBuilt); // the gate must open onto land that leads away
-			}
 			Production.armTraps(level, done, list);
 			if (Progression.KENNEL.equals(s.jobTrack())) {
 				ServerPlayer o = server.getPlayerList().getPlayer(s.owner());
@@ -2094,6 +2089,15 @@ public final class Settlements {
 			}
 			if (!Progression.ROADS.equals(s.jobTrack()) && !Progression.LAMPS.equals(s.jobTrack())) {
 				extendInfrastructure(server, done.withLevel(s.jobTrack(), done.level(s.jobTrack())));
+			}
+			// the gate must open onto land that leads away. From gate 3 the landing and the moat are where they stay;
+			// checked after every build (last, on the stored state: the roads update above writes the settlement too),
+			// since any build's slopes and banks could cover the road
+			Settlement fresh = byHeart(server, s.heart());
+			if (fresh != null && fresh.level(Progression.WALLS) >= 1 && fresh.level(Progression.GATE) >= 3) {
+				Set<Long> allNow = new HashSet<>();
+				fresh.built().values().forEach(allNow::addAll);
+				RoadLink.wayOut(server, fresh, allNow);
 			}
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
