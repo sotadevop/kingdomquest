@@ -288,6 +288,7 @@ public final class SiteWork {
 	 */
 	private static BlockState naturalShore(ServerLevel level, int x0, int z0, int x1, int z1, int reach, Set<Long> built, BlockState surface) {
 		Map<Block, Integer> count = new HashMap<>();
+		Map<Block, Integer> loose = new HashMap<>();
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int x = x0 - reach; x <= x1 + reach; x += 2) {
 			for (int z = z0 - reach; z <= z1 + reach; z += 2) {
@@ -304,9 +305,18 @@ public final class SiteWork {
 					wet |= level.getFluidState(pos.set(x + d.getStepX() * 2, top, z + d.getStepZ() * 2)).is(net.minecraft.tags.FluidTags.WATER);
 				}
 				if (wet) {
-					count.merge(level.getBlockState(pos.set(x, top, z)).getBlock(), 1, Integer::sum);
+					Block b = level.getBlockState(pos.set(x, top, z)).getBlock();
+					count.merge(b, 1, Integer::sum);
+					if (!b.defaultBlockState().is(BlockTags.BASE_STONE_OVERWORLD)) {
+						loose.merge(b, 1, Integer::sum);
+					}
 				}
 			}
+		}
+		// loose ground (sand, gravel, mud, turf) before bare rock: a desert pool walled by a rock ledge still gets
+		// a sand shore; only a shore that is rock all along (a stony shore) gets rock
+		if (!loose.isEmpty()) {
+			count = loose;
 		}
 		// no natural shore near (a settlement reclaimed out of the sea): a sand beach, but a mushroom island keeps
 		// its mycelium down to the water like the real ones
@@ -354,7 +364,8 @@ public final class SiteWork {
 				for (int j = 0; j < ny; j++) {
 					BlockState st = level.getBlockState(pos.set(x0 + i, ylo + j, z0 + k));
 					boolean leaves = st.getBlock() instanceof LeavesBlock && !(st.hasProperty(LeavesBlock.PERSISTENT) && st.getValue(LeavesBlock.PERSISTENT));
-					if (!st.isAir() && st.getFluidState().isEmpty() && !leaves) {
+					// waterlogged blocks (mangrove roots, seagrass beds) are solid: a mangrove stands on its roots in the water
+					if (!st.isAir() && !(st.getBlock() instanceof LiquidBlock) && !leaves) {
 						solid.set((i * nz + k) * ny + j);
 					}
 				}
