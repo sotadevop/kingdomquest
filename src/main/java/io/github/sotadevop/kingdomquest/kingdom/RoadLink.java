@@ -626,7 +626,36 @@ final class RoadLink {
 			trace.append(String.format(" (%d,%d) land %d road %d%s", x0 + c / n - heart.getX(), z0 + c % n - heart.getZ(), land[c] - heart.getY(),
 					road[i] - heart.getY(), water[c] ? " water" : ""));
 		}
-		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.debug("Way out path:{}", trace);
+		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out path:{}", trace);
+		{ // check: walk the finished road again and tell where it stops, if it does
+			Set<Long> again = new java.util.HashSet<>();
+			java.util.ArrayDeque<long[]> q2 = new java.util.ArrayDeque<>();
+			for (int dy = -3; dy <= 6; dy++) {
+				int y = road[0] + 1 + dy;
+				if (!Double.isNaN(FieldTest.feet(level, start.getX(), y, start.getZ(), false)) && again.add(BlockPos.asLong(start.getX(), y, start.getZ()))) {
+					q2.add(new long[] {BlockPos.asLong(start.getX(), y, start.getZ())});
+				}
+			}
+			boolean out = FieldTest.spread(level, heart, again, q2, Set.of(), 300_000);
+			int last = -1;
+			for (int i = 0; i < len; i++) {
+				int c = path.get(i);
+				for (int dy = -1; dy <= 2; dy++) {
+					if (again.contains(BlockPos.asLong(x0 + c / n, road[i] + dy, z0 + c % n))) {
+						last = i;
+					}
+				}
+			}
+			String at = "";
+			if (last + 1 < len) {
+				int c = path.get(last + 1);
+				BlockPos b = new BlockPos(x0 + c / n, road[last + 1], z0 + c % n);
+				at = String.format(" next (%d,%d,%d): below %s, at %s, above %s, over %s", b.getX() - heart.getX(), b.getY() - heart.getY(), b.getZ() - heart.getZ(),
+						level.getBlockState(b).getBlock().getName().getString(), level.getBlockState(b.above()).getBlock().getName().getString(),
+						level.getBlockState(b.above(2)).getBlock().getName().getString(), level.getBlockState(b.above(3)).getBlock().getName().getString());
+			}
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out check: out {}, walked {} of {} road cells{}", out, last + 1, len, at);
+		}
 		int mid = path.get(len / 2);
 		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
