@@ -328,7 +328,7 @@ final class RoadLink {
 			block = (w == 0 || h < 4 ? Blocks.DIRT_PATH : Blocks.COARSE_DIRT).defaultBlockState();
 		}
 		BlockState now = level.getBlockState(cell);
-		if (now.getBlock() instanceof LiquidBlock || now.isAir() || SiteWork.natural(now) || now.is(Blocks.DIRT_PATH) || now.is(Blocks.GRAVEL)
+		if (now.getBlock() instanceof LiquidBlock || now.isAir() || SiteWork.natural(now) || SiteWork.earthwork(now) || now.is(Blocks.DIRT_PATH) || now.is(Blocks.GRAVEL)
 				|| now.is(Blocks.COBBLESTONE) || now.is(Blocks.MOSSY_COBBLESTONE) || now.is(Blocks.SPRUCE_PLANKS) || now.is(Blocks.STONE_BRICKS)) {
 			level.setBlock(cell, block, Block.UPDATE_CLIENTS);
 			BlockPos below = cell.below();
@@ -354,6 +354,27 @@ final class RoadLink {
 	private static final int OUT_RADIUS = 150;
 	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
 	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
+	static final String WAY_OUT_KEY = "wayout";
+
+	/** The columns of the settlement's way-out road (3 wide, and one more each side for its banks), empty if it has none. */
+	static Set<Long> wayOutColumns(Settlement s) {
+		String v = s.names().get(WAY_OUT_KEY);
+		if (v == null || v.isEmpty()) {
+			return Set.of();
+		}
+		Set<Long> out = new java.util.HashSet<>();
+		for (String cell : v.split(";")) {
+			String[] p = cell.split(",");
+			int x = Integer.parseInt(p[0]), z = Integer.parseInt(p[2]);
+			for (int dx = -2; dx <= 2; dx++) {
+				for (int dz = -2; dz <= 2; dz++) {
+					out.add(BlockPos.asLong(x + dx, 0, z + dz));
+				}
+			}
+		}
+		return out;
+	}
+
 	/** Settlements whose owner was told this session that no road out could be laid (said once). */
 	private static final Set<UUID> TOLD = new java.util.HashSet<>();
 
@@ -410,43 +431,52 @@ final class RoadLink {
 				net.minecraft.world.phys.shapes.VoxelShape shape = st.getCollisionShape(level, pos);
 				wall[c] = !water[c] && !shape.isEmpty() && shape.max(Direction.Axis.Y) > 1.0;
 				inRing[c] = x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1;
-				dig[c] = !inRing[c] && !builtCols.contains(BlockPos.asLong(x, 0, z)) && (water[c] || SiteWork.natural(st));
+				// natural land, and the settlement's own old terrace masonry outside the walls (no one's building)
+				dig[c] = !inRing[c] && !builtCols.contains(BlockPos.asLong(x, 0, z)) && (water[c] || SiteWork.natural(st) || SiteWork.earthwork(st));
 			}
-		}
-		int si = start.getX() - x0, sk = start.getZ() - z0;
-		if (si < 0 || sk < 0 || si >= n || sk >= n) {
-			return;
-		}
-		int startCell = si * n + sk;
-		{ // the road starts on whatever is at the gate's exit now: the landing the gate built, or the land
-			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, start.getX(), start.getZ()) - 1;
-			BlockState st = level.getBlockState(pos.set(start.getX(), y, start.getZ()));
-			while (y > level.getMinY() && st.getFluidState().isEmpty() && (st.is(BlockTags.LOGS) || st.canBeReplaced() || !st.isSolid())) {
-				st = level.getBlockState(pos.set(start.getX(), --y, start.getZ()));
-			}
-			h[startCell] = y;
-			water[startCell] = !st.getFluidState().isEmpty();
-			wall[startCell] = false;
-			unloaded[startCell] = false;
 		}
 		int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-		// can one walk from the gate's exit 100 blocks away (the same walk as the field test: one up, three down,
+		// can one walk out of the settlement (from the heart, the same walk as the field test: one up, three down,
 		// through doors and under trees, no swimming)? Then nothing is needed.
 		Set<Long> reach = new java.util.HashSet<>();
-		java.util.ArrayDeque<long[]> walk = new java.util.ArrayDeque<>();
-		for (int dx = -1; dx <= 1; dx++) {
-			for (int dz = -1; dz <= 1; dz++) {
-				for (int dy = -3; dy <= 6; dy++) {
-					int x = start.getX() + dx, y = h[startCell] + 1 + dy, z = start.getZ() + dz;
-					if (!Double.isNaN(FieldTest.feet(level, x, y, z, false)) && reach.add(BlockPos.asLong(x, y, z))) {
-						walk.add(new long[] {BlockPos.asLong(x, y, z)});
-					}
-				}
+		if (walksOut(level, heart, reach)) {
+			return;
+		}
+		// a road laid before that a later build covered or cut (a slope, a bank): laid again where it was
+		List<BlockPos> before = storedLine(s);
+		if (!before.isEmpty()) {
+			lay(level, before, col -> !builtCols.contains(col) && !(BlockPos.getX(col) >= bx0 && BlockPos.getX(col) <= bx1 && BlockPos.getZ(col) >= bz0
+					&& BlockPos.getZ(col) <= bz1), built, SiteWork.subsoil(SiteWork.surface(level, heart)), tier(s));
+			reach.clear();
+			if (walksOut(level, heart, reach)) {
+				io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: the road was covered by a build and is laid again", s.name());
+				return;
 			}
 		}
-		if (FieldTest.spread(level, heart, reach, walk, Set.of(), 300_000)) {
-			return; // the gate already opens onto land that leads away
+		// the road starts where one can get to outside the walls, as near the gate's exit as there is
+		long best = Long.MAX_VALUE;
+		int startCell = -1, startFeet = 0;
+		for (long cell : reach) {
+			int x = BlockPos.getX(cell), z = BlockPos.getZ(cell);
+			int ci = x - x0, ck = z - z0;
+			if (ci < 0 || ck < 0 || ci >= n || ck >= n || x >= bx0 && x <= bx1 && z >= bz0 && z <= bz1 || unloaded[ci * n + ck]) {
+				continue;
+			}
+			long d = (long) (x - start.getX()) * (x - start.getX()) + (long) (z - start.getZ()) * (z - start.getZ());
+			if (d < best) {
+				best = d;
+				startCell = ci * n + ck;
+				startFeet = BlockPos.getY(cell);
+			}
 		}
+		if (startCell < 0) {
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: nothing outside the walls can be walked to", s.name());
+			return;
+		}
+		start = new BlockPos(x0 + startCell / n, startFeet - 1, z0 + startCell % n);
+		h[startCell] = startFeet - 1;
+		water[startCell] = false;
+		wall[startCell] = false;
 		// open land: every column from which one can walk out to 100 blocks away
 		List<Long> edge = new ArrayList<>();
 		int r = FieldTest.R - 1;
@@ -466,6 +496,16 @@ final class RoadLink {
 				int c = ci * n + ck;
 				int feetY = BlockPos.getY(cell);
 				open[c] |= feetY >= h[c] && feetY <= h[c] + 2; // standing on the column's top, not in a cave below it
+			}
+		}
+		// the old road (laid again above) still leads out from where it was cut off: a short link to it is enough
+		for (BlockPos b : before) {
+			int ci = b.getX() - x0, ck = b.getZ() - z0;
+			if (ci >= 0 && ck >= 0 && ci < n && ck < n) {
+				int c = ci * n + ck;
+				h[c] = b.getY();
+				water[c] = false;
+				open[c] = true;
 			}
 		}
 		// the cheapest road from the gate to the open land. The search runs over (column, road height): the road
@@ -496,14 +536,16 @@ final class RoadLink {
 		from[s0] = -1;
 		heap.add(s0);
 		int goal = -1;
+		int popped = 0;
 		while (heap.size() > 0) {
 			long e = heap.poll();
+			popped++;
 			int st = (int) e, cost0 = (int) (e >>> 32);
 			if (cost0 > dist[st]) {
 				continue;
 			}
 			int a = st / kk, ra = land[a] + st % kk - depth;
-			if (open[a] && ra - land[a] <= 3 && land[a] - ra <= 1 && a != startCell) {
+			if (open[a] && ra == land[a] && a != startCell) { // ends on the open land itself, not on a bank over it
 				goal = st;
 				break;
 			}
@@ -554,11 +596,18 @@ final class RoadLink {
 		}
 		if (goal < 0) {
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-			if (owner != null && TOLD.add(s.id())) {
+			// said once, and only when the gate is finished: before that the land may still change
+			if (owner != null && s.level(Progression.GATE) >= Progression.GATE_STEPS.size()
+					&& s.level(Settlement.MAIN) >= Progression.steps(Settlement.MAIN).size() && TOLD.add(s.id())) {
 				People.say(owner, "Architect", "Outside the gate the land is closed in by water and cliffs, and no road can be laid down from it. "
 						+ "Make a way out by hand, or found the castle facing open land.");
 			}
-			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: no road possible from {}", s.name(), start);
+			int openCount = 0;
+			for (boolean o : open) {
+				openCount += o ? 1 : 0;
+			}
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: no road possible from {} (land {}, dig {}, {} open columns, {} states tried)",
+					s.name(), start, h[startCell] - heart.getY(), dig[startCell], openCount, popped);
 			return;
 		}
 		List<Integer> path = new ArrayList<>();
@@ -578,32 +627,108 @@ final class RoadLink {
 		for (int i = 0; i < len; i++) {
 			road[i] = heights.get(i);
 		}
-		BlockState fill = SiteWork.subsoil(SiteWork.surface(level, heart));
-		int tier = tier(s);
+		List<BlockPos> line = new ArrayList<>();
+		for (int i = 0; i < len; i++) {
+			line.add(new BlockPos(x0 + path.get(i) / n, road[i], z0 + path.get(i) % n));
+		}
+		lay(level, line, col -> {
+			int ci = BlockPos.getX(col) - x0, ck = BlockPos.getZ(col) - z0;
+			return ci >= 0 && ck >= 0 && ci < n && ck < n && dig[ci * n + ck] && !builtCols.contains(col);
+		}, built, SiteWork.subsoil(SiteWork.surface(level, heart)), tier(s));
+		StringBuilder trace = new StringBuilder();
 		for (int i = 0; i < len; i++) {
 			int c = path.get(i);
-			BlockPos p = new BlockPos(x0 + c / n, road[i], z0 + c % n);
-			int prev = path.get(Math.max(0, i - 1)), next = path.get(Math.min(len - 1, i + 1));
-			boolean alongX = Math.abs(next / n - prev / n) >= Math.abs(next % n - prev % n);
+			trace.append(String.format(" (%d,%d) land %d road %d%s", x0 + c / n - heart.getX(), z0 + c % n - heart.getZ(), land[c] - heart.getY(),
+					road[i] - heart.getY(), water[c] ? " water" : ""));
+		}
+		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.debug("Way out path:{}", trace);
+		{ // check: can one walk out now?
+			Set<Long> again = new java.util.HashSet<>();
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out check: out {}", walksOut(level, heart, again));
+		}
+		// stored with the settlement, so site grading, smoothing and later builds leave the road alone (also after a
+		// restart); the old road stays part of it (the new one may only link to it)
+		List<BlockPos> keepAll = new ArrayList<>(line);
+		for (BlockPos b : before) {
+			if (!keepAll.contains(b)) {
+				keepAll.add(b);
+			}
+		}
+		StringBuilder enc = new StringBuilder();
+		for (BlockPos b : keepAll) {
+			enc.append(enc.length() == 0 ? "" : ";").append(b.getX()).append(',').append(b.getY()).append(',').append(b.getZ());
+		}
+		Settlement current = Settlements.byHeart(server, heart);
+		if (current != null) {
+			Settlements.putState(server, current.withName(WAY_OUT_KEY, enc.toString()));
+		}
+		int mid = path.get(len / 2);
+		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		if (owner != null) {
+			People.say(owner, "Architect", "Outside the gate the land was closed in, so my workers laid a road from the gate out to the open land (" + len
+					+ " blocks).");
+		}
+		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: road of {} blocks from {} to {}", s.name(), len, start,
+				new BlockPos(x0 + goal / kk / n, road[len - 1], z0 + goal / kk % n));
+	}
+
+	/** The field test's walk from the heart; true if it gets 100 blocks out. The cells walked go into {@code reach}. */
+	private static boolean walksOut(ServerLevel level, BlockPos heart, Set<Long> reach) {
+		java.util.ArrayDeque<long[]> queue = new java.util.ArrayDeque<>();
+		for (int dx = -3; dx <= 3; dx++) {
+			for (int dz = -3; dz <= 3; dz++) {
+				for (int dy = -2; dy <= 3; dy++) {
+					long key = BlockPos.asLong(heart.getX() + dx, heart.getY() + dy, heart.getZ() + dz);
+					if (!Double.isNaN(FieldTest.feet(level, heart.getX() + dx, heart.getY() + dy, heart.getZ() + dz, false)) && reach.add(key)) {
+						queue.add(new long[] {key});
+					}
+				}
+			}
+		}
+		return FieldTest.spread(level, heart, reach, queue, Set.of(), 400_000);
+	}
+
+	/** The centre line of the settlement's way-out road as stored, empty if it has none. */
+	private static List<BlockPos> storedLine(Settlement s) {
+		String v = s.names().get(WAY_OUT_KEY);
+		List<BlockPos> out = new ArrayList<>();
+		if (v != null && !v.isEmpty()) {
+			for (String cell : v.split(";")) {
+				String[] p = cell.split(",");
+				out.add(new BlockPos(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])));
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Lays a road 3 wide along {@code line} (centre cells at road height): the land above goes (trees whole, headroom
+	 * 3), earth is filled under it down to the land, stone through water, then the road surface. Only columns
+	 * {@code mayDig} accepts (keys x,0,z) are touched.
+	 */
+	private static void lay(ServerLevel level, List<BlockPos> line, java.util.function.LongPredicate mayDig, Set<Long> built, BlockState fill, int tier) {
+		int len = line.size();
+		for (int i = 0; i < len; i++) {
+			BlockPos p = line.get(i);
+			BlockPos prev = line.get(Math.max(0, i - 1)), next = line.get(Math.min(len - 1, i + 1));
+			boolean alongX = Math.abs(next.getX() - prev.getX()) >= Math.abs(next.getZ() - prev.getZ());
 			Direction side = alongX ? Direction.SOUTH : Direction.EAST;
 			for (int w = -1; w <= 1; w++) {
 				BlockPos cell = p.relative(side, w);
-				int ci = cell.getX() - x0, ck = cell.getZ() - z0;
-				if (ci < 0 || ck < 0 || ci >= n || ck >= n || !dig[ci * n + ck] || builtCols.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
+				if (!mayDig.test(BlockPos.asLong(cell.getX(), 0, cell.getZ()))) {
 					continue;
 				}
-				// cut: the land above the road goes (trees whole), headroom 3
 				int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, cell.getX(), cell.getZ());
 				for (int y = Math.max(top, cell.getY() + 3); y > cell.getY(); y--) {
 					BlockPos a = new BlockPos(cell.getX(), y, cell.getZ());
 					BlockState st = level.getBlockState(a);
 					if (st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES)) {
 						SiteWork.removeTreeAt(level, a, built);
-					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st)) && st.getFluidState().isEmpty()) {
+					} else if (!st.isAir() && (st.canBeReplaced() || SiteWork.natural(st) || SiteWork.earthwork(st)) && st.getFluidState().isEmpty()) {
 						level.setBlock(a, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_SUPPRESS_DROPS);
 					}
 				}
-				// fill: earth under the road down to the land; stone through water to the bed
 				for (int y = cell.getY() - 1, d = 0; d < 48 && y > level.getMinY(); y--, d++) {
 					BlockPos b = new BlockPos(cell.getX(), y, cell.getZ());
 					BlockState st = level.getBlockState(b);
@@ -619,22 +744,6 @@ final class RoadLink {
 				post(level, p.relative(side, 2));
 			}
 		}
-		StringBuilder trace = new StringBuilder();
-		for (int i = 0; i < len; i++) {
-			int c = path.get(i);
-			trace.append(String.format(" (%d,%d) land %d road %d%s", x0 + c / n - heart.getX(), z0 + c % n - heart.getZ(), land[c] - heart.getY(),
-					road[i] - heart.getY(), water[c] ? " water" : ""));
-		}
-		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.debug("Way out path:{}", trace);
-		int mid = path.get(len / 2);
-		WAY_OUT.put(s.id(), new BlockPos(x0 + mid / n, road[len / 2], z0 + mid % n));
-		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
-		if (owner != null) {
-			People.say(owner, "Architect", "Outside the gate the land was closed in, so my workers laid a road from the gate out to the open land (" + len
-					+ " blocks).");
-		}
-		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: road of {} blocks from {} to {}", s.name(), len, start,
-				new BlockPos(x0 + goal / kk / n, road[len - 1], z0 + goal / kk % n));
 	}
 
 	/** A min-heap of longs (cost in the high half, state in the low half) without boxing. */

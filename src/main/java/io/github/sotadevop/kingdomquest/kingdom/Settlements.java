@@ -555,6 +555,7 @@ public final class Settlements {
 		BlockPos h = s.heart();
 		Set<Long> keep = new HashSet<>(moatColumns(s));
 		keep.addAll(doorApproaches(level, s));
+		keep.addAll(RoadLink.wayOutColumns(s)); // the road out of the gate isn't graded back up
 		SiteWork.grade(level, h, h.getX() + x0 - 6, h.getZ() + z0 - 6, h.getX() + x1 + 6, h.getZ() + z1 + 6, plan::at, all, roads,
 				keep, SiteWork.surface(level, h));
 	}
@@ -579,6 +580,7 @@ public final class Settlements {
 		Set<Long> roads = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		Set<Long> keep = new HashSet<>(moatColumns(s));
 		keep.addAll(doorApproaches(level, s));
+		keep.addAll(RoadLink.wayOutColumns(s)); // the road out of the gate isn't graded back up
 		SiteWork.smooth(level, s.heart(), Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()),
 				Math.max(a.getZ(), b.getZ()), all, roads, SiteWork.surface(level, s.heart()), keep);
 	}
@@ -1900,6 +1902,7 @@ public final class Settlements {
 		// main building's plot covers the whole square and flattened the land in front of raised houses)
 		Set<Long> keepClear = index < cols ? PROTECTED.computeIfAbsent(s.id() + "|" + s.job(), jobKey -> {
 			Set<Long> out = doorApproaches(level, s, s.jobTrack());
+			out.addAll(RoadLink.wayOutColumns(s));
 			for (Template.Placement p : list) {
 				BlockPos q = s.heart().offset(p.offset());
 				out.remove(BlockPos.asLong(q.getX(), 0, q.getZ()));
@@ -2070,10 +2073,6 @@ public final class Settlements {
 				SiteWork.snowCover(level, Math.min(sa.getX(), sb.getX()), Math.min(sa.getZ(), sb.getZ()), Math.max(sa.getX(), sb.getX()),
 						Math.max(sa.getZ(), sb.getZ()), nowBuilt);
 			}
-			if ((Progression.WALLS.equals(s.jobTrack()) || Progression.GATE.equals(s.jobTrack())) && done.level(Progression.WALLS) >= 1
-					&& done.level(Progression.GATE) >= 3) { // from gate 3 the landing and the moat are where they stay
-				RoadLink.wayOut(server, done, nowBuilt); // the gate must open onto land that leads away
-			}
 			Production.armTraps(level, done, list);
 			if (Progression.KENNEL.equals(s.jobTrack())) {
 				ServerPlayer o = server.getPlayerList().getPlayer(s.owner());
@@ -2090,6 +2089,15 @@ public final class Settlements {
 			}
 			if (!Progression.ROADS.equals(s.jobTrack()) && !Progression.LAMPS.equals(s.jobTrack())) {
 				extendInfrastructure(server, done.withLevel(s.jobTrack(), done.level(s.jobTrack())));
+			}
+			// the gate must open onto land that leads away. From gate 3 the landing and the moat are where they stay;
+			// checked after every build (last, on the stored state: the roads update above writes the settlement too),
+			// since any build's slopes and banks could cover the road
+			Settlement fresh = byHeart(server, s.heart());
+			if (fresh != null && fresh.level(Progression.WALLS) >= 1 && fresh.level(Progression.GATE) >= 3) {
+				Set<Long> allNow = new HashSet<>();
+				fresh.built().values().forEach(allNow::addAll);
+				RoadLink.wayOut(server, fresh, allNow);
 			}
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
