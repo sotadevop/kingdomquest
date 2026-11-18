@@ -877,7 +877,7 @@ public final class FieldTest {
 				for (int y = 0; y < hgt; y++) {
 					BlockState st = level.getBlockState(pos.set(x0 + i, ylo + y, z0 + k));
 					boolean leaves = st.getBlock() instanceof LeavesBlock && !(st.hasProperty(LeavesBlock.PERSISTENT) && st.getValue(LeavesBlock.PERSISTENT));
-					if (!st.isAir() && st.getFluidState().isEmpty() && !leaves) {
+					if (!st.isAir() && !(st.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) && !leaves) { // waterlogged roots hold
 						solid.set((i * n + k) * hgt + y);
 					}
 				}
