@@ -546,8 +546,10 @@ final class RoadLink {
 		from[s0] = -1;
 		heap.add(s0);
 		int goal = -1;
+		int popped = 0;
 		while (heap.size() > 0) {
 			long e = heap.poll();
+			popped++;
 			int st = (int) e, cost0 = (int) (e >>> 32);
 			if (cost0 > dist[st]) {
 				continue;
@@ -610,7 +612,12 @@ final class RoadLink {
 				People.say(owner, "Architect", "Outside the gate the land is closed in by water and cliffs, and no road can be laid down from it. "
 						+ "Make a way out by hand, or found the castle facing open land.");
 			}
-			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: no road possible from {}", s.name(), start);
+			int openCount = 0;
+			for (boolean o : open) {
+				openCount += o ? 1 : 0;
+			}
+			io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: no road possible from {} (land {}, dig {}, {} open columns, {} states tried)",
+					s.name(), start, h[startCell] - heart.getY(), dig[startCell], openCount, popped);
 			return;
 		}
 		List<Integer> path = new ArrayList<>();
