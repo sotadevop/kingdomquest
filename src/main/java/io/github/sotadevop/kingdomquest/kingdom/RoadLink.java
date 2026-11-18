@@ -439,42 +439,67 @@ final class RoadLink {
 		if (open[startCell]) {
 			return; // the gate already opens onto land that leads away
 		}
-		// the cheapest route from the gate to the open land
-		int[] dist = new int[n * n];
-		int[] from = new int[n * n];
+		// the cheapest road from the gate to the open land. The search runs over (column, road height): the road
+		// rises or falls at most one block per block and lies at most DEPTH above or below the land (deeper cuts and
+		// higher banks aren't built), so a steep hillside is crossed on a long slanting road instead of a stair.
+		// Cost per column: the earth moved there, water costs a causeway.
+		final int depth = 10, kk = depth * 2 + 1;
+		int[] land = new int[n * n];
+		int[] floor = new int[n * n];
+		for (int c = 0; c < n * n; c++) {
+			land[c] = water[c] ? h[c] + 1 : h[c];
+			floor[c] = land[c] - depth;
+			int ci = c / n, ck = c % n;
+			for (int[] d : dirs) { // beside water the road stays above it, so the cut can't flood
+				int ni = ci + d[0], nk = ck + d[1];
+				if (ni >= 0 && nk >= 0 && ni < n && nk < n && water[ni * n + nk]) {
+					floor[c] = Math.max(floor[c], h[ni * n + nk] + 1);
+				}
+			}
+		}
+		int states = n * n * kk;
+		int[] dist = new int[states];
+		int[] from = new int[states];
 		java.util.Arrays.fill(dist, Integer.MAX_VALUE);
-		java.util.PriorityQueue<long[]> pq = new java.util.PriorityQueue<>(java.util.Comparator.comparingLong((long[] e) -> e[0]));
-		dist[startCell] = 0;
-		from[startCell] = -1;
-		pq.add(new long[] {0, startCell});
+		LongHeap heap = new LongHeap();
+		int s0 = startCell * kk + depth; // on the gate's landing
+		dist[s0] = 0;
+		from[s0] = -1;
+		heap.add(s0);
 		int goal = -1;
-		while (!pq.isEmpty()) {
-			long[] e = pq.poll();
-			int a = (int) e[1];
-			if (e[0] > dist[a]) {
+		while (heap.size() > 0) {
+			long e = heap.poll();
+			int st = (int) e, cost0 = (int) (e >>> 32);
+			if (cost0 > dist[st]) {
 				continue;
 			}
-			if (open[a]) {
-				goal = a;
+			int a = st / kk, ra = land[a] + st % kk - depth;
+			if (open[a] && ra - land[a] <= 3 && land[a] - ra <= 1 && a != startCell) {
+				goal = st;
 				break;
 			}
-			if (dist[a] > 1500) {
-				break; // no reasonable route: leave the land as it is
+			if (cost0 > 6000) {
+				break; // no reasonable road: leave the land as it is
 			}
 			int ai = a / n, ak = a % n;
-			int ha = water[a] ? h[a] + 1 : h[a];
 			for (int[] d : dirs) {
 				int bi = ai + d[0], bk = ak + d[1];
 				if (bi < 0 || bk < 0 || bi >= n || bk >= n || blocked[bi * n + bk]) {
 					continue;
 				}
 				int b = bi * n + bk;
-				int hb = water[b] ? h[b] + 1 : h[b];
-				int cost = 1 + (water[b] ? 4 : 0) + 3 * Math.max(0, Math.abs(hb - ha) - 1);
-				if (dist[a] + cost < dist[b]) {
-					dist[b] = dist[a] + cost;
-					from[b] = a;
-					pq.add(new long[] {dist[b], b});
+				for (int rb = ra - 1; rb <= ra + 1; rb++) {
+					int off = rb - land[b];
+					if (off < -depth || off > depth || rb < floor[b]) {
+						continue;
+					}
+					int nb = b * kk + off + depth;
+					int c2 = cost0 + 2 + Math.abs(off) + (water[b] ? 8 : 0);
+					if (c2 < dist[nb]) {
+						dist[nb] = c2;
+						from[nb] = st;
+						heap.add(((long) c2 << 32) | nb);
+					}
 				}
 			}
 		}
@@ -482,40 +507,21 @@ final class RoadLink {
 			return;
 		}
 		List<Integer> path = new ArrayList<>();
-		for (int c = goal; c >= 0; c = from[c]) {
+		List<Integer> heights = new ArrayList<>();
+		int wet = 0;
+		for (int st = goal; st >= 0; st = from[st]) {
+			int c = st / kk;
 			path.add(0, c);
+			heights.add(0, land[c] + st % kk - depth);
+			wet += water[c] ? 1 : 0;
+		}
+		if (wet > 24) {
+			return; // a long causeway over the sea would make the island something else: it stays an island
 		}
 		int len = path.size();
-		// the road's height: never more than one block per block, as close to the land as that allows
-		// (the middle of the highest and the lowest such line through the land), ends on the gate landing and the land
-		int[] land = new int[len];
-		for (int i = 0; i < len; i++) {
-			int c = path.get(i);
-			int y = water[c] ? h[c] + 1 : h[c];
-			int ci = c / n, ck = c % n;
-			for (int[] d : dirs) { // beside water the road stays above it, so the cut can't flood
-				int ni = ci + d[0], nk = ck + d[1];
-				if (ni >= 0 && nk >= 0 && ni < n && nk < n && water[ni * n + nk]) {
-					y = Math.max(y, h[ni * n + nk] + 1);
-				}
-			}
-			land[i] = y;
-		}
-		int[] hi = land.clone(), lo = land.clone();
-		for (int i = 1; i < len; i++) {
-			hi[i] = Math.min(hi[i], hi[i - 1] + 1);
-			lo[i] = Math.max(lo[i], lo[i - 1] - 1);
-		}
-		for (int i = len - 2; i >= 0; i--) {
-			hi[i] = Math.min(hi[i], hi[i + 1] + 1);
-			lo[i] = Math.max(lo[i], lo[i + 1] - 1);
-		}
 		int[] road = new int[len];
 		for (int i = 0; i < len; i++) {
-			int r = Math.floorDiv(hi[i] + lo[i], 2);
-			r = Math.max(land[0] - i, Math.min(land[0] + i, r));
-			r = Math.max(land[len - 1] - (len - 1 - i), Math.min(land[len - 1] + (len - 1 - i), r));
-			road[i] = r;
+			road[i] = heights.get(i);
 		}
 		BlockState fill = SiteWork.subsoil(SiteWork.surface(level, heart));
 		int tier = tier(s);
@@ -566,6 +572,50 @@ final class RoadLink {
 					+ " blocks).");
 		}
 		io.github.sotadevop.kingdomquest.KingdomQuest.LOG.info("Way out of {}: road of {} blocks from {} to {}", s.name(), len, start,
-				new BlockPos(x0 + goal / n, h[goal], z0 + goal % n));
+				new BlockPos(x0 + goal / kk / n, road[len - 1], z0 + goal / kk % n));
+	}
+
+	/** A min-heap of longs (cost in the high half, state in the low half) without boxing. */
+	private static final class LongHeap {
+		private long[] a = new long[1024];
+		private int size;
+
+		int size() {
+			return size;
+		}
+
+		void add(long v) {
+			if (size == a.length) {
+				a = java.util.Arrays.copyOf(a, size * 2);
+			}
+			int i = size++;
+			while (i > 0 && a[(i - 1) / 2] > v) {
+				a[i] = a[(i - 1) / 2];
+				i = (i - 1) / 2;
+			}
+			a[i] = v;
+		}
+
+		long poll() {
+			long top = a[0];
+			long v = a[--size];
+			int i = 0;
+			while (true) {
+				int c = 2 * i + 1;
+				if (c >= size) {
+					break;
+				}
+				if (c + 1 < size && a[c + 1] < a[c]) {
+					c++;
+				}
+				if (a[c] >= v) {
+					break;
+				}
+				a[i] = a[c];
+				i = c;
+			}
+			a[i] = v;
+			return top;
+		}
 	}
 }
