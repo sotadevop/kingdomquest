@@ -375,7 +375,23 @@ final class RoadLink {
 			}
 			i = j;
 		}
+		for (int k = 0; k < n; k++) {
+			if (liquid[k]) {
+				BRIDGE.put(job.settlement(), new BlockPos(line.get(k).getX(), t[k] / 2 - 1, line.get(k).getZ()));
+				break;
+			}
+		}
 		JOBS.put(job.settlement() + "|" + job.key(), new Job(job.player(), job.settlement(), job.key(), line, job.index(), job.tier(), t, w));
+	}
+
+	/** Where each settlement's last road crosses water (its first bridge cell), for the field test's views. */
+	static final Map<String, BlockPos> BRIDGE = new HashMap<>();
+
+	/** Builds every queued road to the end at once (field test). */
+	static void runAll(MinecraftServer server) {
+		for (int guard = 0; guard < 50_000 && !JOBS.isEmpty(); guard++) {
+			tick(server);
+		}
 	}
 
 	static void tick(MinecraftServer server) {
@@ -646,7 +662,7 @@ final class RoadLink {
 	}
 
 	/** The stored lines of the settlement's roads to other places (land cells near it). */
-	private static List<List<BlockPos>> storedLinks(Settlement s) {
+	static List<List<BlockPos>> storedLinks(Settlement s) {
 		List<List<BlockPos>> out = new ArrayList<>();
 		for (Map.Entry<String, String> e : s.names().entrySet()) {
 			if (!e.getKey().startsWith(LINE_PREFIX) || e.getValue().isEmpty()) {

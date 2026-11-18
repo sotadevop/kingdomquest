@@ -212,6 +212,7 @@ public final class FieldTest {
 		long t = System.nanoTime();
 		s = finish(server, s);
 		check(level, s, base, "tent_1", (System.nanoTime() - t) / 1_000_000, problems, dir, sc.name(), destroyedBefore);
+		s = countryRoad(server, level, s);
 		Set<String> skipped = new HashSet<>();
 		int guard = 0;
 		while (guard++ < 400) {
@@ -270,6 +271,7 @@ public final class FieldTest {
 			write(dir);
 		}
 		check(level, s, base, "final", 0, problems, dir, sc.name(), destroyedBefore);
+		roadIntact(level, s, problems);
 		StringBuilder levels = new StringBuilder();
 		for (String track : Progression.ORDER) {
 			List<Progression.Step> steps = Progression.steps(track);
@@ -391,6 +393,68 @@ public final class FieldTest {
 	private static String path(Holder<Biome> h) {
 		String n = h.getRegisteredName();
 		return n.startsWith("minecraft:") ? n.substring(10) : n;
+	}
+
+	/**
+	 * A road to a place 130 blocks away, built right after the tent, before the castle grows around it (user,
+	 * 2026-11-18: later land work cut such a road and a bridge crossed a river at a slant). The place lies across
+	 * water when there is water around: the direction whose line crosses the most water and ends on land.
+	 */
+	private static Settlement countryRoad(MinecraftServer server, ServerLevel level, Settlement s) {
+		BlockPos start = RoadLink.gateExit(s);
+		BlockPos target = null;
+		int bestWet = -1;
+		for (int a = 0; a < 16; a++) {
+			double ang = a * Math.PI / 8;
+			int wet = 0;
+			BlockPos end = null;
+			for (int r = 8; r <= 130; r += 2) {
+				int x = start.getX() + (int) Math.round(Math.cos(ang) * r), z = start.getZ() + (int) Math.round(Math.sin(ang) * r);
+				int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+				boolean water = !level.getBlockState(new BlockPos(x, y, z)).getFluidState().isEmpty();
+				wet += water ? 1 : 0;
+				end = water ? null : new BlockPos(x, y + 1, z);
+			}
+			if (end != null && wet > bestWet) {
+				bestWet = wet;
+				target = end;
+			}
+		}
+		if (target == null) {
+			return s;
+		}
+		RoadLink.link(server, null, s, "ft", target, "the test place");
+		RoadLink.runAll(server);
+		REPORT.append("Country road to ").append(target.toShortString()).append(" (").append(bestWet * 2).append(" blocks of water on the way).\n\n");
+		return Settlements.byHeart(server, s.heart());
+	}
+
+	/** Whether the country road built after the tent is still there at the end: cells near the castle without road. */
+	private static void roadIntact(ServerLevel level, Settlement s, List<String> problems) {
+		int cells = 0, gone = 0;
+		List<String> where = new ArrayList<>();
+		for (List<BlockPos> line : RoadLink.storedLinks(s)) {
+			for (BlockPos p : line) {
+				cells++;
+				boolean road = false;
+				for (int dy = -1; dy <= 2 && !road; dy++) {
+					BlockState st = level.getBlockState(p.above(dy));
+					road = st.is(Blocks.DIRT_PATH) || st.is(Blocks.GRAVEL) || st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE)
+							|| st.is(Blocks.STONE_BRICKS) || st.is(Blocks.CRACKED_STONE_BRICKS) || st.is(Blocks.STONE_BRICK_SLAB) || st.is(Blocks.COARSE_DIRT);
+				}
+				if (!road) {
+					gone++;
+					if (where.size() < 5) {
+						where.add(p.subtract(s.heart()).toShortString());
+					}
+				}
+			}
+		}
+		REPORT.append("Country road at the end: ").append(cells - gone).append(" of ").append(cells).append(" cells near the castle intact")
+				.append(gone > 0 ? ", cut at " + where : "").append(".\n\n");
+		if (gone > 0) {
+			problems.add("country road cut in " + gone + " cells, e.g. " + where);
+		}
 	}
 
 	private static BlockPos locate(ServerLevel level, Scenario sc, BlockPos origin, List<BlockPos> used) {
@@ -1162,6 +1226,9 @@ public final class FieldTest {
 		centres.put("square", h);
 		if (RoadLink.WAY_OUT.containsKey(s.id())) {
 			centres.put("way_out", RoadLink.WAY_OUT.get(s.id()));
+		}
+		if (RoadLink.BRIDGE.containsKey(s.id().toString())) {
+			centres.put("bridge", RoadLink.BRIDGE.get(s.id().toString()));
 		}
 		java.util.regex.Pattern rel = java.util.regex.Pattern.compile("\\((-?\\d+),(-?\\d+),(-?\\d+)\\)");
 		int doorViews = 0;
