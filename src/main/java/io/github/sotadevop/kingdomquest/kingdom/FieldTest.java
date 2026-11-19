@@ -81,7 +81,21 @@ public final class FieldTest {
 			new Scenario("eroded_badlands", Set.of("eroded_badlands", "wooded_badlands"), "land"),
 			new Scenario("bamboo_jungle", Set.of("bamboo_jungle"), "land"),
 			new Scenario("mushroom_fields", Set.of("mushroom_fields"), "land"),
-			new Scenario("frozen_river", Set.of("frozen_river"), "river"));
+			new Scenario("frozen_river", Set.of("frozen_river"), "river"),
+			// terrain shapes (user, 2026-11-19): hills of different sizes, valleys, ridges, cliff edges, found from the
+			// generator's height noise; the biomes are preferred (one per style), any land biome is taken otherwise
+			new Scenario("knoll", Set.of("plains", "sunflower_plains", "forest", "flower_forest", "birch_forest", "meadow"), "shape"),
+			new Scenario("hill", Set.of("taiga", "snowy_taiga", "snowy_plains", "grove", "old_growth_spruce_taiga", "old_growth_pine_taiga"), "shape"),
+			new Scenario("big_hill", Set.of("windswept_hills", "windswept_forest", "windswept_gravelly_hills", "meadow", "cherry_grove"), "shape"),
+			new Scenario("hillside_up", Set.of("jungle", "bamboo_jungle", "sparse_jungle"), "shape"),
+			new Scenario("hillside_down", Set.of("forest", "birch_forest", "dark_forest", "plains", "old_growth_birch_forest"), "shape"),
+			new Scenario("ridge", Set.of("snowy_slopes", "grove", "taiga", "snowy_taiga"), "shape"),
+			new Scenario("valley", Set.of("forest", "dark_forest", "birch_forest", "taiga", "meadow", "plains"), "shape"),
+			new Scenario("basin", Set.of(), "shape"),
+			new Scenario("cliff_away", Set.of("badlands", "wooded_badlands", "eroded_badlands", "savanna_plateau", "savanna"), "shape"),
+			new Scenario("cliff_toward", Set.of("windswept_hills", "stony_peaks", "meadow", "windswept_savanna"), "shape"),
+			new Scenario("mesa", Set.of("wooded_badlands", "badlands", "savanna_plateau"), "shape"),
+			new Scenario("rolling", Set.of("dark_forest", "old_growth_birch_forest", "forest", "savanna", "sparse_jungle"), "shape"));
 
 	private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-00000000f1e1");
 	/** Half size of the inspected square around the heart: the wall ring, the moat, the beach and a margin. */
@@ -158,7 +172,9 @@ public final class FieldTest {
 	private static boolean runSite(MinecraftServer server, ServerLevel level, Scenario sc, int index, List<BlockPos> used, Path dir) {
 		BlockPos origin = new BlockPos((index % 6) * 2500 - 6000, 80, (index / 6) * 2500 - 2500);
 		KingdomQuest.LOG.info("Field test {}: looking for a site", sc.name());
-		BlockPos heart = locate(level, sc, origin, used);
+		SHAPE_TURN = null;
+		SHAPE_NOTE = "";
+		BlockPos heart = "shape".equals(sc.kind()) ? locateShape(level, sc, origin, used) : locate(level, sc, origin, used);
 		KingdomQuest.LOG.info("Field test {}: site {}", sc.name(), heart);
 		if (heart == null) {
 			REPORT.append("## ").append(sc.name()).append("\n\nNo site found near ").append(origin.toShortString()).append(".\n\n");
@@ -166,7 +182,7 @@ public final class FieldTest {
 			return true;
 		}
 		used.add(heart);
-		Rotation rot = Rotation.values()[index % 4];
+		Rotation rot = SHAPE_TURN != null ? SHAPE_TURN : Rotation.values()[index % 4];
 		int cx0 = (heart.getX() - R - 16) >> 4, cx1 = (heart.getX() + R + 16) >> 4;
 		int cz0 = (heart.getZ() - R - 16) >> 4, cz1 = (heart.getZ() + R + 16) >> 4;
 		for (int cx = cx0; cx <= cx1; cx++) {
@@ -199,8 +215,8 @@ public final class FieldTest {
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
 				.append(", facing ").append(rot).append(", relief ").append(relief).append(", walkable out before founding: ").append(OUT_BEFORE).append(", style ")
 				.append(Style.forBiome(biome)).append(", ground ").append(SiteWork.surface(level, heart).getBlock().getDescriptionId().replace("block.minecraft.", ""))
-				.append(".\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost |\n|")
-				.append("---|".repeat(21)).append('\n');
+				.append(".").append(SHAPE_NOTE).append("\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost | road steep | stumps |\n|")
+				.append("---|".repeat(23)).append('\n');
 		Settlement s = new Settlement(UUID.randomUUID(), OWNER, "FT " + sc.name(), 11, Identifier.withDefaultNamespace("stone_bricks"),
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
@@ -278,6 +294,7 @@ public final class FieldTest {
 		}
 		check(level, s, base, "final", 0, problems, dir, sc.name(), destroyedBefore);
 		roadIntact(level, s, problems);
+		gateReport(level, s, base);
 		StringBuilder levels = new StringBuilder();
 		for (String track : Progression.ORDER) {
 			List<Progression.Step> steps = Progression.steps(track);
@@ -596,6 +613,294 @@ public final class FieldTest {
 		return score;
 	}
 
+	// ---- terrain shapes ----
+
+	/** Rotation a shape site asks for (the gate up or down a slope, along a valley), or null for the usual cycle. */
+	private static Rotation SHAPE_TURN;
+	/** The shape's numbers for the report. */
+	private static String SHAPE_NOTE = "";
+	private static final int[] RINGS = {24, 48, 72, 96};
+	private static final double[][] DIRS = new double[8][];
+
+	static {
+		for (int k = 0; k < 8; k++) {
+			DIRS[k] = new double[] {Math.sin(k * Math.PI / 4), Math.cos(k * Math.PI / 4)}; // k 0 = +z (south), 2 = +x (east)
+		}
+	}
+
+	/** Land heights from the generator's noise on an 8-block grid, without generating chunks. */
+	private static final class Heights {
+		final ServerLevel level;
+		final net.minecraft.world.level.chunk.ChunkGenerator gen;
+		final net.minecraft.world.level.levelgen.RandomState random;
+		final Map<Long, int[]> cache = new HashMap<>();
+
+		Heights(ServerLevel level) {
+			this.level = level;
+			this.gen = level.getChunkSource().getGenerator();
+			this.random = level.getChunkSource().randomState();
+		}
+
+		/** {land height, water surface height} at the grid point nearest x/z. */
+		int[] at(int x, int z) {
+			int gx = Math.round(x / 8f) * 8, gz = Math.round(z / 8f) * 8;
+			return cache.computeIfAbsent(BlockPos.asLong(gx, 0, gz), key -> new int[] {
+					gen.getBaseHeight(gx, gz, Heightmap.Types.OCEAN_FLOOR_WG, level, random),
+					gen.getBaseHeight(gx, gz, Heightmap.Types.WORLD_SURFACE_WG, level, random)});
+		}
+
+		int land(int x, int z) {
+			return at(x, z)[0];
+		}
+
+		boolean wet(int x, int z) {
+			int[] h = at(x, z);
+			return h[1] > h[0];
+		}
+	}
+
+	/**
+	 * Finds a heart whose land around it has the scenario's shape. The land is read at rings 24/48/72/96 blocks out in
+	 * eight directions (heights relative to the heart's own); each shape scores how well the rings fit it. The castle's
+	 * ring reaches about 60 blocks out, so a "knoll" is smaller than the castle, a "hill" about its size and a "big hill"
+	 * larger.
+	 */
+	private static BlockPos locateShape(ServerLevel level, Scenario sc, BlockPos origin, List<BlockPos> used) {
+		Heights hs = new Heights(level);
+		double bestScore = -1;
+		int bx = 0, bz = 0, bDir = -1;
+		int[][] bRing = null;
+		for (int cx = origin.getX() - 1600; cx <= origin.getX() + 1600; cx += 32) {
+			for (int cz = origin.getZ() - 1600; cz <= origin.getZ() + 1600; cz += 32) {
+				if (hs.wet(cx, cz) || hs.wet(cx + 8, cz) || hs.wet(cx, cz + 8)) {
+					continue;
+				}
+				boolean near = false;
+				for (BlockPos u : used) {
+					near |= u.distSqr(new BlockPos(cx, u.getY(), cz)) < 400 * 400;
+				}
+				if (near) {
+					continue;
+				}
+				int h0 = (hs.land(cx, cz) * 2 + hs.land(cx + 8, cz) + hs.land(cx - 8, cz) + hs.land(cx, cz + 8) + hs.land(cx, cz - 8)) / 6;
+				int[][] ring = new int[RINGS.length][8];
+				for (int r = 0; r < RINGS.length; r++) {
+					for (int k = 0; k < 8; k++) {
+						ring[r][k] = hs.land(cx + (int) Math.round(DIRS[k][0] * RINGS[r]), cz + (int) Math.round(DIRS[k][1] * RINGS[r])) - h0;
+					}
+				}
+				int[] dir = {-1};
+				double score = sc.name().equals("rolling") ? rolling(hs, cx, cz, h0) : shapeScore(sc.name(), ring, dir);
+				if (score < 0) {
+					continue;
+				}
+				String biome = path(level.getBiome(new BlockPos(cx, h0, cz)));
+				if (biome.contains("ocean") || biome.contains("river") || biome.contains("beach") || biome.contains("shore")) {
+					continue;
+				}
+				if (!sc.biomes().isEmpty() && !sc.biomes().contains(biome)) {
+					score -= 4; // any biome will do, the preferred ones first
+				}
+				if (score > bestScore) {
+					bestScore = score;
+					bx = cx;
+					bz = cz;
+					bDir = dir[0];
+					bRing = ring;
+				}
+			}
+		}
+		if (bestScore < 0) {
+			return null;
+		}
+		BlockPos heart = null;
+		for (int r = 0; r <= 16 && heart == null; r += 4) {
+			for (int dx = -r; dx <= r && heart == null; dx += 4) {
+				for (int dz = -r; dz <= r && heart == null; dz += 4) {
+					if (Math.max(Math.abs(dx), Math.abs(dz)) == r) {
+						heart = surface(level, bx + dx, bz + dz);
+					}
+				}
+			}
+		}
+		if (heart == null) {
+			return null;
+		}
+		if (bDir >= 0) {
+			// the gate (template z +40) is turned to face the asked direction
+			double best = -2;
+			for (Rotation r : Rotation.values()) {
+				BlockPos g = Template.rotate(new BlockPos(0, 0, 40), r);
+				double dot = (g.getX() * DIRS[bDir][0] + g.getZ() * DIRS[bDir][1]) / 40.0;
+				if (dot > best) {
+					best = dot;
+					SHAPE_TURN = r;
+				}
+			}
+		}
+		StringBuilder note = new StringBuilder(" Shape ").append(sc.name()).append(" (score ").append(Math.round(bestScore * 10) / 10.0).append(")");
+		if (bRing != null) {
+			note.append(", land relative to the heart, directions S SE E NE N NW W SW");
+			String[] names = {"S", "SE", "E", "NE", "N", "NW", "W", "SW"};
+			if (bDir >= 0) {
+				note.append(", gate toward ").append(names[bDir]);
+			}
+			for (int r = 0; r < RINGS.length; r++) {
+				note.append(r == 0 ? ": " : "; ").append(RINGS[r]).append(" out ").append(java.util.Arrays.toString(bRing[r]));
+			}
+		}
+		SHAPE_NOTE = note.append('.').toString();
+		return heart;
+	}
+
+	private static double mean(int[] v) {
+		double t = 0;
+		for (int x : v) {
+			t += x;
+		}
+		return t / v.length;
+	}
+
+	private static int min(int[] v) {
+		return java.util.Arrays.stream(v).min().orElse(0);
+	}
+
+	private static int max(int[] v) {
+		return java.util.Arrays.stream(v).max().orElse(0);
+	}
+
+	/** How well the rings (relative heights at 24/48/72/96 in 8 directions) fit a shape; negative = not this shape. */
+	static double shapeScore(String shape, int[][] d, int[] dir) {
+		int[] r24 = d[0], r48 = d[1], r72 = d[2], r96 = d[3];
+		double m24 = mean(r24), m48 = mean(r48), m72 = mean(r72), m96 = mean(r96);
+		switch (shape) {
+			case "knoll": // a hill smaller than the castle: the land drops within 24, then stays
+				if (max(r24) > -3 || m24 < -14 || m24 > -4 || Math.abs(m48 - m24) > 5 || Math.abs(m96 - m24) > 8) {
+					return -1;
+				}
+				return 10 - Math.abs(m24 + 8) - Math.abs(m48 - m24);
+			case "hill": // about the castle's size: down 10-24 by 48, flat beyond
+				if (m24 > -2 || m24 < -12 || max(r48) > -5 || m48 > -9 || m48 < -26 || m96 < m48 - 8) {
+					return -1;
+				}
+				return 10 - Math.abs(m48 + 15) / 2 - Math.abs(m96 - m48) / 2;
+			case "big_hill": // the top of a hill much larger than the castle: gentle near, far down at 96
+				if (m24 < -6 || m24 > 1 || min(r24) < -10 || max(r24) > 4 || m48 > -3 || m48 < -16 || max(r96) > -10 || m96 > -22) {
+					return -1;
+				}
+				return Math.min(10, -m96 / 4) - Math.abs(m48 + 8) / 3;
+			case "basin": // a bowl: higher land all round
+				if (min(r24) < 0 || min(r48) < 6 || m48 < 12) {
+					return -1;
+				}
+				return Math.min(10, m48 / 3) + min(r48) / 4.0;
+			case "mesa": // a flat top with steep sides all round
+				if (max(r24) > 4 || min(r24) < -4 || max(r72) > -8 || m72 > -14) {
+					return -1;
+				}
+				return Math.min(10, -m72 / 4);
+			default:
+				break;
+		}
+		double best = -1;
+		for (int k = 0; k < 8; k++) {
+			int o = (k + 4) % 8, p1 = (k + 2) % 8, p2 = (k + 6) % 8;
+			double score = -1;
+			int toward = k;
+			switch (shape) {
+				case "hillside_up", "hillside_down" -> { // k uphill, o downhill, gentle across
+					if (r48[k] >= 12 && r48[o] <= -12 && r24[k] >= 4 && r24[o] <= -4 && Math.abs(r48[p1]) <= 8 && Math.abs(r48[p2]) <= 8) {
+						score = Math.min(r48[k], -r48[o]) / 4.0 - (Math.abs(r48[p1]) + Math.abs(r48[p2])) / 4.0;
+						toward = shape.equals("hillside_up") ? k : o;
+					}
+				}
+				case "ridge" -> { // down on both sides k and o, level along the ridge (the gate runs along it)
+					if (k < 4 && r48[k] <= -10 && r48[o] <= -10 && r48[p1] >= -5 && r48[p1] <= 8 && r48[p2] >= -5 && r48[p2] <= 8) {
+						score = Math.min(-r48[k], -r48[o]) / 4.0 - (Math.abs(r48[p1]) + Math.abs(r48[p2])) / 4.0;
+						toward = p1;
+					}
+				}
+				case "valley" -> { // up on both sides k and o, level along the valley (the gate runs along it)
+					if (k < 4 && r48[k] >= 12 && r48[o] >= 12 && r24[k] >= 3 && r24[o] >= 3 && Math.abs(r48[p1]) <= 6 && Math.abs(r48[p2]) <= 6) {
+						score = Math.min(r48[k], r48[o]) / 4.0 - (Math.abs(r48[p1]) + Math.abs(r48[p2])) / 4.0;
+						toward = p1;
+					}
+				}
+				case "cliff_away", "cliff_toward" -> { // flat near the heart, a drop of 18+ beyond the wall line on side k
+					if (max(r24) <= 3 && min(r24) >= -3 && r72[k] <= -18 && r48[k] <= -6 && r72[o] >= -6) {
+						score = Math.min(10, -r72[k] / 3.0) - Math.abs(r72[o]) / 4.0;
+						toward = shape.equals("cliff_toward") ? k : o;
+					}
+				}
+				default -> {
+					return -1;
+				}
+			}
+			if (score > best) {
+				best = score;
+				dir[0] = toward;
+			}
+		}
+		return best;
+	}
+
+	/** Rolling land: bumps and dips all over the castle's area, but no overall slope. */
+	private static double rolling(Heights hs, int cx, int cz, int h0) {
+		List<Integer> v = new ArrayList<>();
+		double east = 0, west = 0, south = 0, north = 0;
+		for (int dx = -48; dx <= 48; dx += 16) {
+			for (int dz = -48; dz <= 48; dz += 16) {
+				int y = hs.land(cx + dx, cz + dz) - h0;
+				if (hs.wet(cx + dx, cz + dz)) {
+					return -1;
+				}
+				v.add(y);
+				east += dx > 0 ? y : 0;
+				west += dx < 0 ? y : 0;
+				south += dz > 0 ? y : 0;
+				north += dz < 0 ? y : 0;
+			}
+		}
+		double m = v.stream().mapToInt(Integer::intValue).average().orElse(0);
+		double sd = Math.sqrt(v.stream().mapToDouble(y -> (y - m) * (y - m)).average().orElse(0));
+		int range = v.stream().mapToInt(Integer::intValue).max().orElse(0) - v.stream().mapToInt(Integer::intValue).min().orElse(0);
+		if (sd < 4.5 || range > 24 || Math.abs(east - west) / 21 > 5 || Math.abs(south - north) / 21 > 5) {
+			return -1;
+		}
+		return sd;
+	}
+
+	/** The gate's surroundings at the end: land in front of it before and after, the moat per side, the road out. */
+	private static void gateReport(ServerLevel level, Settlement s, Snapshot base) {
+		Rotation r = Rotation.values()[s.rotation()];
+		BlockPos h = s.heart();
+		Set<Long> built = new HashSet<>();
+		s.built().values().forEach(built::addAll);
+		int n = 2 * R + 1;
+		StringBuilder b = new StringBuilder("Gate (land relative to the heart, before -> after) at 0/5/10/15/20/30/40 blocks out of the gate:");
+		for (int out : new int[] {0, 5, 10, 15, 20, 30, 40}) {
+			BlockPos p = h.offset(Template.rotate(new BlockPos(0, 0, 40 + out), r));
+			int i = p.getX() - base.x0(), k = p.getZ() - base.z0();
+			String was = i >= 0 && k >= 0 && i < n && k < n ? String.valueOf(base.ground()[i * n + k] - h.getY()) : "?";
+			b.append(' ').append(was).append("->").append(SiteWork.groundDeep(level, p.getX(), p.getZ(), h.getY(), built) - h.getY());
+		}
+		Map<String, Integer> sides = new java.util.TreeMap<>();
+		Rotation back = switch (r) {
+			case CLOCKWISE_90 -> Rotation.COUNTERCLOCKWISE_90;
+			case COUNTERCLOCKWISE_90 -> Rotation.CLOCKWISE_90;
+			default -> r;
+		};
+		for (long col : Settlements.moatColumns(s)) {
+			BlockPos t = Template.rotate(new BlockPos(BlockPos.getX(col) - h.getX(), 0, BlockPos.getZ(col) - h.getZ()), back);
+			String side = t.getZ() > 40 ? "gate" : t.getZ() < -56 ? "back" : t.getX() < -63 ? "left" : t.getX() > 69 ? "right" : "corner";
+			sides.merge(side, 1, Integer::sum);
+		}
+		b.append(". Moat columns per side ").append(sides.isEmpty() ? "none" : sides.toString());
+		String way = s.names().getOrDefault("wayout", "");
+		b.append(". Way-out road ").append(way.isEmpty() ? "none" : way.split(";").length + " blocks").append(".\n\n");
+		REPORT.append(b);
+	}
+
 	// ---- measuring ----
 
 	/** The land around a heart before anything was built: ground height and top block per column, leaves about to decay, map colours. */
@@ -882,6 +1187,20 @@ public final class FieldTest {
 				}
 			}
 		}
+		// a road climbing 3 or more within 3 blocks reads as a staircase, not a road (smooth roads, user 2026-11-18)
+		int roadSteep = 0;
+		for (Map.Entry<Long, Integer> e : roadTop.entrySet()) {
+			int x = BlockPos.getX(e.getKey()), z = BlockPos.getZ(e.getKey());
+			for (int[] d : new int[][] {{3, 0}, {0, 3}}) {
+				Integer o = roadTop.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
+				if (o != null && Math.abs(o - e.getValue()) >= 3 && roadTop.containsKey(BlockPos.asLong(x + d[0] / 3, 0, z + d[1] / 3))
+						&& roadTop.containsKey(BlockPos.asLong(x + 2 * d[0] / 3, 0, z + 2 * d[1] / 3))) {
+					roadSteep++;
+					sample(samples, "road steep", rel(s, new BlockPos(x, e.getValue(), z)) + " to " + (o - e.getValue()) + " in 3");
+					marks.add(new Mark(x, z, 0x6060FF));
+				}
+			}
+		}
 		c.put("road gaps", roadGaps);
 		c.put("road steps", roadSteps);
 		int wallGaps = 0;
@@ -951,6 +1270,23 @@ public final class FieldTest {
 			}
 		}
 		c.put("snow lost", bare);
+		c.put("road steep", roadSteep);
+		// bamboo, cactus or sugar cane cut off in a floor (user, 2026-11-19: bamboo left in the ground around a jungle camp)
+		int stumps = 0;
+		for (int x = h.getX() - 70; x <= h.getX() + 70; x++) {
+			for (int z = h.getZ() - 70; z <= h.getZ() + 70; z++) {
+				int ty = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+				for (int y = ty; y >= ty - 8; y--) {
+					pos.set(x, y, z);
+					if (SiteWork.stalk(level.getBlockState(pos)) && SiteWork.stumpTop(level, pos.immutable(), builtAll)) {
+						stumps++;
+						sample(samples, "stumps", rel(s, pos.immutable()) + " " + name(level.getBlockState(pos)) + " under " + name(level.getBlockState(pos.above())));
+						marks.add(new Mark(x, z, 0x80FF00));
+					}
+				}
+			}
+		}
+		c.put("stumps", stumps);
 
 		StringBuilder row = new StringBuilder("| ").append(stage).append(" | ").append(ms);
 		for (int v : c.values()) {

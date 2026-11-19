@@ -30,7 +30,7 @@ jobs:
           INPUT: ${{ github.event.inputs.sites }}
           MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          all="plains forest dark_forest high_meadow snowy_plains snowy_slopes taiga windswept_hills stony_peaks desert badlands savanna_plateau jungle swamp mangrove beach river_bank flower_forest old_birch pale_garden cherry_grove ice_spikes jagged_peaks stony_shore snowy_beach eroded_badlands bamboo_jungle mushroom_fields frozen_river"
+          all="plains forest dark_forest high_meadow snowy_plains snowy_slopes taiga windswept_hills stony_peaks desert badlands savanna_plateau jungle swamp mangrove beach river_bank flower_forest old_birch pale_garden cherry_grove ice_spikes jagged_peaks stony_shore snowy_beach eroded_badlands bamboo_jungle mushroom_fields frozen_river knoll hill big_hill hillside_up hillside_down ridge valley basin cliff_away cliff_toward mesa rolling"
           want="$INPUT"
           if [ -z "$want" ]; then want=$(printf '%s' "$MESSAGE" | grep -oE '\[fieldtest[^]]*\]' | head -1 | sed -E 's/\[fieldtest ?//; s/\]//'); fi
           # seed=N or seed=random in the brackets picks the world; default is the regression seed
