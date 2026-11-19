@@ -1947,20 +1947,12 @@ public final class Settlements {
 		// (gatehouse, arch), and on the square around the heart
 		Map<Long, List<Integer>> builtYs = new HashMap<>();
 		Map<Long, Integer> doorCols = new HashMap<>(); // column -> the threshold: the door's lowest block (offset from the heart)
-		// porch steps standing on something: a lane that ends beside one meets its foot (field test: lanes ended 2 blocks
-		// under the bottom step of the lord's porch and the tannery's)
-		Map<Long, Integer> stairCols = new HashMap<>();
 		for (long o : others) {
 			BlockPos b = BlockPos.of(o);
 			builtYs.computeIfAbsent(BlockPos.asLong(b.getX(), 0, b.getZ()), k -> new ArrayList<>()).add(b.getY() - heartY);
 			Block block = level.getBlockState(b).getBlock();
 			if (block instanceof net.minecraft.world.level.block.DoorBlock || block instanceof net.minecraft.world.level.block.FenceGateBlock) {
 				doorCols.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b.getY() - heartY, Math::min);
-			}
-			BlockState bs = level.getBlockState(b);
-			if (block instanceof net.minecraft.world.level.block.StairBlock && bs.getValue(net.minecraft.world.level.block.StairBlock.HALF)
-					== net.minecraft.world.level.block.state.properties.Half.BOTTOM && !level.getBlockState(b.below()).isAir()) {
-				stairCols.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b.getY() - heartY, Math::min);
 			}
 		}
 		Set<Long> fixed = new HashSet<>();
@@ -1982,14 +1974,6 @@ public final class Settlements {
 					Integer t = doorCols.get(BlockPos.asLong(x + dx, 0, z + dz));
 					if (t != null && (threshold == null || t < threshold)) {
 						threshold = t;
-					}
-				}
-			}
-			if (threshold == null) {
-				for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
-					Integer st = stairCols.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
-					if (st != null && Math.abs(st - e.getValue()) <= 3 && (threshold == null || st < threshold)) {
-						threshold = st;
 					}
 				}
 			}
