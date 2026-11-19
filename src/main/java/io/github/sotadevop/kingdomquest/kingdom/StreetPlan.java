@@ -145,9 +145,24 @@ final class StreetPlan {
 		seg.forEach((c, name) -> bySeg.computeIfAbsent(name, k -> new ArrayList<>()).add(c));
 		for (Map.Entry<String, List<Long>> e : bySeg.entrySet()) {
 			if (lane(e.getKey())) {
+				// the lane's last two blocks at its door are one flat landing: the porch foot meets it level wherever it
+				// touches (field test: porch steps 1.5-2 above a lane still sloping past them)
+				long goal = goal(e.getKey(), r, h);
+				List<Long> landing = new ArrayList<>();
 				for (long c : e.getValue()) {
+					if (goal != Long.MIN_VALUE && Math.max(Math.abs(BlockPos.getX(c) - BlockPos.getX(goal)), Math.abs(BlockPos.getZ(c) - BlockPos.getZ(goal))) <= 2) {
+						landing.add(c);
+						continue;
+					}
 					unitOf.put(c, units.size());
 					units.add(List.of(c));
+					laneUnit.add(true);
+				}
+				if (!landing.isEmpty()) {
+					for (long c : landing) {
+						unitOf.put(c, units.size());
+					}
+					units.add(landing);
 					laneUnit.add(true);
 				}
 				continue;
@@ -198,7 +213,8 @@ final class StreetPlan {
 				// the square, the gate passage (the gate stands at the square's level) and the main plots
 				fixed[i] |= Math.abs(t.getX()) <= 3 && Math.abs(t.getZ()) <= 3 || t.getZ() >= 36 && Math.abs(t.getX()) <= 2 || level0.contains(c);
 			}
-			target[i] = sum / units.get(i).size();
+			// streets stay within the height plots may follow them to, so a building can always stand at its street
+			target[i] = Math.max(-Settlements.STREET_LIFT, Math.min(Settlements.STREET_LIFT, sum / units.get(i).size()));
 		}
 		double[] v = target.clone();
 		for (int i = 0; i < n; i++) {
@@ -450,6 +466,20 @@ final class StreetPlan {
 			}
 		}
 		return v;
+	}
+
+	/** The world column of a lane's goal (the cell in front of its door), from its name "track_level_x_z" (m = minus). */
+	private static long goal(String name, Rotation r, BlockPos h) {
+		String[] p = name.split("_");
+		try {
+			int x = Integer.parseInt(p[p.length - 2].replace('m', '-'));
+			int z = Integer.parseInt(p[p.length - 1].replace('m', '-'));
+			// lane names are in the layout's coordinates (tools/buildings.py: HEART = (7, 0, 10))
+			BlockPos rel = Template.rotate(new BlockPos(x - 7, 0, z - 10), r);
+			return BlockPos.asLong(h.getX() + rel.getX(), 0, h.getZ() + rel.getZ());
+		} catch (NumberFormatException e) {
+			return Long.MIN_VALUE;
+		}
 	}
 
 	/** A lane to one door or goal ("track_level_x_z"), not a street of the layout. */
