@@ -182,7 +182,6 @@ public final class FieldTest {
 			return true;
 		}
 		used.add(heart);
-		Rotation rot = SHAPE_TURN != null ? SHAPE_TURN : Rotation.values()[index % 4];
 		int cx0 = (heart.getX() - R - 16) >> 4, cx1 = (heart.getX() + R + 16) >> 4;
 		int cz0 = (heart.getZ() - R - 16) >> 4, cz1 = (heart.getZ() + R + 16) >> 4;
 		for (int cx = cx0; cx <= cx1; cx++) {
@@ -192,6 +191,13 @@ public final class FieldTest {
 			}
 		}
 		KingdomQuest.LOG.info("Field test {}: chunks loaded", sc.name());
+		// the gate: shape sites that test a side keep it (the lord can set any side in the menu), the rest use Auto
+		Rotation rot = SHAPE_TURN != null ? SHAPE_TURN : GateSite.best(level, heart, Rotation.values()[index % 4]);
+		StringBuilder costs = new StringBuilder();
+		for (Rotation r : Rotation.values()) {
+			costs.append(GateSite.side(r)).append(' ').append(Math.round(GateSite.cost(level, heart, r))).append(r == rot ? "*" : "").append(", ");
+		}
+		SHAPE_NOTE += " Gate approach cost per side (* = used): " + costs.substring(0, costs.length() - 2) + ".";
 		String biome = level.getBiome(heart).getRegisteredName();
 		Snapshot base = Snapshot.take(level, heart, Set.of());
 		{
@@ -1213,9 +1219,14 @@ public final class FieldTest {
 				wallCount.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), 1, Integer::sum);
 			}
 		}
+		Set<Long> wallSet = new HashSet<>(s.built().getOrDefault(Progression.WALLS, List.of()));
 		for (BlockPos b : wallLow.values()) {
 			if (wallCount.getOrDefault(BlockPos.asLong(b.getX(), 0, b.getZ()), 0) < 3) {
 				continue; // a walkway board on brackets, not a wall body
+			}
+			if (!wallSet.contains(b.above().asLong()) || !wallSet.contains(b.above(2).asLong()) || level.getBlockState(b.above()).isAir()
+					|| level.getBlockState(b.above(2)).isAir()) {
+				continue; // a corbel or a hoarding's eave sticking out over the ditch: the body above it is not solid from here
 			}
 			BlockState below = level.getBlockState(b.below());
 			if ((below.isAir() || !below.getFluidState().isEmpty() || below.canBeReplaced()) && !owner.containsKey(b.below().asLong())) {

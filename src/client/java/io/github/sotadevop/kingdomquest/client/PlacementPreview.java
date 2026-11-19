@@ -14,7 +14,7 @@ import net.minecraft.world.phys.HitResult;
 
 /**
  * While a sealed charter is held and aimed at the top of a block, outlines the plot with particles and marks
- * the heart and the entrance side, rotated the way the player faces (the camp opens toward the player).
+ * the heart and the gate side (flames): the side set in the charter's menu, or the gentlest way in on Auto.
  */
 public final class PlacementPreview {
 	private static int ticks;
@@ -43,12 +43,15 @@ public final class PlacementPreview {
 			mc.level.addParticle(ParticleTypes.ANGRY_VILLAGER, heart.getX() + 0.5, heart.getY() + 0.5, heart.getZ() + 0.5, 0, 0, 0);
 			return;
 		}
-		Rotation rotation = switch (mc.player.getDirection()) {
+		Rotation facing = switch (mc.player.getDirection()) {
 			case EAST -> Rotation.CLOCKWISE_90;
 			case SOUTH -> Rotation.CLOCKWISE_180;
 			case WEST -> Rotation.COUNTERCLOCKWISE_90;
 			default -> Rotation.NONE;
 		};
+		// the side set in the charter's menu, or on Auto the gentlest way in, as the server will pick it
+		int gate = held.get(RoyalCharter.DATA).gate();
+		Rotation rotation = gate < 0 ? io.github.sotadevop.kingdomquest.kingdom.GateSite.best(mc.level, heart, facing) : Rotation.values()[Math.min(gate, 3)];
 		for (int x = 0; x < t.sizeX; x++) {
 			for (int z = 0; z < t.sizeZ; z++) {
 				boolean edge = x == 0 || z == 0 || x == t.sizeX - 1 || z == t.sizeZ - 1;

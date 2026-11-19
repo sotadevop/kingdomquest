@@ -247,9 +247,21 @@ public final class Settlements {
 		}
 		long now = server.getTickCount();
 		Pending p = PENDING.get(player.getUUID());
+		// the gate: the side chosen in the charter's menu, or on Auto the gentlest way in (user, 2026-11-19)
+		Rotation rotation = data.gate() == CharterData.AUTO ? GateSite.best(level, heart, rotationFor(player.getDirection()))
+				: Rotation.values()[Math.clamp(data.gate(), 0, 3)];
 		if (p == null || !p.heart().equals(heart) || now - p.tick() > CONFIRM_TICKS) {
 			PENDING.put(player.getUUID(), new Pending(heart, now));
-			player.sendOverlayMessage(Component.translatable("kingdomquest.found.confirm", data.name()));
+			player.sendOverlayMessage(Component.translatable(data.gate() == CharterData.AUTO ? "kingdomquest.found.confirm_auto" : "kingdomquest.found.confirm",
+					data.name(), Component.translatable("kingdomquest.side." + GateSite.side(rotation))));
+			double easiest = Double.MAX_VALUE;
+			for (Rotation r : Rotation.values()) {
+				easiest = Math.min(easiest, GateSite.cost(level, heart, r));
+			}
+			if (easiest > GateSite.STEEP_ALL_ROUND) {
+				// a hollow or a peak: no side gives a gentle way in (field test: a castle founded 30 blocks down a pit)
+				player.sendSystemMessage(Component.translatable("kingdomquest.found.hollow").withStyle(net.minecraft.ChatFormatting.GOLD));
+			}
 			int relief = relief(level, heart);
 			if (relief > 20) {
 				player.sendSystemMessage(Component.translatable("kingdomquest.found.steep", relief).withStyle(net.minecraft.ChatFormatting.GOLD));
@@ -258,7 +270,6 @@ public final class Settlements {
 		}
 		PENDING.remove(player.getUUID());
 		String style = Style.forBiome(level.getBiome(heart).getRegisteredName());
-		Rotation rotation = rotationFor(player.getDirection());
 		Settlement s = new Settlement(UUID.randomUUID(), player.getUUID(), data.name(), data.color(), data.logo(), style, heart,
 				rotation.ordinal(), Map.of(Settlement.MAIN, 1), style + "/tent_1", Settlement.MAIN, 0, Map.of(), Map.of());
 		Template t = Template.get(s.job());
@@ -419,7 +430,13 @@ public final class Settlements {
 		// terraced instead.
 		// and never more than a walkable ramp (one block per block) can climb between its doors and the main
 		// building's plot, which stays at the square's level: next to the main plot that is only a few blocks
-		int limit = Math.max(2, Math.min(LIFT_LIMIT, roomToSquare(s, t) - 1));
+		// (1 in 2 since 2026-11-19, the gentle lanes the user asked for on hills)
+		int limit = Math.max(2, Math.min(LIFT_LIMIT, roomToSquare(s, t) / 2));
+		if (gateOnly(t)) {
+			// a field entered through a fence gate (the farm) lies beside its road, not sunk 6 below it (field test: on five
+			// steep sites the farm gate opened onto a 6-block bank under the farm road)
+			limit = Math.min(limit, 3);
+		}
 		dy = Math.max(-limit, Math.min(limit, dy));
 		// plots that face each other share a level: a door looking onto a neighbour's plot within 4 blocks, either
 		// way round, puts both on the same level (one block either side), or the door looks at a wall (field test)
@@ -503,6 +520,19 @@ public final class Settlements {
 	}
 
 	/** Blocks (walking, along the grid) from the nearest door of {@code t} to the main building's plot; large if unknown. */
+	/** True when the plot's only ways in are fence gates (a field, a paddock): no porch steps to climb. */
+	private static boolean gateOnly(Template t) {
+		boolean gate = false;
+		for (Template.Placement p : t.placements("white", Rotation.NONE)) {
+			Block b = p.state().getBlock();
+			if (b instanceof net.minecraft.world.level.block.DoorBlock) {
+				return false;
+			}
+			gate |= b instanceof net.minecraft.world.level.block.FenceGateBlock;
+		}
+		return gate;
+	}
+
 	private static int roomToSquare(Settlement s, Template t) {
 		Progression.Step main = Progression.current(s, Settlement.MAIN);
 		Template m = main == null ? null : Template.get(s.style() + "/" + main.building());
@@ -1716,6 +1746,9 @@ public final class Settlements {
 					}
 				}
 			}
+			if (walls && !same) {
+				towersUp(level, s, base, ground, heartY, others, through, own);
+			}
 			for (Template.Placement p : base) {
 				BlockPos col = s.heart().offset(p.anchor());
 				Integer top = planTop.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
@@ -1826,6 +1859,59 @@ public final class Settlements {
 	}
 
 	/**
+	 * A wall tower stands at least as high as the wall sections it joins (field test: where the land stepped, a tower
+	 * lower than its neighbour put its roof's eaves into that section's masonry). Towers are the anchors whose blocks
+	 * reach the roof (template y 12 and up); every section anchor with a block within one of a tower's footprint lifts
+	 * the tower to its own height. Writes the offsets into {@code ground} (anchor column -> offset from the heart).
+	 */
+	private static void towersUp(ServerLevel level, Settlement s, List<Template.Placement> base, Map<Long, Integer> ground, int heartY,
+			Set<Long> others, Set<Long> through, Set<Long> own) {
+		Map<Long, int[]> box = new HashMap<>(); // anchor (relative) -> minX, minZ, maxX, maxZ, maxY
+		for (Template.Placement p : base) {
+			long a = BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ());
+			int x = p.offset().getX(), z = p.offset().getZ(), y = p.offset().getY();
+			box.merge(a, new int[] {x, z, x, z, y}, (o, n) -> new int[] {Math.min(o[0], n[0]), Math.min(o[1], n[1]), Math.max(o[2], n[2]),
+					Math.max(o[3], n[3]), Math.max(o[4], n[4])});
+		}
+		java.util.function.ToIntFunction<Long> land = a -> {
+			BlockPos col = s.heart().offset(BlockPos.getX(a), 0, BlockPos.getZ(a));
+			return ground.computeIfAbsent(col.asLong(), c -> {
+				int g;
+				if (!own.isEmpty()) {
+					List<Integer> near = new ArrayList<>();
+					for (int[] d2 : new int[][] {{2, 0}, {-2, 0}, {0, 2}, {0, -2}}) {
+						near.add(SiteWork.groundDeep(level, col.getX() + d2[0], col.getZ() + d2[1], heartY, through));
+					}
+					java.util.Collections.sort(near);
+					g = near.get(2);
+				} else {
+					g = SiteWork.groundDeep(level, col.getX(), col.getZ(), heartY, others);
+				}
+				return Math.max(-40, Math.min(30, g + 1 - heartY));
+			});
+		};
+		for (Map.Entry<Long, int[]> t : box.entrySet()) {
+			int[] tb = t.getValue();
+			if (tb[4] < 12 || tb[2] - tb[0] > 8 || tb[3] - tb[1] > 8) {
+				continue; // not a tower (a tower and its roof are at most 7 across)
+			}
+			int high = land.applyAsInt(t.getKey());
+			for (Map.Entry<Long, int[]> o : box.entrySet()) {
+				int[] ob = o.getValue();
+				if (o.getKey().equals(t.getKey()) || ob[4] >= 12) {
+					continue;
+				}
+				boolean touches = ob[0] <= tb[2] + 1 && ob[2] >= tb[0] - 1 && ob[1] <= tb[3] + 1 && ob[3] >= tb[1] - 1;
+				if (touches) {
+					high = Math.max(high, land.applyAsInt(o.getKey()));
+				}
+			}
+			BlockPos col = s.heart().offset(BlockPos.getX(t.getKey()), 0, BlockPos.getZ(t.getKey()));
+			ground.put(col.asLong(), high);
+		}
+	}
+
+	/**
 	 * The height of every road column (offset from the heart's level, as the road follows the land) after cut and
 	 * fill: neighbouring road columns never differ by more than one block, so every step can be walked (and gets a
 	 * slab). Columns next to anything built (doors, the gatehouse, terraces) keep the height of their land; between
@@ -1899,8 +1985,12 @@ public final class Settlements {
 				e.setValue(threshold);
 			}
 		}
-		Map<Long, Integer> low = new HashMap<>(g);
-		Map<Long, Integer> high = new HashMap<>(g);
+		// envelopes and caps run in half blocks, one half block per block: free stretches climb at most 1 in 2 (user,
+		// 2026-11-19: on hills the lanes climbed the terraces 1:1 like stairs); only where two fixed ends are closer than
+		// that allows do the closing passes below fall back to a block per block
+		Map<Long, Integer> low = new HashMap<>();
+		g.forEach((k, v) -> low.put(k, 2 * v));
+		Map<Long, Integer> high = new HashMap<>(low);
 		int[][] four = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 		for (boolean changed = true; changed; ) {
 			changed = false;
@@ -1930,8 +2020,8 @@ public final class Settlements {
 		Map<Long, Integer> capHigh = new HashMap<>();
 		Map<Long, Integer> capLow = new HashMap<>();
 		for (long c : g.keySet()) {
-			capHigh.put(c, fixed.contains(c) ? g.get(c) : Integer.MAX_VALUE / 2);
-			capLow.put(c, fixed.contains(c) ? g.get(c) : Integer.MIN_VALUE / 2);
+			capHigh.put(c, fixed.contains(c) ? 2 * g.get(c) : Integer.MAX_VALUE / 2);
+			capLow.put(c, fixed.contains(c) ? 2 * g.get(c) : Integer.MIN_VALUE / 2);
 		}
 		for (boolean changed = !fixed.isEmpty(); changed; ) {
 			changed = false;
@@ -1952,10 +2042,38 @@ public final class Settlements {
 				}
 			}
 		}
+		// hard caps in whole blocks, one block per block from the fixed ends: where the gentle 1 in 2 can't reach a door
+		// step in time, the road still meets it (field test: lanes left 2 blocks under the lord's porch)
+		Map<Long, Integer> hardHigh = new HashMap<>();
+		Map<Long, Integer> hardLow = new HashMap<>();
+		for (long c : g.keySet()) {
+			hardHigh.put(c, fixed.contains(c) ? g.get(c) : Integer.MAX_VALUE / 2);
+			hardLow.put(c, fixed.contains(c) ? g.get(c) : Integer.MIN_VALUE / 2);
+		}
+		for (boolean changed = !fixed.isEmpty(); changed; ) {
+			changed = false;
+			for (long c : g.keySet()) {
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				for (int[] d : four) {
+					long n = BlockPos.asLong(x + d[0], 0, z + d[1]);
+					Integer hn = hardHigh.get(n);
+					if (hn != null && hn + 1 < hardHigh.get(c)) {
+						hardHigh.put(c, hn + 1);
+						changed = true;
+					}
+					Integer ln = hardLow.get(n);
+					if (ln != null && ln - 1 > hardLow.get(c)) {
+						hardLow.put(c, ln - 1);
+						changed = true;
+					}
+				}
+			}
+		}
 		Map<Long, Integer> h = new HashMap<>();
 		for (long c : g.keySet()) {
 			int mid = Math.floorDiv(low.get(c) + high.get(c), 2);
-			h.put(c, fixed.contains(c) ? g.get(c) : Math.min(capHigh.get(c), Math.max(capLow.get(c), mid)));
+			int soft = Math.floorDiv(Math.min(capHigh.get(c), Math.max(capLow.get(c), mid)) + 1, 2);
+			h.put(c, fixed.contains(c) ? g.get(c) : Math.min(hardHigh.get(c), Math.max(hardLow.get(c), soft)));
 		}
 		for (int pass = 0; pass < 12; pass++) { // where two fixed ends disagree, the free columns between still close up
 			for (long c : g.keySet()) {
@@ -1997,7 +2115,8 @@ public final class Settlements {
 					}
 				}
 				int mean = Math.floorDiv(2 * sum + count, 2 * count);
-				next.put(c, Math.min(capHigh.get(c), Math.max(capLow.get(c), mean)));
+				int soft = Math.floorDiv(Math.min(capHigh.get(c), Math.max(capLow.get(c), 2 * mean)) + 1, 2); // soft caps are in half blocks
+				next.put(c, Math.min(hardHigh.get(c), Math.max(hardLow.get(c), soft)));
 			}
 			h = next;
 		}
@@ -2072,9 +2191,13 @@ public final class Settlements {
 	 * placed at once at the current road/lamp level.
 	 */
 	private static void extendInfrastructure(MinecraftServer server, Settlement s) {
+		extendInfrastructure(server, s, List.of(Progression.ROADS, Progression.LAMPS));
+	}
+
+	private static void extendInfrastructure(MinecraftServer server, Settlement s, List<String> tracks) {
 		ServerLevel level = server.overworld();
 		BlockState surface = SiteWork.surface(level, s.heart());
-		for (String track : List.of(Progression.ROADS, Progression.LAMPS)) {
+		for (String track : tracks) {
 			Progression.Step current = Progression.current(s, track);
 			if (current == null) {
 				continue;
@@ -2544,6 +2667,12 @@ public final class Settlements {
 				Set<Long> allNow = new HashSet<>();
 				fresh.built().values().forEach(allNow::addAll);
 				RoadLink.wayOut(server, fresh, allNow);
+			}
+			// the way-out road's earthwork can cut or raise the land under a lamp post: the posts are seated again
+			// (field test: lanterns hanging a block over cut ground, posts sunk into a raised bank)
+			Settlement seated = byHeart(server, s.heart());
+			if (seated != null && seated.level(Progression.LAMPS) > 0 && !Progression.LAMPS.equals(s.jobTrack())) {
+				extendInfrastructure(server, seated, List.of(Progression.LAMPS));
 			}
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {

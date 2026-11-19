@@ -34,6 +34,9 @@ public class FoundingScreen extends Screen {
 	private EditBox name;
 	private EditBox search;
 	private Button save;
+	/** Gate side: {@link CharterData#AUTO} or a rotation ordinal; the button cycles Auto, north, east, south, west. */
+	private int gate;
+	private static final int[] GATES = {CharterData.AUTO, 2, 3, 0, 1};
 	private Item icon;
 	private int color;
 	private List<Item> shown = List.of();
@@ -53,6 +56,14 @@ public class FoundingScreen extends Screen {
 		this.offhand = offhand;
 		this.icon = editing == null ? null : BuiltInRegistries.ITEM.getValue(editing.logo());
 		this.color = editing == null ? DyeColor.BLUE.getId() : editing.color();
+		this.gate = editing == null ? CharterData.AUTO : editing.gate();
+	}
+
+	private Component gateLabel() {
+		Component side = this.gate == CharterData.AUTO ? Component.translatable("kingdomquest.founding.gate.auto")
+				: Component.translatable("kingdomquest.side." + io.github.sotadevop.kingdomquest.kingdom.GateSite.side(
+						net.minecraft.world.level.block.Rotation.values()[this.gate]));
+		return Component.translatable("kingdomquest.founding.gate", side);
 	}
 
 	public static void open(ItemStack stack, boolean offhand) {
@@ -90,11 +101,21 @@ public class FoundingScreen extends Screen {
 		this.columns = (this.w - 2 * PAD - 2) / SLOT;
 		this.rows = Math.max(1, (this.h - 84 - 30) / SLOT);
 		int buttonsY = this.top + this.h - 25;
+		int bw = Math.min(96, (this.w - 2 * PAD - 8) / 3);
+		int bx = this.left + (this.w - 3 * bw - 8) / 2;
+		this.addRenderableWidget(Button.builder(gateLabel(), b -> {
+			int i = 0;
+			while (i < GATES.length && GATES[i] != this.gate) {
+				i++;
+			}
+			this.gate = GATES[(i + 1) % GATES.length];
+			b.setMessage(gateLabel());
+		}).bounds(bx, buttonsY, bw, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.gate.tip"))).build());
 		this.save = Button.builder(Component.translatable("kingdomquest.founding.confirm"), b -> save())
-				.bounds(this.left + this.w / 2 - 102, buttonsY, 100, 18).build();
+				.bounds(bx + bw + 4, buttonsY, bw, 18).build();
 		this.addRenderableWidget(this.save);
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> this.onClose())
-				.bounds(this.left + this.w / 2 + 2, buttonsY, 100, 18).build());
+				.bounds(bx + 2 * bw + 8, buttonsY, bw, 18).build());
 		filter();
 		updateSave();
 		this.setInitialFocus(this.name);
@@ -118,7 +139,7 @@ public class FoundingScreen extends Screen {
 	private void save() {
 		var id = BuiltInRegistries.ITEM.getKey(this.icon);
 		String text = this.name.getValue().strip();
-		ClientPlayNetworking.send(new FoundingPayload(new CharterData(text, this.color, id), this.offhand));
+		ClientPlayNetworking.send(new FoundingPayload(new CharterData(text, this.color, id, this.gate), this.offhand));
 		this.onClose();
 	}
 

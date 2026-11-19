@@ -1,0 +1,13 @@
+-d
+/tmp/jc
+-proc:none
+src/client/java/io/github/sotadevop/kingdomquest/client/FoundingScreen.java
+src/client/java/io/github/sotadevop/kingdomquest/client/PlacementPreview.java
+src/main/java/io/github/sotadevop/kingdomquest/charter/CharterData.java
+src/main/java/io/github/sotadevop/kingdomquest/charter/FoundingPayload.java
+src/main/java/io/github/sotadevop/kingdomquest/charter/RoyalCharter.java
+src/main/java/io/github/sotadevop/kingdomquest/charter/RoyalCharterItem.java
+src/main/java/io/github/sotadevop/kingdomquest/kingdom/FieldTest.java
+src/main/java/io/github/sotadevop/kingdomquest/kingdom/GateSite.java
+src/main/java/io/github/sotadevop/kingdomquest/kingdom/Settlements.java
+src/main/java/io/github/sotadevop/kingdomquest/kingdom/SiteWork.java
