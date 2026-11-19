@@ -171,6 +171,9 @@ final class DoorSteps {
 	/** Lays a flight of steps on the lower side of every step on the route that is too high to walk. */
 	private static List<Long> lay(ServerLevel level, Settlement s, List<long[]> path, Set<Long> built) {
 		List<Long> placed = new ArrayList<>();
+		// the streets are planned: steps never go on a street column (a lane laid later would run into them)
+		StreetPlan streets = StreetPlan.of(level.getServer(), s);
+		Set<Long> reserved = streets == null ? Set.of() : streets.columns();
 		Block[] mat = material(level, s);
 		for (int i = 0; i + 1 < path.size(); i++) {
 			long[] a = path.get(i), b = path.get(i + 1);
@@ -188,7 +191,7 @@ final class DoorSteps {
 			boolean ok = true;
 			for (int k = 1; top - k > low + 0.01 && ok; k++) {
 				BlockPos cell = new BlockPos((int) hi[0] + dx * k, top - k, (int) hi[2] + dz * k); // the body's cell on step k
-				ok = free(level, cell, built) && !built.contains(cell.below().asLong());
+				ok = free(level, cell, built) && !built.contains(cell.below().asLong()) && !reserved.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()));
 				steps.add(cell.below());
 			}
 			boolean cut = false;
@@ -200,7 +203,8 @@ final class DoorSteps {
 				int base = (int) Math.floor(low + 0.01);
 				for (int k = 1; base + k < high - 0.01 && ok; k++) {
 					BlockPos cell = new BlockPos((int) lo[0] - dx * k, base + k, (int) lo[2] - dz * k);
-					ok = !built.contains(cell.below().asLong()) && !built.contains(cell.asLong()) && !built.contains(cell.above().asLong());
+					ok = !built.contains(cell.below().asLong()) && !built.contains(cell.asLong()) && !built.contains(cell.above().asLong())
+							&& !reserved.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()));
 					steps.add(cell.below());
 				}
 				cut = true;

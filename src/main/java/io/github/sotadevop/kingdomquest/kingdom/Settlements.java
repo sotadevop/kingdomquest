@@ -1887,6 +1887,7 @@ public final class Settlements {
 					top.merge(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()), p.offset().getY(), Math::max);
 				}
 				List<Template.Placement> steps = new ArrayList<>();
+				Map<Long, BlockState> stairAt = new HashMap<>();
 				for (Template.Placement p : out) {
 					BlockState st = p.state();
 					if (st.is(Blocks.DIRT_PATH) || st.is(Blocks.COARSE_DIRT) || !st.isSolid()) {
@@ -1912,13 +1913,15 @@ public final class Settlements {
 					if (stepStair) {
 						// a stepped lane: the stair takes the road block's own place (its back is the cell's walking level, its
 						// front half a block lower), so a flight starts half a step above the street, not one and a half
-						steps.add(new Template.Placement(p.offset(),
-								(rough ? Blocks.COBBLESTONE_STAIRS : Blocks.STONE_BRICK_STAIRS).defaultBlockState().setValue(net.minecraft.world.level.block.StairBlock.FACING, stepUp),
-								p.segment(), p.anchor()));
+						stairAt.put(p.offset().asLong(),
+								(rough ? Blocks.COBBLESTONE_STAIRS : Blocks.STONE_BRICK_STAIRS).defaultBlockState().setValue(net.minecraft.world.level.block.StairBlock.FACING, stepUp));
 					} else if (stepSlab && !others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
 						steps.add(new Template.Placement(above, (rough ? Blocks.COBBLESTONE_SLAB : Blocks.STONE_BRICK_SLAB).defaultBlockState(),
 								p.segment(), p.anchor()));
 					}
+				}
+				if (!stairAt.isEmpty()) {
+					out.replaceAll(pl -> stairAt.containsKey(pl.offset().asLong()) ? new Template.Placement(pl.offset(), stairAt.get(pl.offset().asLong()), pl.segment(), pl.anchor()) : pl);
 				}
 				out.addAll(steps);
 				// cut and fill: where the road was evened out it gets earth under it, or the land above it is opened
