@@ -1434,7 +1434,11 @@ public final class SiteWork {
 				if (built.contains(pos.asLong()) || !(at.isAir() || plant(at) && at.canBeReplaced()) || at.is(Blocks.SNOW)) {
 					continue;
 				}
-				if (level.getBiome(pos).value().shouldSnow(level, pos)) {
+				// cold enough and the snow would stay: vanilla melts a snow layer only above block light 11, and snowy villages
+				// generate with snow right beside their lanterns (shouldSnow refuses any light from 10, which left ~1000 bare
+				// columns around a snowy taiga castle in the field test)
+				if (level.getBiome(pos).value().coldEnoughToSnow(pos, level.getSeaLevel()) && level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, pos) <= 11
+						&& Blocks.SNOW.defaultBlockState().canSurvive(level, pos)) {
 					level.setBlock(pos, Blocks.SNOW.defaultBlockState(), Block.UPDATE_ALL);
 				}
 			}

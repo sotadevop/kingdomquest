@@ -12,14 +12,22 @@ import net.minecraft.resources.Identifier;
  *
  * @param color dye color id (0-15), used only as an accent
  * @param logo  block item shown as the kingdom's logo, together with {@code color}
+ * @param gate  where the gate faces: -1 auto (the gentlest way in, chosen on founding), else the
+ *              {@link net.minecraft.world.level.block.Rotation} ordinal of the settlement (user, 2026-11-19)
  */
-public record CharterData(String name, int color, Identifier logo) {
+public record CharterData(String name, int color, Identifier logo, int gate) {
 	public static final int MAX_NAME = 32;
+	public static final int AUTO = -1;
+
+	public CharterData(String name, int color, Identifier logo) {
+		this(name, color, logo, AUTO);
+	}
 
 	public static final Codec<CharterData> CODEC = RecordCodecBuilder.create(i -> i.group(
 			Codec.STRING.fieldOf("name").forGetter(CharterData::name),
 			Codec.INT.fieldOf("color").forGetter(CharterData::color),
-			Identifier.CODEC.fieldOf("logo").forGetter(CharterData::logo)
+			Identifier.CODEC.fieldOf("logo").forGetter(CharterData::logo),
+			Codec.INT.optionalFieldOf("gate", AUTO).forGetter(CharterData::gate)
 	).apply(i, CharterData::new));
 
 	public static final StreamCodec<RegistryFriendlyByteBuf, CharterData> STREAM_CODEC = ByteBufCodecs.fromCodec(CODEC).cast();

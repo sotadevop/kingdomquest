@@ -57,6 +57,6 @@ public final class RoyalCharter {
 			return;
 		}
 		int color = Math.clamp(d.color(), 0, DyeColor.values().length - 1);
-		stack.set(DATA, new CharterData(name, color, d.logo()));
+		stack.set(DATA, new CharterData(name, color, d.logo(), Math.clamp(d.gate(), CharterData.AUTO, 3)));
 	}
 }
