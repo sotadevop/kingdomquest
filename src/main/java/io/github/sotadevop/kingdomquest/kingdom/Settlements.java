@@ -2499,6 +2499,8 @@ public final class Settlements {
 							nowBuilt);
 					SiteWork.roughFaces(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
 							nowBuilt, SiteWork.surface(level, s.heart()), touched);
+					SiteWork.stumps(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
+							nowBuilt, SiteWork.surface(level, s.heart()));
 				}
 			}
 			carryRoads(level, done, SiteWork.surface(level, s.heart()));

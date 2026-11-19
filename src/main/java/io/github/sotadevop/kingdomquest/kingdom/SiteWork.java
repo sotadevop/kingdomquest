@@ -7,12 +7,14 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.block.BambooStalkBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BambooLeaves;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
@@ -73,6 +75,99 @@ public final class SiteWork {
 	static boolean plant(BlockState st) {
 		return !st.isAir() && !st.isSolid() && !(st.getBlock() instanceof LiquidBlock) && !st.is(BlockTags.LOGS) && !st.is(BlockTags.LEAVES)
 				&& !st.hasBlockEntity() && natural(st);
+	}
+
+	/**
+	 * Bamboo, cactus and sugar cane: they stand like blocks (bamboo and cactus even count as solid), but they are
+	 * plants, never part of a floor. A cut that stops at the floor leaves their lower part in it (user, 2026-11-19:
+	 * bamboo in the cleared ground around a jungle camp).
+	 */
+	static boolean stalk(BlockState st) {
+		return st.is(Blocks.BAMBOO) || st.is(Blocks.CACTUS) || st.is(Blocks.SUGAR_CANE);
+	}
+
+	/**
+	 * Takes up stalk stumps in a box after a build. A stump is a stalk whose top was cut: bamboo without leaves on
+	 * top, a stalk under something built, or a cactus/cane whose top is level with the ground beside it. Where the
+	 * stump stood in the floor (level with the ground around, or under a built block) its hole is filled with earth
+	 * and the neighbours' top block; a stump standing free above the ground is removed. Returns how many it took up.
+	 */
+	public static int stumps(ServerLevel level, int x0, int z0, int x1, int z1, Set<Long> built, BlockState surface) {
+		int n = 0;
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		for (int x = x0; x <= x1; x++) {
+			for (int z = z0; z <= z1; z++) {
+				int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z) - 1;
+				for (int y = top; y >= top - 8; y--) {
+					pos.set(x, y, z);
+					BlockState st = level.getBlockState(pos);
+					if (!stalk(st) || built.contains(pos.asLong())) {
+						continue;
+					}
+					if (!stumpTop(level, pos, built)) {
+						continue;
+					}
+					BlockPos up = pos.above();
+					boolean covered = built.contains(up.asLong()) || level.getBlockState(up).isCollisionShapeFullBlock(level, up);
+					BlockState level0 = flushTop(level, x, y, z, built, surface);
+					boolean inFloor = covered || level0 != null;
+					int yy = y;
+					while (yy > level.getMinY() && stalk(level.getBlockState(pos.set(x, yy, z))) && !built.contains(pos.asLong())) {
+						BlockState fill = !inFloor ? Blocks.AIR.defaultBlockState()
+								: yy == y && !covered ? level0 : subsoil(surface);
+						level.setBlock(pos, fill, FLAGS);
+						n++;
+						yy--;
+					}
+					y = yy;
+				}
+			}
+		}
+		return n;
+	}
+
+	/** The top of a stalk that was cut (see {@link #stumps}); the field test counts these as "stumps". */
+	static boolean stumpTop(ServerLevel level, BlockPos pos, Set<Long> built) {
+		BlockState st = level.getBlockState(pos);
+		BlockPos up = pos.above();
+		BlockState over = level.getBlockState(up);
+		if (!stalk(st) || stalk(over) || built.contains(pos.asLong())) {
+			return false;
+		}
+		return built.contains(up.asLong()) || over.isCollisionShapeFullBlock(level, up)
+				|| flushTop(level, pos.getX(), pos.getY(), pos.getZ(), built, Blocks.DIRT.defaultBlockState()) != null
+				|| st.is(Blocks.BAMBOO) && st.getValue(BambooStalkBlock.LEAVES) == BambooLeaves.NONE;
+	}
+
+	/**
+	 * The ground block beside a stalk top at {@code y} when at least two neighbours have their ground surface at the same
+	 * height (a full block with open air over it): the stalk sits flush in a floor. Null otherwise.
+	 */
+	private static BlockState flushTop(ServerLevel level, int x, int y, int z, Set<Long> built, BlockState surface) {
+		Map<BlockState, Integer> tops = new HashMap<>();
+		int flush = 0;
+		BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			p.set(x + d.getStepX(), y, z + d.getStepZ());
+			BlockState st = level.getBlockState(p);
+			if (stalk(st) || !st.isCollisionShapeFullBlock(level, p)) {
+				continue;
+			}
+			p.move(Direction.UP);
+			BlockState over = level.getBlockState(p);
+			if (over.isCollisionShapeFullBlock(level, p) || stalk(over)) {
+				continue;
+			}
+			p.move(Direction.DOWN);
+			flush++;
+			if (!built.contains(p.asLong()) && isGround(st)) {
+				tops.merge(st, 1, Integer::sum);
+			}
+		}
+		if (flush < 2) {
+			return null;
+		}
+		return tops.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(surface);
 	}
 
 	private static final Map<String, List<Column>> CACHE = new HashMap<>();
@@ -701,8 +796,9 @@ public final class SiteWork {
 				removeTreeAt(level, pos.immutable(), built); // a tree growing up from below the pad
 				state = level.getBlockState(pos);
 			}
-			if (!(state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock || state.is(BlockTags.LEAVES) || plant(state))) {
-				break;
+			if (!(state.isAir() || state.canBeReplaced() || state.getBlock() instanceof LiquidBlock || state.is(BlockTags.LEAVES) || plant(state)
+					|| stalk(state))) {
+				break; // a stalk standing in a dip is filled over like a plant, not built on as ground
 			}
 			depth++;
 		}
