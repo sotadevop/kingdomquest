@@ -1276,6 +1276,10 @@ public final class FieldTest {
 					bare++;
 					if (bare % 50 == 1) {
 						marks.add(new Mark(x, z, 0xFFFFFF));
+						int ty = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
+						BlockPos tp = new BlockPos(x, ty, z);
+						sample(samples, "snow lost", rel(s, tp) + " on " + name(level.getBlockState(tp.below())) + " at " + name(level.getBlockState(tp))
+								+ " light " + level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, tp) + (owner.containsKey(tp.below().asLong()) ? " built" : ""));
 					}
 				}
 			}

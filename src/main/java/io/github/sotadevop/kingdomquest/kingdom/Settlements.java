@@ -258,6 +258,15 @@ public final class Settlements {
 			for (Rotation r : Rotation.values()) {
 				easiest = Math.min(easiest, GateSite.cost(level, heart, r));
 			}
+			if (data.gate() != CharterData.AUTO) {
+				// the lord set the side himself: say so when it is much harder than the side Auto would take
+				Rotation auto = GateSite.best(level, heart, rotationFor(player.getDirection()));
+				double mine = GateSite.cost(level, heart, rotation), best = GateSite.cost(level, heart, auto);
+				if (auto != rotation && mine > 40 && mine > 2 * best) {
+					player.sendSystemMessage(Component.translatable("kingdomquest.found.gate_hard", Component.translatable("kingdomquest.side." + GateSite.side(rotation)),
+							Component.translatable("kingdomquest.side." + GateSite.side(auto))).withStyle(net.minecraft.ChatFormatting.GOLD));
+				}
+			}
 			if (easiest > GateSite.STEEP_ALL_ROUND) {
 				// a hollow or a peak: no side gives a gentle way in (field test: a castle founded 30 blocks down a pit)
 				player.sendSystemMessage(Component.translatable("kingdomquest.found.hollow").withStyle(net.minecraft.ChatFormatting.GOLD));
@@ -2635,8 +2644,9 @@ public final class Settlements {
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			{
 				Rotation turn = Rotation.values()[s.rotation()];
-				BlockPos sa = s.heart().offset(Template.rotate(new BlockPos(-63 - 16, 0, -56 - 16), turn));
-				BlockPos sb = s.heart().offset(Template.rotate(new BlockPos(69 + 16, 0, 40 + 16), turn));
+				// the whole worked area: ring, moat bank and the way-out road beyond the gate (field test: bare ground there)
+				BlockPos sa = s.heart().offset(Template.rotate(new BlockPos(-63 - 30, 0, -56 - 30), turn));
+				BlockPos sb = s.heart().offset(Template.rotate(new BlockPos(69 + 30, 0, 40 + 40), turn));
 				SiteWork.snowCover(level, Math.min(sa.getX(), sb.getX()), Math.min(sa.getZ(), sb.getZ()), Math.max(sa.getX(), sb.getX()),
 						Math.max(sa.getZ(), sb.getZ()), nowBuilt);
 			}
@@ -2673,6 +2683,14 @@ public final class Settlements {
 			Settlement seated = byHeart(server, s.heart());
 			if (seated != null && seated.level(Progression.LAMPS) > 0 && !Progression.LAMPS.equals(s.jobTrack())) {
 				extendInfrastructure(server, seated, List.of(Progression.LAMPS));
+			}
+			// every door can be walked to: steps where the lane meets a raised plot too low (field test: porches)
+			Settlement stepped = byHeart(server, s.heart());
+			if (stepped != null) {
+				Settlement withSteps = DoorSteps.connect(server, stepped);
+				if (withSteps != stepped) {
+					put(server, withSteps);
+				}
 			}
 			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 			if (owner != null) {
