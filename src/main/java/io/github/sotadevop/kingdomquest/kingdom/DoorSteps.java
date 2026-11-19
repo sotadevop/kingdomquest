@@ -29,7 +29,7 @@ import java.util.Set;
  */
 final class DoorSteps {
 	/** How far from a door the route to walkable ground may run. */
-	private static final int RANGE = 24;
+	private static final int RANGE = 40;
 	private static final int MAX_STEP = 8;
 
 	private DoorSteps() {
@@ -53,6 +53,25 @@ final class DoorSteps {
 		FieldTest.spread(level, h, reach, queue, Set.of(), 400_000);
 		Set<Long> all = new HashSet<>();
 		s.built().values().forEach(all::addAll);
+		// roads are no obstacle to steps (lamp posts are): a flight may be patched into a laid road (field test: steps gave up
+		// where the low side of a 2-block joint was road)
+		Set<Long> hard = new HashSet<>(all);
+		hard.removeAll(s.built().getOrDefault(Progression.ROADS, List.of()));
+		// only ground counts as reached: not a roof or a wall top the walk climbed onto (field test: in deep sites the
+		// steps headed for a roof 9 above the door)
+		Set<Long> ground = new HashSet<>();
+		Map<Long, Integer> landOf = new HashMap<>(); // per column, the land under everything built
+		for (long k : reach) {
+			BlockPos b = BlockPos.of(k).below();
+			if (!hard.contains(b.asLong())) {
+				ground.add(k);
+				continue;
+			}
+			int land = landOf.computeIfAbsent(BlockPos.asLong(b.getX(), 0, b.getZ()), col -> SiteWork.groundDeep(level, b.getX(), b.getZ(), h.getY(), hard));
+			if (land >= b.getY() - 2) {
+				ground.add(k);
+			}
+		}
 		Settlement out = s;
 		for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
 			String track = e.getKey();
@@ -77,9 +96,9 @@ final class DoorSteps {
 				if (reached(reach, d, fronts)) {
 					continue;
 				}
-				List<long[]> route = route(level, fronts, reach, all);
+				List<long[]> route = route(level, fronts, ground, all);
 				if (route != null) {
-					added.addAll(lay(level, s, route, all));
+					added.addAll(lay(level, s, route, hard));
 				}
 			}
 			if (!added.isEmpty()) {
@@ -107,7 +126,8 @@ final class DoorSteps {
 	private static List<long[]> route(ServerLevel level, List<BlockPos> fronts, Set<Long> reach, Set<Long> built) {
 		Map<Long, Double> cost = new HashMap<>();
 		Map<Long, Long> from = new HashMap<>();
-		PriorityQueue<double[]> pq = new PriorityQueue<>((a, b) -> Double.compare(a[0], b[0]));
+		Set<Long> gaps = new HashSet<>();
+		PriorityQueue<Map.Entry<Long, Double>> pq = new PriorityQueue<>((a, b) -> Double.compare(a.getValue(), b.getValue()));
 		if (fronts.isEmpty()) {
 			return null;
 		}
@@ -118,16 +138,16 @@ final class DoorSteps {
 				if (!Double.isNaN(f)) {
 					long k = c.above(dy).asLong();
 					cost.put(k, 0.0);
-					pq.add(new double[] {0, k});
+					pq.add(Map.entry(k, 0.0));
 				}
 			}
 		}
 		long goal = Long.MIN_VALUE;
 		int seen = 0;
-		while (!pq.isEmpty() && seen++ < 20_000) {
-			double[] top = pq.poll();
-			long k = (long) top[1];
-			if (top[0] > cost.getOrDefault(k, Double.MAX_VALUE)) {
+		while (!pq.isEmpty() && seen++ < 60_000) {
+			Map.Entry<Long, Double> top = pq.poll();
+			long k = top.getKey();
+			if (top.getValue() > cost.getOrDefault(k, Double.MAX_VALUE)) {
 				continue;
 			}
 			if (reach.contains(k)) {
@@ -141,18 +161,29 @@ final class DoorSteps {
 				if (Math.abs(nx - origin.getX()) > RANGE || Math.abs(nz - origin.getZ()) > RANGE) {
 					continue;
 				}
+				// through a fence, wall or hedge of the settlement's own (a door enclosed by its yard): an opening is made
+				if (gapAt(level, nx, y, nz, built) && Math.abs(y - f) <= FieldTest.STEP) {
+					double c = top.getValue() + 12;
+					long nk = BlockPos.asLong(nx, y, nz);
+					if (c < cost.getOrDefault(nk, Double.MAX_VALUE)) {
+						cost.put(nk, c);
+						from.put(nk, k);
+						gaps.add(nk);
+						pq.add(Map.entry(nk, c));
+					}
+				}
 				for (int dy = MAX_STEP; dy >= -MAX_STEP; dy--) {
 					double g = FieldTest.feet(level, nx, y + dy, nz, false);
 					if (Double.isNaN(g) || Math.abs(g - f) > MAX_STEP) {
 						continue;
 					}
 					double rise = Math.abs(g - f);
-					double c = top[0] + 1 + (rise <= FieldTest.STEP ? 0 : 6 * rise);
+					double c = top.getValue() + 1 + (rise <= FieldTest.STEP ? 0 : 6 * rise);
 					long nk = BlockPos.asLong(nx, y + dy, nz);
 					if (c < cost.getOrDefault(nk, Double.MAX_VALUE)) {
 						cost.put(nk, c);
 						from.put(nk, k);
-						pq.add(new double[] {c, nk});
+						pq.add(Map.entry(nk, c));
 					}
 				}
 			}
@@ -163,7 +194,9 @@ final class DoorSteps {
 		List<long[]> path = new ArrayList<>();
 		for (Long k = goal; k != null; k = from.get(k)) {
 			int x = BlockPos.getX(k), y = BlockPos.getY(k), z = BlockPos.getZ(k);
-			path.add(new long[] {x, y, z, Math.round(FieldTest.feet(level, x, y, z, false) * 100)});
+			boolean gap = gaps.contains(k);
+			double feet = gap ? y : FieldTest.feet(level, x, y, z, false);
+			path.add(new long[] {x, y, z, Math.round(feet * 100), gap ? 1 : 0});
 		}
 		return path; // from the reached cell to the door
 	}
@@ -171,6 +204,24 @@ final class DoorSteps {
 	/** Lays a flight of steps on the lower side of every step on the route that is too high to walk. */
 	private static List<Long> lay(ServerLevel level, Settlement s, List<long[]> path, Set<Long> built) {
 		List<Long> placed = new ArrayList<>();
+		for (long[] cell : path) {
+			if (cell.length > 4 && cell[4] == 1) {
+				for (int dy = 0; dy <= 1; dy++) {
+					BlockPos q = new BlockPos((int) cell[0], (int) cell[1] + dy, (int) cell[2]);
+					if (light(level.getBlockState(q))) {
+						level.setBlock(q, Blocks.AIR.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_ALL);
+						// kept open: repairs skip it like a change the lord made himself
+						LordChanges.record(level.getServer(), s, q.asLong(), Blocks.AIR.defaultBlockState());
+					}
+				}
+			}
+		}
+		// the streets are planned: steps never go on a street column (a lane laid later would run into them)
+		StreetPlan streets = StreetPlan.of(level.getServer(), s);
+		Set<Long> reserved = new HashSet<>(streets == null ? Set.of() : streets.columns());
+		for (long p : s.built().getOrDefault(Progression.ROADS, List.of())) {
+			reserved.remove(BlockPos.asLong(BlockPos.getX(p), 0, BlockPos.getZ(p))); // a road already laid may get a step patched in
+		}
 		Block[] mat = material(level, s);
 		for (int i = 0; i + 1 < path.size(); i++) {
 			long[] a = path.get(i), b = path.get(i + 1);
@@ -188,7 +239,7 @@ final class DoorSteps {
 			boolean ok = true;
 			for (int k = 1; top - k > low + 0.01 && ok; k++) {
 				BlockPos cell = new BlockPos((int) hi[0] + dx * k, top - k, (int) hi[2] + dz * k); // the body's cell on step k
-				ok = free(level, cell, built) && !built.contains(cell.below().asLong());
+				ok = free(level, cell, built) && !built.contains(cell.below().asLong()) && !reserved.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()));
 				steps.add(cell.below());
 			}
 			boolean cut = false;
@@ -200,7 +251,8 @@ final class DoorSteps {
 				int base = (int) Math.floor(low + 0.01);
 				for (int k = 1; base + k < high - 0.01 && ok; k++) {
 					BlockPos cell = new BlockPos((int) lo[0] - dx * k, base + k, (int) lo[2] - dz * k);
-					ok = !built.contains(cell.below().asLong()) && !built.contains(cell.asLong()) && !built.contains(cell.above().asLong());
+					ok = !built.contains(cell.below().asLong()) && !built.contains(cell.asLong()) && !built.contains(cell.above().asLong())
+							&& !reserved.contains(BlockPos.asLong(cell.getX(), 0, cell.getZ()));
 					steps.add(cell.below());
 				}
 				cut = true;
@@ -231,6 +283,50 @@ final class DoorSteps {
 			}
 		}
 		return placed;
+	}
+
+	/** A light built block: fence, wall, pane, hedge leaves, trapdoor. An opening may be made through it. */
+	private static boolean light(BlockState st) {
+		net.minecraft.world.level.block.Block b = st.getBlock();
+		return b instanceof net.minecraft.world.level.block.FenceBlock || b instanceof net.minecraft.world.level.block.WallBlock
+				|| b instanceof net.minecraft.world.level.block.IronBarsBlock || b instanceof net.minecraft.world.level.block.LeavesBlock
+				|| b instanceof net.minecraft.world.level.block.TrapDoorBlock;
+	}
+
+	/** A cell (body at y) shut only by the settlement's light blocks, on solid ground: an opening there is walkable. */
+	private static boolean gapAt(ServerLevel level, int x, int y, int z, Set<Long> built) {
+		boolean any = false;
+		for (int dy = 0; dy <= 1; dy++) {
+			BlockPos q = new BlockPos(x, y + dy, z);
+			BlockState st = level.getBlockState(q);
+			if (light(st) && built.contains(q.asLong())) {
+				any = true;
+			} else if (!(st.isAir() || st.canBeReplaced())) {
+				return false;
+			}
+		}
+		BlockPos under = new BlockPos(x, y - 1, z);
+		BlockPos over = new BlockPos(x, y + 2, z);
+		// nothing built hangs on it from above (a sign on a fence, a lantern on an arm): it would be left floating
+		if (!any || !level.getBlockState(under).isCollisionShapeFullBlock(level, under) || hangs(level.getBlockState(over))) {
+			return false;
+		}
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			for (int dy = 0; dy <= 2; dy++) {
+				if (hangs(level.getBlockState(new BlockPos(x + d.getStepX(), y + dy, z + d.getStepZ())))) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/** Something that hangs on or is fixed to a neighbouring block. */
+	private static boolean hangs(BlockState st) {
+		net.minecraft.world.level.block.Block b = st.getBlock();
+		return b instanceof net.minecraft.world.level.block.SignBlock || b instanceof net.minecraft.world.level.block.CeilingHangingSignBlock
+				|| b instanceof net.minecraft.world.level.block.WallHangingSignBlock || b instanceof net.minecraft.world.level.block.LanternBlock
+				|| b instanceof net.minecraft.world.level.block.BaseTorchBlock || b instanceof net.minecraft.world.level.block.AbstractBannerBlock;
 	}
 
 	/** Room to stand on a step: two open blocks, nothing built. */

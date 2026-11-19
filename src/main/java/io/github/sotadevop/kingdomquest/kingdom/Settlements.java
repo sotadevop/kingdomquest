@@ -92,6 +92,7 @@ public final class Settlements {
 			FOLLOWED.clear();
 			MOAT.clear();
 			SitePlan.forgetAll();
+			StreetPlan.forgetAll();
 			UNFIXABLE.clear();
 		});
 		// no monsters spawn inside a settlement
@@ -413,6 +414,12 @@ public final class Settlements {
 				}
 			}
 		}
+		// road first (user, 2026-11-19, option A): the building stands at the street's height where its door meets it
+		// (the porch steps of a raised house are part of its design), so street and plot always agree
+		Integer street = streetAtDoor(s, t);
+		if (street != null) {
+			return Math.max(-STREET_LIFT, Math.min(STREET_LIFT, street));
+		}
 		List<Integer> hs = new ArrayList<>();
 		SitePlan sitePlan = server == null ? null : SitePlan.of(server, s);
 		int n = 0;
@@ -529,6 +536,78 @@ public final class Settlements {
 	}
 
 	/** Blocks (walking, along the grid) from the nearest door of {@code t} to the main building's plot; large if unknown. */
+	/** How far above or below the square a plot may follow its street. */
+	static final int STREET_LIFT = 16; // as far as the site plan itself fills or cuts
+
+	/**
+	 * The street's feet height (relative to the heart) where the building's way in meets it: straight out from its
+	 * doors and fence gates (either side, up to 6 blocks); for a place without one, the street cell nearest to any of
+	 * its blocks within 4. Null without a street plan or a street nearby.
+	 */
+	private static Integer streetAtDoor(Settlement s, Template t) {
+		StreetPlan streets = server == null ? null : StreetPlan.of(server, s);
+		if (streets == null || streets.columns().isEmpty()) {
+			return null;
+		}
+		Rotation r = Rotation.values()[s.rotation()];
+		BlockPos h = s.heart();
+		Integer best = null;
+		int bestK = Integer.MAX_VALUE;
+		List<Template.Placement> list = t.placements(dye(s.color()), r);
+		Set<Long> body = new HashSet<>(); // the building's own blocks: a way out through them is no way out
+		for (Template.Placement p : list) {
+			if (!p.state().isAir()) {
+				body.add(h.offset(p.offset()).asLong());
+			}
+		}
+		for (Template.Placement p : list) {
+			BlockState st = p.state();
+			boolean door = st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
+					&& st.getValue(net.minecraft.world.level.block.DoorBlock.HALF) == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
+			if (!door && !(st.getBlock() instanceof net.minecraft.world.level.block.FenceGateBlock)) {
+				continue;
+			}
+			net.minecraft.core.Direction f = st.getValue(net.minecraft.world.level.block.HorizontalDirectionalBlock.FACING);
+			for (net.minecraft.core.Direction side : new net.minecraft.core.Direction[] {f, f.getOpposite()}) {
+				for (int k = 1; k <= 6 && k < bestK; k++) {
+					BlockPos c = h.offset(p.offset()).relative(side, k);
+					if (body.contains(c.asLong()) || body.contains(c.above().asLong())) {
+						break; // into the building: the street behind it is not this door's
+					}
+					Integer feet = streets.feetAt(BlockPos.asLong(c.getX(), 0, c.getZ()));
+					if (feet != null) {
+						best = feet;
+						bestK = k;
+						break;
+					}
+				}
+			}
+		}
+		if (best != null) {
+			return best;
+		}
+		Set<Long> mine = new HashSet<>();
+		for (Template.Placement p : list) {
+			mine.add(BlockPos.asLong(h.getX() + p.offset().getX(), 0, h.getZ() + p.offset().getZ()));
+		}
+		for (int d = 1; d <= 4; d++) {
+			for (long c : mine) {
+				for (int dx = -d; dx <= d; dx++) {
+					for (int dz = -d; dz <= d; dz++) {
+						if (Math.max(Math.abs(dx), Math.abs(dz)) != d) {
+							continue;
+						}
+						Integer feet = streets.feetAt(BlockPos.asLong(BlockPos.getX(c) + dx, 0, BlockPos.getZ(c) + dz));
+						if (feet != null) {
+							return feet;
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+
 	/** True when the plot's only ways in are fence gates (a field, a paddock): no porch steps to climb. */
 	private static boolean gateOnly(Template t) {
 		boolean gate = false;
@@ -1740,7 +1819,18 @@ public final class Settlements {
 				minY = Math.min(minY, p.offset().getY());
 			}
 			Set<Long> placed = new HashSet<>();
-			if (track.equals(Progression.ROADS)) {
+			// roads take their height from the street plan (worked out once, never changed by later builds); without one
+			// (site not loaded yet) the old per-column evening is the fallback
+			StreetPlan streets = track.equals(Progression.ROADS) && server != null ? StreetPlan.of(server, s) : null;
+			if (streets != null && !streets.columns().isEmpty()) {
+				for (Template.Placement p : base) {
+					BlockPos col = s.heart().offset(p.anchor());
+					Integer f = streets.feetAt(BlockPos.asLong(col.getX(), 0, col.getZ()));
+					if (f != null) {
+						ground.put(col.asLong(), f);
+					}
+				}
+			} else if (track.equals(Progression.ROADS)) {
 				ground.putAll(evenRoad(level, s, base, others, own, through));
 			}
 			// a wall that stands (after a restart, for repairs, for a rebuild) is found where it is: the top of
@@ -1758,8 +1848,31 @@ public final class Settlements {
 			if (walls && !same) {
 				towersUp(level, s, base, ground, heartY, others, through, own);
 			}
+			// a lamp's arm follows its post, not the road under it (field test: arms left hanging where the road and the
+			// ground beside it differ): a lamp block in a column without a post takes the neighbouring post's column
+			Map<Long, BlockPos> lampPost = new HashMap<>();
+			if (track.equals(Progression.LAMPS)) {
+				Set<Long> lampPosts = new HashSet<>();
+				for (Template.Placement p : base) {
+					if (p.offset().getY() == 0) {
+						lampPosts.add(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
+					}
+				}
+				for (Template.Placement p : base) {
+					long lpCol = BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ());
+					if (!lampPosts.contains(lpCol)) {
+						for (int[] lpD : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+							long lpN = BlockPos.asLong(p.anchor().getX() + lpD[0], 0, p.anchor().getZ() + lpD[1]);
+							if (lampPosts.contains(lpN)) {
+								lampPost.put(lpCol, new BlockPos(p.anchor().getX() + lpD[0], 0, p.anchor().getZ() + lpD[1]));
+								break;
+							}
+						}
+					}
+				}
+			}
 			for (Template.Placement p : base) {
-				BlockPos col = s.heart().offset(p.anchor());
+				BlockPos col = s.heart().offset(lampPost.getOrDefault(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.anchor()));
 				Integer top = planTop.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
 				int off = ground.computeIfAbsent(col.asLong(), c -> {
 					int g;
@@ -1797,22 +1910,57 @@ public final class Settlements {
 					top.merge(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()), p.offset().getY(), Math::max);
 				}
 				List<Template.Placement> steps = new ArrayList<>();
+				Map<Long, BlockState> stairAt = new HashMap<>();
 				for (Template.Placement p : out) {
 					BlockState st = p.state();
 					if (st.is(Blocks.DIRT_PATH) || st.is(Blocks.COARSE_DIRT) || !st.isSolid()) {
 						continue;
 					}
 					boolean climbs = false;
+					int climbing = 0;
+					boolean straight = false;
+					net.minecraft.core.Direction stepUp = null;
 					for (int[] d2 : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
 						Integer n = top.get(BlockPos.asLong(p.offset().getX() + d2[0], 0, p.offset().getZ() + d2[1]));
-						climbs |= n != null && n == p.offset().getY() + 1;
+						if (n != null && n == p.offset().getY() + 1) {
+							climbs = true;
+							climbing++;
+							stepUp = d2[0] > 0 ? net.minecraft.core.Direction.EAST : d2[0] < 0 ? net.minecraft.core.Direction.WEST
+									: d2[1] > 0 ? net.minecraft.core.Direction.SOUTH : net.minecraft.core.Direction.NORTH;
+							Integer behind = top.get(BlockPos.asLong(p.offset().getX() - d2[0], 0, p.offset().getZ() - d2[1]));
+							straight = behind == null || behind <= p.offset().getY();
+						}
 					}
+					// a stair only on a straight run of a flight: at a bend it would face the wrong way (field test: 1.5 steps)
+					straight &= climbing == 1;
+					BlockPos stepWorld = s.heart().offset(p.offset());
+					long stepCol = BlockPos.asLong(stepWorld.getX(), 0, stepWorld.getZ());
+					boolean stepPlanned = streets != null && streets.halfAt(stepCol) != null;
+					boolean stepStair = stepPlanned && streets.steep(stepCol) && climbs && straight; // a stepped lane: real stairs
+					boolean stepSlab = stepPlanned ? streets.slab(stepCol) && !stepStair : climbs; // the plan's half heights are slabs
 					BlockPos above = p.offset().above();
-					if (climbs && !others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
-						boolean rough = st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE) || st.is(Blocks.GRAVEL);
+					boolean rough = st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE) || st.is(Blocks.GRAVEL);
+					if (stepStair) {
+						// a stepped lane: on a whole planned height the stair takes the road block's own place (its back is the
+						// cell's walking level); on a half height it stands on the road block, where the slab would be (its front
+						// is the walking level). Either way each stair meets the next half a block apart (field test: the half
+						// was lost and the flight met the music hall's landing 1.5 high)
+						BlockState stairState = (rough ? Blocks.COBBLESTONE_STAIRS : Blocks.STONE_BRICK_STAIRS).defaultBlockState()
+								.setValue(net.minecraft.world.level.block.StairBlock.FACING, stepUp);
+						if (streets.slab(stepCol)) {
+							if (!others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
+								steps.add(new Template.Placement(above, stairState, p.segment(), p.anchor()));
+							}
+						} else {
+							stairAt.put(p.offset().asLong(), stairState);
+						}
+					} else if (stepSlab && !others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
 						steps.add(new Template.Placement(above, (rough ? Blocks.COBBLESTONE_SLAB : Blocks.STONE_BRICK_SLAB).defaultBlockState(),
 								p.segment(), p.anchor()));
 					}
+				}
+				if (!stairAt.isEmpty()) {
+					out.replaceAll(pl -> stairAt.containsKey(pl.offset().asLong()) ? new Template.Placement(pl.offset(), stairAt.get(pl.offset().asLong()), pl.segment(), pl.anchor()) : pl);
 				}
 				out.addAll(steps);
 				// cut and fill: where the road was evened out it gets earth under it, or the land above it is opened
@@ -2642,6 +2790,8 @@ public final class Settlements {
 				SiteWork.sealDitch(level, moatColumns(done), nowBuilt, SiteWork.surface(level, s.heart()));
 			}
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
+			// the streets' edges: verge level with the road, a step or a retaining wall beyond (road first, 2026-11-19)
+			StreetPlan.edges(server, done, nowBuilt);
 			{
 				Rotation turn = Rotation.values()[s.rotation()];
 				// the whole worked area: ring, moat bank and the way-out road beyond the gate (field test: bare ground there)
