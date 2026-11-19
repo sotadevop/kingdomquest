@@ -2499,9 +2499,11 @@ public final class Settlements {
 							nowBuilt);
 					SiteWork.roughFaces(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
 							nowBuilt, SiteWork.surface(level, s.heart()), touched);
-					SiteWork.stumps(level, s.heart().getX() + ax - 10, s.heart().getZ() + az - 10, s.heart().getX() + bx + 10, s.heart().getZ() + bz + 10,
-							nowBuilt, SiteWork.surface(level, s.heart()));
 				}
+				// stalk stumps over the whole settlement: wall, gate and road works shape land outside their own box
+				// (field test: bamboo cut flush along the wall line)
+				SiteWork.stumps(level, s.heart().getX() - 80, s.heart().getZ() - 80, s.heart().getX() + 80, s.heart().getZ() + 80, nowBuilt,
+						SiteWork.surface(level, s.heart()));
 			}
 			carryRoads(level, done, SiteWork.surface(level, s.heart()));
 			if (s.jobTrack().equals(Progression.GATE) && !moatColumns(done).isEmpty()) {

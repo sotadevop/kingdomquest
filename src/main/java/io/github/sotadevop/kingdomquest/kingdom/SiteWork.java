@@ -108,7 +108,7 @@ public final class SiteWork {
 						continue;
 					}
 					BlockPos up = pos.above();
-					boolean covered = built.contains(up.asLong()) || level.getBlockState(up).isCollisionShapeFullBlock(level, up);
+					boolean covered = built.contains(up.asLong()) || isGround(level.getBlockState(up));
 					BlockState level0 = flushTop(level, x, y, z, built, surface);
 					boolean inFloor = covered || level0 != null;
 					int yy = y;
@@ -134,7 +134,8 @@ public final class SiteWork {
 		if (!stalk(st) || stalk(over) || built.contains(pos.asLong())) {
 			return false;
 		}
-		return built.contains(up.asLong()) || over.isCollisionShapeFullBlock(level, up)
+		// covered: a floor over it (built, or ground laid on it); bamboo grown up into a tree's leaves is not cut
+		return built.contains(up.asLong()) || isGround(over)
 				|| flushTop(level, pos.getX(), pos.getY(), pos.getZ(), built, Blocks.DIRT.defaultBlockState()) != null
 				|| st.is(Blocks.BAMBOO) && st.getValue(BambooStalkBlock.LEAVES) == BambooLeaves.NONE;
 	}

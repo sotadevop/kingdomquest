@@ -785,7 +785,7 @@ public final class FieldTest {
 				}
 				return 10 - Math.abs(m48 + 15) / 2 - Math.abs(m96 - m48) / 2;
 			case "big_hill": // the top of a hill much larger than the castle: gentle near, far down at 96
-				if (m24 < -6 || m24 > 1 || m48 > -3 || m48 < -16 || max(r96) > -10 || m96 > -22) {
+				if (m24 < -6 || m24 > 1 || min(r24) < -10 || max(r24) > 4 || m48 > -3 || m48 < -16 || max(r96) > -10 || m96 > -22) {
 					return -1;
 				}
 				return Math.min(10, -m96 / 4) - Math.abs(m48 + 8) / 3;
@@ -795,7 +795,7 @@ public final class FieldTest {
 				}
 				return Math.min(10, m48 / 3) + min(r48) / 4.0;
 			case "mesa": // a flat top with steep sides all round
-				if (max(r24) > 3 || min(r24) < -3 || max(r72) > -12 || m72 > -18) {
+				if (max(r24) > 4 || min(r24) < -4 || max(r72) > -8 || m72 > -14) {
 					return -1;
 				}
 				return Math.min(10, -m72 / 4);
