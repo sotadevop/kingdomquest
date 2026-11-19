@@ -256,7 +256,8 @@ final class StreetPlan {
 		}
 		int[] halfV = new int[n];
 		for (int i = 0; i < n; i++) {
-			halfV[i] = fixed[i] ? 0 : (int) Math.round(v[i] * 2);
+			// stepped lanes on whole heights only: a stair is walked in two half steps from a whole level below it
+			halfV[i] = fixed[i] ? 0 : steepUnits.contains(i) ? 2 * (int) Math.round(v[i]) : (int) Math.round(v[i] * 2);
 		}
 		// rounding may leave two units a whole block apart where the grade allows less: pulled together again
 		boolean moved = true;
@@ -268,11 +269,14 @@ final class StreetPlan {
 				}
 				for (int j : adj.get(i)) {
 					int most = (int) Math.ceil(2 * Math.max(grade[i], grade[j]) - 1e-9);
+					boolean even = steepUnits.contains(i);
 					if (halfV[i] - halfV[j] > most) {
-						halfV[i] = halfV[j] + most;
+						int b = halfV[j] + most;
+						halfV[i] = even && Math.floorMod(b, 2) == 1 ? b - 1 : b; // a stepped lane stays on a whole height
 						moved = true;
 					} else if (halfV[j] - halfV[i] > most) {
-						halfV[i] = halfV[j] - most;
+						int b = halfV[j] - most;
+						halfV[i] = even && Math.floorMod(b, 2) == 1 ? b + 1 : b;
 						moved = true;
 					}
 				}
