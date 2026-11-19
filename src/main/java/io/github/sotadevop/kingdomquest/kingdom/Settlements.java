@@ -432,6 +432,11 @@ public final class Settlements {
 		// building's plot, which stays at the square's level: next to the main plot that is only a few blocks
 		// (1 in 2 since 2026-11-19, the gentle lanes the user asked for on hills)
 		int limit = Math.max(2, Math.min(LIFT_LIMIT, roomToSquare(s, t) / 2));
+		if (gateOnly(t)) {
+			// a field entered through a fence gate (the farm) lies beside its road, not sunk 6 below it (field test: on five
+			// steep sites the farm gate opened onto a 6-block bank under the farm road)
+			limit = Math.min(limit, 3);
+		}
 		dy = Math.max(-limit, Math.min(limit, dy));
 		// plots that face each other share a level: a door looking onto a neighbour's plot within 4 blocks, either
 		// way round, puts both on the same level (one block either side), or the door looks at a wall (field test)
@@ -515,6 +520,19 @@ public final class Settlements {
 	}
 
 	/** Blocks (walking, along the grid) from the nearest door of {@code t} to the main building's plot; large if unknown. */
+	/** True when the plot's only ways in are fence gates (a field, a paddock): no porch steps to climb. */
+	private static boolean gateOnly(Template t) {
+		boolean gate = false;
+		for (Template.Placement p : t.placements("white", Rotation.NONE)) {
+			Block b = p.state().getBlock();
+			if (b instanceof net.minecraft.world.level.block.DoorBlock) {
+				return false;
+			}
+			gate |= b instanceof net.minecraft.world.level.block.FenceGateBlock;
+		}
+		return gate;
+	}
+
 	private static int roomToSquare(Settlement s, Template t) {
 		Progression.Step main = Progression.current(s, Settlement.MAIN);
 		Template m = main == null ? null : Template.get(s.style() + "/" + main.building());
@@ -1929,12 +1947,20 @@ public final class Settlements {
 		// (gatehouse, arch), and on the square around the heart
 		Map<Long, List<Integer>> builtYs = new HashMap<>();
 		Map<Long, Integer> doorCols = new HashMap<>(); // column -> the threshold: the door's lowest block (offset from the heart)
+		// porch steps standing on something: a lane that ends beside one meets its foot (field test: lanes ended 2 blocks
+		// under the bottom step of the lord's porch and the tannery's)
+		Map<Long, Integer> stairCols = new HashMap<>();
 		for (long o : others) {
 			BlockPos b = BlockPos.of(o);
 			builtYs.computeIfAbsent(BlockPos.asLong(b.getX(), 0, b.getZ()), k -> new ArrayList<>()).add(b.getY() - heartY);
 			Block block = level.getBlockState(b).getBlock();
 			if (block instanceof net.minecraft.world.level.block.DoorBlock || block instanceof net.minecraft.world.level.block.FenceGateBlock) {
 				doorCols.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b.getY() - heartY, Math::min);
+			}
+			BlockState bs = level.getBlockState(b);
+			if (block instanceof net.minecraft.world.level.block.StairBlock && bs.getValue(net.minecraft.world.level.block.StairBlock.HALF)
+					== net.minecraft.world.level.block.state.properties.Half.BOTTOM && !level.getBlockState(b.below()).isAir()) {
+				stairCols.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b.getY() - heartY, Math::min);
 			}
 		}
 		Set<Long> fixed = new HashSet<>();
@@ -1956,6 +1982,14 @@ public final class Settlements {
 					Integer t = doorCols.get(BlockPos.asLong(x + dx, 0, z + dz));
 					if (t != null && (threshold == null || t < threshold)) {
 						threshold = t;
+					}
+				}
+			}
+			if (threshold == null) {
+				for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+					Integer st = stairCols.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
+					if (st != null && Math.abs(st - e.getValue()) <= 3 && (threshold == null || st < threshold)) {
+						threshold = st;
 					}
 				}
 			}
