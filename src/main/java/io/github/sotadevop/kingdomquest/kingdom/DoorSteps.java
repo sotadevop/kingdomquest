@@ -53,11 +53,10 @@ final class DoorSteps {
 		FieldTest.spread(level, h, reach, queue, Set.of(), 400_000);
 		Set<Long> all = new HashSet<>();
 		s.built().values().forEach(all::addAll);
-		// roads and lamps are no obstacle to steps: a flight may be patched into a laid road (field test: steps gave up
+		// roads are no obstacle to steps (lamp posts are): a flight may be patched into a laid road (field test: steps gave up
 		// where the low side of a 2-block joint was road)
 		Set<Long> hard = new HashSet<>(all);
 		hard.removeAll(s.built().getOrDefault(Progression.ROADS, List.of()));
-		hard.removeAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
 		// only ground counts as reached: not a roof or a wall top the walk climbed onto (field test: in deep sites the
 		// steps headed for a roof 9 above the door)
 		Set<Long> ground = new HashSet<>();
@@ -307,7 +306,27 @@ final class DoorSteps {
 			}
 		}
 		BlockPos under = new BlockPos(x, y - 1, z);
-		return any && level.getBlockState(under).isCollisionShapeFullBlock(level, under);
+		BlockPos over = new BlockPos(x, y + 2, z);
+		// nothing built hangs on it from above (a sign on a fence, a lantern on an arm): it would be left floating
+		if (!any || !level.getBlockState(under).isCollisionShapeFullBlock(level, under) || hangs(level.getBlockState(over))) {
+			return false;
+		}
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			for (int dy = 0; dy <= 2; dy++) {
+				if (hangs(level.getBlockState(new BlockPos(x + d.getStepX(), y + dy, z + d.getStepZ())))) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/** Something that hangs on or is fixed to a neighbouring block. */
+	private static boolean hangs(BlockState st) {
+		net.minecraft.world.level.block.Block b = st.getBlock();
+		return b instanceof net.minecraft.world.level.block.SignBlock || b instanceof net.minecraft.world.level.block.CeilingHangingSignBlock
+				|| b instanceof net.minecraft.world.level.block.WallHangingSignBlock || b instanceof net.minecraft.world.level.block.LanternBlock
+				|| b instanceof net.minecraft.world.level.block.BaseTorchBlock || b instanceof net.minecraft.world.level.block.AbstractBannerBlock;
 	}
 
 	/** Room to stand on a step: two open blocks, nothing built. */
