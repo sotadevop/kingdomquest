@@ -15,6 +15,7 @@
 	"kingdomquest.found.confirm": "Right-click again to found %s here. The gate (flames) faces %s, as set in the charter's menu (sneak + right-click).",
 	"kingdomquest.found.confirm_auto": "Right-click again to found %s here. The gate (flames) faces %s, the gentlest way in. To choose the side yourself, set the gate in the charter's menu (sneak + right-click).",
 	"kingdomquest.found.hollow": "No side here gives a gentle way in: the land rises or falls steeply all round. The castle would sit in a pit or on a crag; a spot with one gentler side works much better.",
+	"kingdomquest.found.gate_hard": "The gate faces %s, where the land drops or climbs steeply: the way in will need tall banks. Auto would put it on the %s side.",
 	"kingdomquest.side.north": "north",
 	"kingdomquest.side.east": "east",
 	"kingdomquest.side.south": "south",
