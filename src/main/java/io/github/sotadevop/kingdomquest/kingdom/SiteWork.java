@@ -1426,12 +1426,16 @@ public final class SiteWork {
 				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
 				pos.set(x, y - 1, z);
 				BlockState ground = level.getBlockState(pos);
-				if (built.contains(pos.asLong()) || !terrain(ground) || !ground.isCollisionShapeFullBlock(level, pos)) {
+				// natural ground and the made ground nobody owns (terrace tops, masonry faces): the field test found bare
+				// cobblestone and stone brick benches in the snow
+				if (built.contains(pos.asLong()) || !(terrain(ground) || earthwork(ground)) || !ground.isCollisionShapeFullBlock(level, pos)) {
 					continue;
 				}
 				pos.set(x, y, z);
 				BlockState at = level.getBlockState(pos);
-				if (built.contains(pos.asLong()) || !(at.isAir() || plant(at) && at.canBeReplaced()) || at.is(Blocks.SNOW)) {
+				// small flowers left by the builders' tidying go under the snow too, as they would in a snowfall
+				boolean flower = at.is(BlockTags.FLOWERS) && !at.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF);
+				if (built.contains(pos.asLong()) || !(at.isAir() || plant(at) && (at.canBeReplaced() || flower)) || at.is(Blocks.SNOW)) {
 					continue;
 				}
 				// cold enough and the snow would stay: vanilla melts a snow layer only above block light 11, and snowy villages
@@ -1462,6 +1466,9 @@ public final class SiteWork {
 			pos.set(x, y, z);
 			if (!level.getBlockState(pos).isAir() || built.contains(pos.asLong())) {
 				continue;
+			}
+			if (level.getBiome(pos).value().coldEnoughToSnow(pos, level.getSeaLevel())) {
+				continue; // no flowers in the snow (field test: poppies and bluets kept snowy plains bare)
 			}
 			level.setBlock(pos, GRASSY[h % GRASSY.length].defaultBlockState(), Block.UPDATE_CLIENTS);
 		}

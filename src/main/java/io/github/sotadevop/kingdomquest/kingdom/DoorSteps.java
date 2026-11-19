@@ -181,23 +181,42 @@ final class DoorSteps {
 			long[] lo = fb > fa ? a : b, hi = fb > fa ? b : a;
 			int dx = (int) (lo[0] - hi[0]), dz = (int) (lo[2] - hi[2]);
 			Direction up = dx < 0 ? Direction.EAST : dx > 0 ? Direction.WEST : dz < 0 ? Direction.SOUTH : Direction.NORTH; // the way it climbs
-			int top = (int) Math.floor(hi[3] / 100.0 + 0.01); // feet level on the high side
-			double low = lo[3] / 100.0;
+			double high = hi[3] / 100.0, low = lo[3] / 100.0;
+			int top = (int) Math.ceil(high - 0.01); // a slab-high top (4.5) counts as 5: the last stair still meets it
+			// on the lower side first: the flight stands out from the high ground, each step a block lower
 			List<BlockPos> steps = new ArrayList<>();
 			boolean ok = true;
 			for (int k = 1; top - k > low + 0.01 && ok; k++) {
 				BlockPos cell = new BlockPos((int) hi[0] + dx * k, top - k, (int) hi[2] + dz * k); // the body's cell on step k
-				for (int y = 0; y <= 1; y++) {
-					BlockPos head = cell.above(y);
-					ok &= !built.contains(head.asLong()) && (level.getBlockState(head).isAir() || level.getBlockState(head).canBeReplaced());
-				}
-				ok &= !built.contains(cell.below().asLong());
+				ok = free(level, cell, built) && !built.contains(cell.below().asLong());
 				steps.add(cell.below());
+			}
+			boolean cut = false;
+			if (!ok || steps.isEmpty()) {
+				// the lower side is taken (the door's own floor, a neighbour): the flight is cut into the high ground instead,
+				// starting at the low cell's level and climbing away from it
+				steps.clear();
+				ok = true;
+				int base = (int) Math.floor(low + 0.01);
+				for (int k = 1; base + k < high - 0.01 && ok; k++) {
+					BlockPos cell = new BlockPos((int) lo[0] - dx * k, base + k, (int) lo[2] - dz * k);
+					ok = !built.contains(cell.below().asLong()) && !built.contains(cell.asLong()) && !built.contains(cell.above().asLong());
+					steps.add(cell.below());
+				}
+				cut = true;
 			}
 			if (!ok || steps.isEmpty()) {
 				continue;
 			}
 			for (BlockPos st : steps) {
+				if (cut) {
+					for (int y = 1; y <= 3; y++) { // headroom through the cut
+						BlockPos o = st.above(y);
+						if (!built.contains(o.asLong()) && SiteWork.natural(level.getBlockState(o))) {
+							level.setBlock(o, Blocks.AIR.defaultBlockState(), SiteWork.FLAGS);
+						}
+					}
+				}
 				level.setBlock(st, mat[1].defaultBlockState().setValue(StairBlock.FACING, up), SiteWork.FLAGS);
 				placed.add(st.asLong());
 				// carried down to the land: a flight on a stone base, not on stilts
@@ -212,6 +231,18 @@ final class DoorSteps {
 			}
 		}
 		return placed;
+	}
+
+	/** Room to stand on a step: two open blocks, nothing built. */
+	private static boolean free(ServerLevel level, BlockPos cell, Set<Long> built) {
+		for (int y = 0; y <= 1; y++) {
+			BlockPos head = cell.above(y);
+			BlockState st = level.getBlockState(head);
+			if (built.contains(head.asLong()) || !(st.isAir() || st.canBeReplaced())) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Block and stairs of the steps, from the region's stone. */

@@ -1,6 +1,0 @@
--d
-/tmp/jc
--proc:none
-src/main/java/io/github/sotadevop/kingdomquest/kingdom/DoorSteps.java
-src/main/java/io/github/sotadevop/kingdomquest/kingdom/Settlements.java
-src/main/java/io/github/sotadevop/kingdomquest/kingdom/FieldTest.java
