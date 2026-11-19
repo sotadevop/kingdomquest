@@ -1805,7 +1805,8 @@ public final class FieldTest {
 			}
 			builtTop.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b, (a, c) -> a.getY() >= c.getY() ? a : c);
 		}
-		StringBuilder out = new StringBuilder("# x z base land road road_block built_top built_track (relative to the heart; - = none)\n");
+		StreetPlan plan = StreetPlan.of(level.getServer(), s);
+		StringBuilder out = new StringBuilder("# x z base land road road_block built_top built_track plan_half steep (relative to the heart; - = none)\n");
 		for (int dx = -70; dx <= 70; dx++) {
 			for (int dz = -70; dz <= 70; dz++) {
 				int x = h.getX() + dx, z = h.getZ() + dz;
@@ -1820,7 +1821,9 @@ public final class FieldTest {
 				out.append(dx).append('\t').append(dz).append('\t').append(base.ground()[i * n + k] - h.getY()).append('\t').append(land - h.getY()).append('\t')
 						.append(rt == null ? "-" : String.valueOf(rt[0] - h.getY())).append('\t')
 						.append(rt == null ? "-" : name(level.getBlockState(new BlockPos(x, rt[0], z)))).append('\t')
-						.append(bt == null ? "-" : String.valueOf(bt.getY() - h.getY())).append('\t').append(bt == null ? "-" : owner.get(bt.asLong())).append('\n');
+						.append(bt == null ? "-" : String.valueOf(bt.getY() - h.getY())).append('\t').append(bt == null ? "-" : owner.get(bt.asLong())).append('\t')
+						.append(plan == null || plan.halfAt(col) == null ? "-" : String.valueOf(plan.halfAt(col))).append('\t')
+						.append(plan != null && plan.steep(col) ? "1" : "0").append('\n');
 			}
 		}
 		out.append("# doors: track x y z facing\n");
