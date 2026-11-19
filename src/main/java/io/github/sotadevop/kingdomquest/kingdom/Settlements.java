@@ -1848,8 +1848,31 @@ public final class Settlements {
 			if (walls && !same) {
 				towersUp(level, s, base, ground, heartY, others, through, own);
 			}
+			// a lamp's arm follows its post, not the road under it (field test: arms left hanging where the road and the
+			// ground beside it differ): a lamp block in a column without a post takes the neighbouring post's column
+			Map<Long, BlockPos> lampPost = new HashMap<>();
+			if (track.equals(Progression.LAMPS)) {
+				Set<Long> lampPosts = new HashSet<>();
+				for (Template.Placement p : base) {
+					if (p.offset().getY() == 0) {
+						lampPosts.add(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
+					}
+				}
+				for (Template.Placement p : base) {
+					long lpCol = BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ());
+					if (!lampPosts.contains(lpCol)) {
+						for (int[] lpD : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+							long lpN = BlockPos.asLong(p.anchor().getX() + lpD[0], 0, p.anchor().getZ() + lpD[1]);
+							if (lampPosts.contains(lpN)) {
+								lampPost.put(lpCol, new BlockPos(p.anchor().getX() + lpD[0], 0, p.anchor().getZ() + lpD[1]));
+								break;
+							}
+						}
+					}
+				}
+			}
 			for (Template.Placement p : base) {
-				BlockPos col = s.heart().offset(p.anchor());
+				BlockPos col = s.heart().offset(lampPost.getOrDefault(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.anchor()));
 				Integer top = planTop.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
 				int off = ground.computeIfAbsent(col.asLong(), c -> {
 					int g;
