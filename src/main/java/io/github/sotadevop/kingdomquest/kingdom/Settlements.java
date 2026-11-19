@@ -2024,10 +2024,38 @@ public final class Settlements {
 				}
 			}
 		}
+		// hard caps in whole blocks, one block per block from the fixed ends: where the gentle 1 in 2 can't reach a door
+		// step in time, the road still meets it (field test: lanes left 2 blocks under the lord's porch)
+		Map<Long, Integer> hardHigh = new HashMap<>();
+		Map<Long, Integer> hardLow = new HashMap<>();
+		for (long c : g.keySet()) {
+			hardHigh.put(c, fixed.contains(c) ? g.get(c) : Integer.MAX_VALUE / 2);
+			hardLow.put(c, fixed.contains(c) ? g.get(c) : Integer.MIN_VALUE / 2);
+		}
+		for (boolean changed = !fixed.isEmpty(); changed; ) {
+			changed = false;
+			for (long c : g.keySet()) {
+				int x = BlockPos.getX(c), z = BlockPos.getZ(c);
+				for (int[] d : four) {
+					long n = BlockPos.asLong(x + d[0], 0, z + d[1]);
+					Integer hn = hardHigh.get(n);
+					if (hn != null && hn + 1 < hardHigh.get(c)) {
+						hardHigh.put(c, hn + 1);
+						changed = true;
+					}
+					Integer ln = hardLow.get(n);
+					if (ln != null && ln - 1 > hardLow.get(c)) {
+						hardLow.put(c, ln - 1);
+						changed = true;
+					}
+				}
+			}
+		}
 		Map<Long, Integer> h = new HashMap<>();
 		for (long c : g.keySet()) {
 			int mid = Math.floorDiv(low.get(c) + high.get(c), 2);
-			h.put(c, fixed.contains(c) ? g.get(c) : Math.floorDiv(Math.min(capHigh.get(c), Math.max(capLow.get(c), mid)) + 1, 2));
+			int soft = Math.floorDiv(Math.min(capHigh.get(c), Math.max(capLow.get(c), mid)) + 1, 2);
+			h.put(c, fixed.contains(c) ? g.get(c) : Math.min(hardHigh.get(c), Math.max(hardLow.get(c), soft)));
 		}
 		for (int pass = 0; pass < 12; pass++) { // where two fixed ends disagree, the free columns between still close up
 			for (long c : g.keySet()) {
@@ -2069,7 +2097,8 @@ public final class Settlements {
 					}
 				}
 				int mean = Math.floorDiv(2 * sum + count, 2 * count);
-				next.put(c, Math.floorDiv(Math.min(capHigh.get(c), Math.max(capLow.get(c), 2 * mean)) + 1, 2)); // caps are in half blocks
+				int soft = Math.floorDiv(Math.min(capHigh.get(c), Math.max(capLow.get(c), 2 * mean)) + 1, 2); // soft caps are in half blocks
+				next.put(c, Math.min(hardHigh.get(c), Math.max(hardLow.get(c), soft)));
 			}
 			h = next;
 		}
