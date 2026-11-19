@@ -1213,8 +1213,8 @@ public final class FieldTest {
 		int roadHigh = 0, roadBank = 0;
 		for (Map.Entry<Long, Integer> e : roadTop.entrySet()) {
 			int x = BlockPos.getX(e.getKey()), z = BlockPos.getZ(e.getKey());
-			BlockPos rb = new BlockPos(x, e.getValue(), z);
-			double rf = e.getValue() + (level.getBlockState(rb).getBlock() instanceof net.minecraft.world.level.block.SlabBlock ? 0.5 : 1.0);
+			BlockPos roadAt = new BlockPos(x, e.getValue(), z);
+			double rf = e.getValue() + (level.getBlockState(roadAt).getBlock() instanceof net.minecraft.world.level.block.SlabBlock ? 0.5 : 1.0);
 			boolean high = false;
 			for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
 				for (int dy = -4; dy <= 2 && !high; dy++) {
@@ -1228,10 +1228,10 @@ public final class FieldTest {
 							&& qs.getValue(net.minecraft.world.level.block.StairBlock.HALF) == net.minecraft.world.level.block.state.properties.Half.BOTTOM
 							&& level.getBlockState(q.above()).isAir() && rf > q.getY() + 1.01) {
 						high = true;
-						sample(samples, "road high", rel(s, rb) + " above " + tr + " step " + rel(s, q));
+						sample(samples, "road high", rel(s, roadAt) + " above " + tr + " step " + rel(s, q));
 					} else if (qs.getBlock() instanceof DoorBlock && qs.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER && rf > q.getY() + 0.51) {
 						high = true;
-						sample(samples, "road high", rel(s, rb) + " above " + tr + " door " + rel(s, q));
+						sample(samples, "road high", rel(s, roadAt) + " above " + tr + " door " + rel(s, q));
 					}
 				}
 			}
@@ -1248,7 +1248,7 @@ public final class FieldTest {
 				int g2 = SiteWork.groundDeep(level, x - d[0], z - d[1], h.getY(), owner.keySet());
 				if (e.getValue() - g1 >= 2 && e.getValue() - g2 >= 2) {
 					roadBank++;
-					sample(samples, "road bank", rel(s, rb) + " over " + (e.getValue() - g1) + "/" + (e.getValue() - g2));
+					sample(samples, "road bank", rel(s, roadAt) + " over " + (e.getValue() - g1) + "/" + (e.getValue() - g2));
 					break;
 				}
 			}
@@ -1375,6 +1375,7 @@ public final class FieldTest {
 		}
 		if ("final".equals(stage)) {
 			views(level, s, samples, dir, site);
+			roads(level, s, base, owner, dir, site);
 		}
 	}
 
@@ -1681,6 +1682,11 @@ public final class FieldTest {
 		centres.put("gate", h.offset(Template.rotate(new BlockPos(0, 0, 40), r)));
 		centres.put("corner", h.offset(Template.rotate(new BlockPos(-60, 0, -52), r)));
 		centres.put("square", h);
+		// the town's four quarters, for looking at the roads inside the walls as a whole (user, 2026-11-19)
+		centres.put("town_a", h.offset(Template.rotate(new BlockPos(-30, 0, -28), r)));
+		centres.put("town_b", h.offset(Template.rotate(new BlockPos(34, 0, -28), r)));
+		centres.put("town_c", h.offset(Template.rotate(new BlockPos(-30, 0, 20), r)));
+		centres.put("town_d", h.offset(Template.rotate(new BlockPos(34, 0, 20), r)));
 		if (RoadLink.WAY_OUT.containsKey(s.id())) {
 			centres.put("way_out", RoadLink.WAY_OUT.get(s.id()));
 		}
@@ -1749,6 +1755,64 @@ public final class FieldTest {
 			} catch (IOException ex) {
 				KingdomQuest.LOG.error("Field test: view not written", ex);
 			}
+		}
+	}
+
+	/**
+	 * Every column within 70 of the heart for the road analysis: natural ground before founding, the shaped land now
+	 * (looking through everything built), the road's top block if any, the highest built block and its track; and every
+	 * door with its facing. Heights relative to the heart. Written as fieldtest/<site>_roads.tsv.
+	 */
+	private static void roads(ServerLevel level, Settlement s, Snapshot base, Map<Long, String> owner, Path dir, String site) {
+		BlockPos h = s.heart();
+		int n = 2 * R + 1;
+		Map<Long, int[]> roadTop = new HashMap<>();
+		for (long p : s.built().getOrDefault(Progression.ROADS, List.of())) {
+			BlockPos b = BlockPos.of(p);
+			if (!level.getBlockState(b).isAir()) {
+				roadTop.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), new int[] {b.getY()}, (a, c) -> a[0] >= c[0] ? a : c);
+			}
+		}
+		Map<Long, BlockPos> builtTop = new HashMap<>();
+		for (long p : owner.keySet()) {
+			BlockPos b = BlockPos.of(p);
+			String tr = owner.get(p);
+			if (Progression.ROADS.equals(tr) || Progression.LAMPS.equals(tr) || level.getBlockState(b).isAir()) {
+				continue;
+			}
+			builtTop.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b, (a, c) -> a.getY() >= c.getY() ? a : c);
+		}
+		StringBuilder out = new StringBuilder("# x z base land road road_block built_top built_track (relative to the heart; - = none)\n");
+		for (int dx = -70; dx <= 70; dx++) {
+			for (int dz = -70; dz <= 70; dz++) {
+				int x = h.getX() + dx, z = h.getZ() + dz;
+				int i = x - base.x0(), k = z - base.z0();
+				if (i < 0 || k < 0 || i >= n || k >= n) {
+					continue;
+				}
+				long col = BlockPos.asLong(x, 0, z);
+				int land = SiteWork.groundDeep(level, x, z, h.getY(), owner.keySet());
+				int[] rt = roadTop.get(col);
+				BlockPos bt = builtTop.get(col);
+				out.append(dx).append('\t').append(dz).append('\t').append(base.ground()[i * n + k] - h.getY()).append('\t').append(land - h.getY()).append('\t')
+						.append(rt == null ? "-" : String.valueOf(rt[0] - h.getY())).append('\t')
+						.append(rt == null ? "-" : name(level.getBlockState(new BlockPos(x, rt[0], z)))).append('\t')
+						.append(bt == null ? "-" : String.valueOf(bt.getY() - h.getY())).append('\t').append(bt == null ? "-" : owner.get(bt.asLong())).append('\n');
+			}
+		}
+		out.append("# doors: track x y z facing\n");
+		for (Map.Entry<Long, String> e : owner.entrySet()) {
+			BlockPos b = BlockPos.of(e.getKey());
+			BlockState st = level.getBlockState(b);
+			if (st.getBlock() instanceof DoorBlock && st.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER) {
+				out.append("door\t").append(e.getValue()).append('\t').append(b.getX() - h.getX()).append('\t').append(b.getY() - h.getY()).append('\t')
+						.append(b.getZ() - h.getZ()).append('\t').append(st.getValue(DoorBlock.FACING)).append('\n');
+			}
+		}
+		try {
+			Files.writeString(dir.resolve(site + "_roads.tsv"), out.toString());
+		} catch (IOException ex) {
+			KingdomQuest.LOG.error("Field test: roads not written", ex);
 		}
 	}
 
