@@ -1894,19 +1894,26 @@ public final class Settlements {
 						continue;
 					}
 					boolean climbs = false;
+					int climbing = 0;
+					boolean straight = false;
 					net.minecraft.core.Direction stepUp = null;
 					for (int[] d2 : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
 						Integer n = top.get(BlockPos.asLong(p.offset().getX() + d2[0], 0, p.offset().getZ() + d2[1]));
 						if (n != null && n == p.offset().getY() + 1) {
 							climbs = true;
+							climbing++;
 							stepUp = d2[0] > 0 ? net.minecraft.core.Direction.EAST : d2[0] < 0 ? net.minecraft.core.Direction.WEST
 									: d2[1] > 0 ? net.minecraft.core.Direction.SOUTH : net.minecraft.core.Direction.NORTH;
+							Integer behind = top.get(BlockPos.asLong(p.offset().getX() - d2[0], 0, p.offset().getZ() - d2[1]));
+							straight = behind == null || behind <= p.offset().getY();
 						}
 					}
+					// a stair only on a straight run of a flight: at a bend it would face the wrong way (field test: 1.5 steps)
+					straight &= climbing == 1;
 					BlockPos stepWorld = s.heart().offset(p.offset());
 					long stepCol = BlockPos.asLong(stepWorld.getX(), 0, stepWorld.getZ());
 					boolean stepPlanned = streets != null && streets.halfAt(stepCol) != null;
-					boolean stepStair = stepPlanned && streets.steep(stepCol) && climbs; // a stepped lane: real stairs
+					boolean stepStair = stepPlanned && streets.steep(stepCol) && climbs && straight; // a stepped lane: real stairs
 					boolean stepSlab = stepPlanned ? streets.slab(stepCol) && !stepStair : climbs; // the plan's half heights are slabs
 					BlockPos above = p.offset().above();
 					boolean rough = st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE) || st.is(Blocks.GRAVEL);
