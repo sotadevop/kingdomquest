@@ -107,7 +107,7 @@ final class DoorSteps {
 	private static List<long[]> route(ServerLevel level, List<BlockPos> fronts, Set<Long> reach, Set<Long> built) {
 		Map<Long, Double> cost = new HashMap<>();
 		Map<Long, Long> from = new HashMap<>();
-		PriorityQueue<double[]> pq = new PriorityQueue<>((a, b) -> Double.compare(a[0], b[0]));
+		PriorityQueue<Map.Entry<Long, Double>> pq = new PriorityQueue<>((a, b) -> Double.compare(a.getValue(), b.getValue()));
 		if (fronts.isEmpty()) {
 			return null;
 		}
@@ -118,16 +118,16 @@ final class DoorSteps {
 				if (!Double.isNaN(f)) {
 					long k = c.above(dy).asLong();
 					cost.put(k, 0.0);
-					pq.add(new double[] {0, k});
+					pq.add(Map.entry(k, 0.0));
 				}
 			}
 		}
 		long goal = Long.MIN_VALUE;
 		int seen = 0;
 		while (!pq.isEmpty() && seen++ < 20_000) {
-			double[] top = pq.poll();
-			long k = (long) top[1];
-			if (top[0] > cost.getOrDefault(k, Double.MAX_VALUE)) {
+			Map.Entry<Long, Double> top = pq.poll();
+			long k = top.getKey();
+			if (top.getValue() > cost.getOrDefault(k, Double.MAX_VALUE)) {
 				continue;
 			}
 			if (reach.contains(k)) {
@@ -147,12 +147,12 @@ final class DoorSteps {
 						continue;
 					}
 					double rise = Math.abs(g - f);
-					double c = top[0] + 1 + (rise <= FieldTest.STEP ? 0 : 6 * rise);
+					double c = top.getValue() + 1 + (rise <= FieldTest.STEP ? 0 : 6 * rise);
 					long nk = BlockPos.asLong(nx, y + dy, nz);
 					if (c < cost.getOrDefault(nk, Double.MAX_VALUE)) {
 						cost.put(nk, c);
 						from.put(nk, k);
-						pq.add(new double[] {c, nk});
+						pq.add(Map.entry(nk, c));
 					}
 				}
 			}

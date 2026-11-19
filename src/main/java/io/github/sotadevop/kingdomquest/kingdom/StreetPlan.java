@@ -364,39 +364,58 @@ final class StreetPlan {
 		return w.defaultBlockState();
 	}
 
-	/** Heights pulled within the grade of each cell from the fixed cells and from their neighbours. */
+	/**
+	 * The profile closest to {@code start} that keeps every step between neighbours within their grade and meets the
+	 * fixed cells: the middle of the highest and the lowest such profile under/over {@code start} (both keep the grade,
+	 * so their middle does too), clamped into what the fixed cells allow (also within the grade).
+	 */
 	private static Map<Long, Double> limit(Set<Long> cells, Map<Long, Double> start, Map<Long, Double> grade, Set<Long> fixed) {
-		Map<Long, Double> v = new HashMap<>(start);
-		for (long c : fixed) {
-			v.put(c, 0.0);
+		Map<Long, Double> under = relax(cells, start, grade, true);
+		Map<Long, Double> over = relax(cells, start, grade, false);
+		Map<Long, Double> capHigh = new HashMap<>();
+		Map<Long, Double> capLow = new HashMap<>();
+		for (long c : cells) {
+			capHigh.put(c, fixed.contains(c) ? 0.0 : 1e9);
+			capLow.put(c, fixed.contains(c) ? 0.0 : -1e9);
 		}
-		for (int pass = 0; pass < 400; pass++) {
-			boolean changed = false;
-			for (long c : cells) {
-				if (fixed.contains(c)) {
-					continue;
-				}
-				double lo = -1e9, hi = 1e9;
-				for (long nb : neighbours(c)) {
-					Double w = v.get(nb);
-					if (w != null) {
-						double g = Math.max(grade.get(c), grade.get(nb));
-						lo = Math.max(lo, w - g);
-						hi = Math.min(hi, w + g);
-					}
-				}
-				if (lo > hi) {
-					continue;
-				}
-				double now = v.get(c);
-				double clamped = Math.max(lo, Math.min(hi, now));
-				if (Math.abs(clamped - now) > 1e-6) {
-					v.put(c, clamped);
-					changed = true;
-				}
+		capHigh = relax(cells, capHigh, grade, true);
+		capLow = relax(cells, capLow, grade, false);
+		Map<Long, Double> v = new HashMap<>();
+		for (long c : cells) {
+			double mid = (under.get(c) + over.get(c)) / 2;
+			v.put(c, fixed.contains(c) ? 0.0 : Math.max(capLow.get(c), Math.min(capHigh.get(c), mid)));
+		}
+		return v;
+	}
+
+	/**
+	 * The highest profile at or under {@code start} whose neighbours differ by at most their grade ({@code down}), or the
+	 * lowest at or over it: a shortest-path relaxation from every cell at once.
+	 */
+	private static Map<Long, Double> relax(Set<Long> cells, Map<Long, Double> start, Map<Long, Double> grade, boolean down) {
+		Map<Long, Double> v = new HashMap<>(start);
+		java.util.PriorityQueue<Map.Entry<Long, Double>> pq = new java.util.PriorityQueue<>(
+				(a, b) -> down ? Double.compare(a.getValue(), b.getValue()) : Double.compare(b.getValue(), a.getValue()));
+		for (long c : cells) {
+			pq.add(Map.entry(c, v.get(c)));
+		}
+		while (!pq.isEmpty()) {
+			Map.Entry<Long, Double> top = pq.poll();
+			long c = top.getKey();
+			if (!top.getValue().equals(v.get(c))) {
+				continue;
 			}
-			if (!changed) {
-				break;
+			for (long nb : neighbours(c)) {
+				Double w = v.get(nb);
+				if (w == null) {
+					continue;
+				}
+				double g = Math.max(grade.get(c), grade.get(nb));
+				double bound = down ? top.getValue() + g : top.getValue() - g;
+				if (down ? bound < w : bound > w) {
+					v.put(nb, bound);
+					pq.add(Map.entry(nb, bound));
+				}
 			}
 		}
 		return v;
