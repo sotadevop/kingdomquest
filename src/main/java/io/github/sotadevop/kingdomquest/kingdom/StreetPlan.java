@@ -106,79 +106,50 @@ final class StreetPlan {
 		if (seg.isEmpty()) {
 			return new StreetPlan(Map.of(), Set.of());
 		}
-		// the main building's plots are levelled to the square's level
-		Set<Long> mainPads = new HashSet<>();
+		// the main building's plots are levelled to the square's level, and so is the way in to its doors: streets there
+		// lie at that level (field test: the high street sank 4 below the plaza and a lane 7 above the hall's door)
+		Set<Long> level0 = new HashSet<>();
 		Template main = Template.get(s.style() + "/citadel_1");
 		if (main != null) {
 			for (int[] pad : main.pads) {
 				for (int x = pad[0]; x <= pad[2]; x++) {
 					for (int z = pad[1]; z <= pad[3]; z++) {
 						BlockPos rel = Template.rotate(new BlockPos(x - main.heart.getX(), 0, z - main.heart.getZ()), r);
-						mainPads.add(BlockPos.asLong(h.getX() + rel.getX(), 0, h.getZ() + rel.getZ()));
+						level0.add(BlockPos.asLong(h.getX() + rel.getX(), 0, h.getZ() + rel.getZ()));
 					}
 				}
 			}
 		}
-		Map<Long, Double> target = new HashMap<>();
-		Map<Long, Double> v = new HashMap<>();
-		for (long c : seg.keySet()) {
-			int at = site.at(BlockPos.getX(c), BlockPos.getZ(c));
-			double t = mainPads.contains(c) ? 0 : at == Integer.MIN_VALUE ? 0 : at;
-			target.put(c, t);
-			v.put(c, t);
-		}
-		// fixed: the square and the gate passage (template z 36.. relative to the heart, the gate stands at level 0)
-		Set<Long> fixed = new HashSet<>();
-		for (long c : seg.keySet()) {
-			int dx = BlockPos.getX(c) - h.getX(), dz = BlockPos.getZ(c) - h.getZ();
-			BlockPos t = Template.rotate(new BlockPos(dx, 0, dz), back(r));
-			if (Math.abs(t.getX()) <= 3 && Math.abs(t.getZ()) <= 3 || t.getZ() >= 36 && Math.abs(t.getX()) <= 2) {
-				fixed.add(c);
-				v.put(c, 0.0);
+		List<Progression.Step> mainSteps = Progression.steps(Settlement.MAIN);
+		for (Progression.Step step : mainSteps == null ? List.<Progression.Step>of() : mainSteps) {
+			Template t = Template.get(s.style() + "/" + step.building());
+			if (t == null) {
+				continue;
 			}
-		}
-		// smoothed along the network: a street follows the land's shape, not its bumps
-		for (int pass = 0; pass < 40; pass++) {
-			Map<Long, Double> next = new HashMap<>(v);
-			for (long c : seg.keySet()) {
-				if (fixed.contains(c)) {
-					continue;
-				}
-				double sum = 0;
-				int n = 0;
-				for (long nb : neighbours(c)) {
-					Double w = v.get(nb);
-					if (w != null) {
-						sum += w;
-						n++;
+			for (Template.Placement p : t.placements("white", r)) {
+				if (p.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock && p.offset().getY() <= 3) {
+					for (int dx = -3; dx <= 3; dx++) {
+						for (int dz = -3; dz <= 3; dz++) {
+							level0.add(BlockPos.asLong(h.getX() + p.offset().getX() + dx, 0, h.getZ() + p.offset().getZ() + dz));
+						}
 					}
 				}
-				next.put(c, n == 0 ? v.get(c) : 0.5 * v.get(c) + 0.5 * sum / n);
-			}
-			v = next;
-		}
-		Map<Long, Double> smooth = new HashMap<>(v);
-		Map<Long, Double> grade = new HashMap<>();
-		for (long c : seg.keySet()) {
-			grade.put(c, lane(seg.get(c)) ? LANE_GRADE : TRUNK_GRADE);
-		}
-		Set<Long> steep = new HashSet<>();
-		v = limit(seg.keySet(), smooth, grade, fixed);
-		// lanes that would cut or fill too much for a gentle slope become stepped lanes where they are that steep
-		for (long c : seg.keySet()) {
-			if (lane(seg.get(c)) && Math.abs(v.get(c) - target.get(c)) > STAIR_TRIGGER) {
-				steep.add(c);
-				grade.put(c, STAIR_GRADE);
 			}
 		}
-		if (!steep.isEmpty()) {
-			v = limit(seg.keySet(), smooth, grade, fixed);
-		}
-		// level across: every cell across a trunk takes the mean of its row
+		// units: every row across a street is one unit (so a street is level across by construction); a lane cell is
+		// a unit of its own
+		Map<Long, Integer> unitOf = new HashMap<>();
+		List<List<Long>> units = new ArrayList<>();
+		List<Boolean> laneUnit = new ArrayList<>();
 		Map<String, List<Long>> bySeg = new HashMap<>();
 		seg.forEach((c, name) -> bySeg.computeIfAbsent(name, k -> new ArrayList<>()).add(c));
 		for (Map.Entry<String, List<Long>> e : bySeg.entrySet()) {
 			if (lane(e.getKey())) {
+				for (long c : e.getValue()) {
+					unitOf.put(c, units.size());
+					units.add(List.of(c));
+					laneUnit.add(true);
+				}
 				continue;
 			}
 			int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
@@ -189,42 +160,110 @@ final class StreetPlan {
 				maxZ = Math.max(maxZ, BlockPos.getZ(c));
 			}
 			boolean alongX = maxX - minX >= maxZ - minZ;
-			Map<Integer, double[]> rows = new HashMap<>();
+			Map<Integer, List<Long>> rows = new HashMap<>();
 			for (long c : e.getValue()) {
-				int key = alongX ? BlockPos.getX(c) : BlockPos.getZ(c);
-				rows.computeIfAbsent(key, k -> new double[2]);
-				rows.get(key)[0] += v.get(c);
-				rows.get(key)[1]++;
+				rows.computeIfAbsent(alongX ? BlockPos.getX(c) : BlockPos.getZ(c), k -> new ArrayList<>()).add(c);
 			}
-			for (long c : e.getValue()) {
-				if (fixed.contains(c)) {
+			for (List<Long> row : rows.values()) {
+				for (long c : row) {
+					unitOf.put(c, units.size());
+				}
+				units.add(row);
+				laneUnit.add(false);
+			}
+		}
+		int n = units.size();
+		List<Set<Integer>> adj = new ArrayList<>();
+		for (int i = 0; i < n; i++) {
+			adj.add(new HashSet<>());
+		}
+		for (Map.Entry<Long, Integer> e : unitOf.entrySet()) {
+			for (long nb : neighbours(e.getKey())) {
+				Integer j = unitOf.get(nb);
+				if (j != null && j != e.getValue().intValue()) {
+					adj.get(e.getValue()).add(j);
+					adj.get(j).add(e.getValue());
+				}
+			}
+		}
+		double[] target = new double[n];
+		boolean[] fixed = new boolean[n];
+		for (int i = 0; i < n; i++) {
+			double sum = 0;
+			for (long c : units.get(i)) {
+				int at = site.at(BlockPos.getX(c), BlockPos.getZ(c));
+				sum += level0.contains(c) || at == Integer.MIN_VALUE ? 0 : at;
+				int dx = BlockPos.getX(c) - h.getX(), dz = BlockPos.getZ(c) - h.getZ();
+				BlockPos t = Template.rotate(new BlockPos(dx, 0, dz), back(r));
+				// the square, the gate passage (the gate stands at the square's level) and the main plots
+				fixed[i] |= Math.abs(t.getX()) <= 3 && Math.abs(t.getZ()) <= 3 || t.getZ() >= 36 && Math.abs(t.getX()) <= 2 || level0.contains(c);
+			}
+			target[i] = sum / units.get(i).size();
+		}
+		double[] v = target.clone();
+		for (int i = 0; i < n; i++) {
+			if (fixed[i]) {
+				v[i] = 0;
+			}
+		}
+		// smoothed along the network: a street follows the land's shape, not its bumps
+		for (int pass = 0; pass < 40; pass++) {
+			double[] next = v.clone();
+			for (int i = 0; i < n; i++) {
+				if (fixed[i] || adj.get(i).isEmpty()) {
 					continue;
 				}
-				double[] row = rows.get(alongX ? BlockPos.getX(c) : BlockPos.getZ(c));
-				v.put(c, row[0] / row[1]);
+				double sum = 0;
+				for (int j : adj.get(i)) {
+					sum += v[j];
+				}
+				next[i] = 0.5 * v[i] + 0.5 * sum / adj.get(i).size();
+			}
+			v = next;
+		}
+		double[] smooth = v;
+		double[] grade = new double[n];
+		for (int i = 0; i < n; i++) {
+			grade[i] = laneUnit.get(i) ? LANE_GRADE : TRUNK_GRADE;
+		}
+		v = limit(n, adj, smooth, grade, fixed);
+		Set<Integer> steepUnits = new HashSet<>();
+		// lanes that would cut or fill too much for a gentle slope become stepped lanes where they are that steep
+		for (int i = 0; i < n; i++) {
+			if (laneUnit.get(i) && !fixed[i] && Math.abs(v[i] - target[i]) > STAIR_TRIGGER) {
+				steepUnits.add(i);
+				grade[i] = STAIR_GRADE;
+			}
+		}
+		if (!steepUnits.isEmpty()) {
+			v = limit(n, adj, smooth, grade, fixed);
+		}
+		int[] halfV = new int[n];
+		for (int i = 0; i < n; i++) {
+			halfV[i] = fixed[i] ? 0 : (int) Math.round(v[i] * 2);
+		}
+		// rounding may leave two units a whole block apart where the grade allows less: pulled together again
+		for (int pass = 0; pass < 8; pass++) {
+			for (int i = 0; i < n; i++) {
+				if (fixed[i]) {
+					continue;
+				}
+				for (int j : adj.get(i)) {
+					int most = (int) Math.ceil(2 * Math.max(grade[i], grade[j]) - 1e-9);
+					if (halfV[i] - halfV[j] > most) {
+						halfV[i] = halfV[j] + most;
+					} else if (halfV[j] - halfV[i] > most) {
+						halfV[i] = halfV[j] - most;
+					}
+				}
 			}
 		}
 		Map<Long, Integer> half = new HashMap<>();
-		for (long c : seg.keySet()) {
-			half.put(c, (int) Math.round(v.get(c) * 2));
-		}
-		// rounding may leave a neighbour pair a whole block apart on a gentle street: pulled together again
-		for (int pass = 0; pass < 6; pass++) {
-			for (long c : seg.keySet()) {
-				if (fixed.contains(c) || steep.contains(c)) {
-					continue;
-				}
-				for (long nb : neighbours(c)) {
-					Integer w = half.get(nb);
-					if (w != null && !steep.contains(nb)) {
-						int here = half.get(c);
-						if (here - w > 2) {
-							half.put(c, w + 2);
-						} else if (w - here > 2) {
-							half.put(c, w - 2);
-						}
-					}
-				}
+		Set<Long> steep = new HashSet<>();
+		for (Map.Entry<Long, Integer> e : unitOf.entrySet()) {
+			half.put(e.getKey(), halfV[e.getValue()]);
+			if (steepUnits.contains(e.getValue())) {
+				steep.add(e.getKey());
 			}
 		}
 		return new StreetPlan(half, steep);
@@ -365,56 +404,48 @@ final class StreetPlan {
 	}
 
 	/**
-	 * The profile closest to {@code start} that keeps every step between neighbours within their grade and meets the
-	 * fixed cells: the middle of the highest and the lowest such profile under/over {@code start} (both keep the grade,
-	 * so their middle does too), clamped into what the fixed cells allow (also within the grade).
+	 * The profile closest to {@code start} that keeps every step between neighbouring units within their grade and meets
+	 * the fixed units: the middle of the highest and the lowest such profile under/over {@code start} (both keep the
+	 * grade, so their middle does too), clamped into what the fixed units allow (also within the grade).
 	 */
-	private static Map<Long, Double> limit(Set<Long> cells, Map<Long, Double> start, Map<Long, Double> grade, Set<Long> fixed) {
-		Map<Long, Double> under = relax(cells, start, grade, true);
-		Map<Long, Double> over = relax(cells, start, grade, false);
-		Map<Long, Double> capHigh = new HashMap<>();
-		Map<Long, Double> capLow = new HashMap<>();
-		for (long c : cells) {
-			capHigh.put(c, fixed.contains(c) ? 0.0 : 1e9);
-			capLow.put(c, fixed.contains(c) ? 0.0 : -1e9);
+	private static double[] limit(int n, List<Set<Integer>> adj, double[] start, double[] grade, boolean[] fixed) {
+		double[] under = relax(n, adj, start, grade, true);
+		double[] over = relax(n, adj, start, grade, false);
+		double[] capHigh = new double[n];
+		double[] capLow = new double[n];
+		for (int i = 0; i < n; i++) {
+			capHigh[i] = fixed[i] ? 0 : 1e9;
+			capLow[i] = fixed[i] ? 0 : -1e9;
 		}
-		capHigh = relax(cells, capHigh, grade, true);
-		capLow = relax(cells, capLow, grade, false);
-		Map<Long, Double> v = new HashMap<>();
-		for (long c : cells) {
-			double mid = (under.get(c) + over.get(c)) / 2;
-			v.put(c, fixed.contains(c) ? 0.0 : Math.max(capLow.get(c), Math.min(capHigh.get(c), mid)));
+		capHigh = relax(n, adj, capHigh, grade, true);
+		capLow = relax(n, adj, capLow, grade, false);
+		double[] v = new double[n];
+		for (int i = 0; i < n; i++) {
+			v[i] = fixed[i] ? 0 : Math.max(capLow[i], Math.min(capHigh[i], (under[i] + over[i]) / 2));
 		}
 		return v;
 	}
 
-	/**
-	 * The highest profile at or under {@code start} whose neighbours differ by at most their grade ({@code down}), or the
-	 * lowest at or over it: a shortest-path relaxation from every cell at once.
-	 */
-	private static Map<Long, Double> relax(Set<Long> cells, Map<Long, Double> start, Map<Long, Double> grade, boolean down) {
-		Map<Long, Double> v = new HashMap<>(start);
-		java.util.PriorityQueue<Map.Entry<Long, Double>> pq = new java.util.PriorityQueue<>(
-				(a, b) -> down ? Double.compare(a.getValue(), b.getValue()) : Double.compare(b.getValue(), a.getValue()));
-		for (long c : cells) {
-			pq.add(Map.entry(c, v.get(c)));
+	/** The highest profile at or under {@code start} keeping the grade ({@code down}), or the lowest at or over it. */
+	private static double[] relax(int n, List<Set<Integer>> adj, double[] start, double[] grade, boolean down) {
+		double[] v = start.clone();
+		java.util.PriorityQueue<double[]> pq = new java.util.PriorityQueue<>(
+				(a, b) -> down ? Double.compare(a[0], b[0]) : Double.compare(b[0], a[0]));
+		for (int i = 0; i < n; i++) {
+			pq.add(new double[] {v[i], i});
 		}
 		while (!pq.isEmpty()) {
-			Map.Entry<Long, Double> top = pq.poll();
-			long c = top.getKey();
-			if (!top.getValue().equals(v.get(c))) {
+			double[] top = pq.poll();
+			int i = (int) top[1]; // a unit index: small, exact as a double
+			if (top[0] != v[i]) {
 				continue;
 			}
-			for (long nb : neighbours(c)) {
-				Double w = v.get(nb);
-				if (w == null) {
-					continue;
-				}
-				double g = Math.max(grade.get(c), grade.get(nb));
-				double bound = down ? top.getValue() + g : top.getValue() - g;
-				if (down ? bound < w : bound > w) {
-					v.put(nb, bound);
-					pq.add(Map.entry(nb, bound));
+			for (int j : adj.get(i)) {
+				double g = Math.max(grade[i], grade[j]);
+				double bound = down ? top[0] + g : top[0] - g;
+				if (down ? bound < v[j] : bound > v[j]) {
+					v[j] = bound;
+					pq.add(new double[] {bound, j});
 				}
 			}
 		}
