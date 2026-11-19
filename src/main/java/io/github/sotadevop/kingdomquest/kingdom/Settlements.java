@@ -898,6 +898,17 @@ public final class Settlements {
 		}
 		sweepDrops(level, lo, hi);
 		gradeSite(server, s, job);
+		{
+			// the plan being replaced, to see which spots the upgrade changes (the lord's changes stay where it doesn't)
+			Map<Long, BlockState> was = new HashMap<>();
+			Progression.Step cur = Progression.current(s, track0);
+			if (cur != null && !LordChanges.of(server, s).isEmpty()) {
+				for (Template.Placement p : placements(s, s.style() + "/" + cur.building())) {
+					was.put(s.heart().offset(p.offset()).asLong(), p.state());
+				}
+			}
+			OLD_PLAN.put(s.id() + "|" + job, was);
+		}
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
 		People.sendWorkers(level, s, list.size(), server.getPlayerList().getPlayer(s.owner()));
 	}
@@ -980,16 +991,9 @@ public final class Settlements {
 
 	/** What the current level of the job's track had at each spot (empty for a first build). */
 	private static Map<Long, BlockState> oldPlan(Settlement s) {
-		return OLD_PLAN.computeIfAbsent(s.id() + "|" + s.job(), k -> {
-			Map<Long, BlockState> out = new HashMap<>();
-			Progression.Step cur = Progression.current(s, s.jobTrack());
-			if (cur != null) {
-				for (Template.Placement p : placements(s, s.style() + "/" + cur.building())) {
-					out.put(s.heart().offset(p.offset()).asLong(), p.state());
-				}
-			}
-			return out;
-		});
+		// kept from the job's start (the track's level is raised then); after a restart nothing is known: the
+		// lord's changes are then all kept, the safe side
+		return OLD_PLAN.getOrDefault(s.id() + "|" + s.job(), null);
 	}
 
 	/** Puts the plan back where the lord changed it: every changed spot of a built level gets its planned block again. */
@@ -2357,6 +2361,9 @@ public final class Settlements {
 				if (was != null) {
 					// the lord changed this spot: it stays his where the new plan has the same block as the old one
 					// here (the upgrade doesn't touch it); where the plan changes, the upgrade wins
+					if (oldPlan == null) {
+						continue;
+					}
 					BlockState planned = oldPlan.get(pos.asLong());
 					BlockState plannedOld = planned == null ? Blocks.AIR.defaultBlockState() : planned;
 					if (plannedOld.getBlock() == p.state().getBlock()) {
