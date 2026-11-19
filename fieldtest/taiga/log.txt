@@ -1,0 +1,17 @@
+[23:34:41] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:34:47] [Server thread/INFO] (KingdomQuest) Field test taiga: looking for a site
+[23:34:50] [Server thread/INFO] (KingdomQuest) Field test taiga: site BlockPos{x=-4856, y=97, z=1144}
+[23:34:57] [Server thread/INFO] (KingdomQuest) Field test taiga: chunks loaded
+[23:35:02] [Server thread/INFO] (KingdomQuest) Field test taiga: tent_2 built and checked
+[23:35:03] [Server thread/INFO] (KingdomQuest) Field test taiga: tent_3 built and checked
+[23:35:04] [Server thread/INFO] (KingdomQuest) Field test taiga: hamlet_1 built and checked
+[23:35:07] [Server thread/INFO] (KingdomQuest) Field test taiga: hamlet_2 built and checked
+[23:35:11] [Server thread/INFO] (KingdomQuest) Field test taiga: hamlet_3 built and checked
+[23:35:12] [Server thread/INFO] (KingdomQuest) Field test taiga: village_1 built and checked
+[23:35:19] [Server thread/INFO] (KingdomQuest) Field test taiga: town_1 built and checked
+[23:35:24] [Server thread/INFO] (KingdomQuest) Field test taiga: castle_1 built and checked
+[23:35:29] [Server thread/INFO] (KingdomQuest) Field test taiga: castle_2 built and checked
+[23:35:32] [Server thread/INFO] (KingdomQuest) Field test taiga: citadel_1 built and checked
+[23:35:34] [Server thread/INFO] (KingdomQuest) Field test taiga done in 46 s
+[23:35:34] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:35:34] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

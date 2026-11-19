@@ -1,0 +1,17 @@
+[23:33:17] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:24] [Server thread/INFO] (KingdomQuest) Field test high_meadow: looking for a site
+[23:33:29] [Server thread/INFO] (KingdomQuest) Field test high_meadow: site BlockPos{x=2932, y=127, z=-1164}
+[23:33:36] [Server thread/INFO] (KingdomQuest) Field test high_meadow: chunks loaded
+[23:33:44] [Server thread/INFO] (KingdomQuest) Field test high_meadow: tent_2 built and checked
+[23:33:45] [Server thread/INFO] (KingdomQuest) Field test high_meadow: tent_3 built and checked
+[23:33:48] [Server thread/INFO] (KingdomQuest) Field test high_meadow: hamlet_1 built and checked
+[23:33:52] [Server thread/INFO] (KingdomQuest) Field test high_meadow: hamlet_2 built and checked
+[23:33:57] [Server thread/INFO] (KingdomQuest) Field test high_meadow: hamlet_3 built and checked
+[23:33:59] [Server thread/INFO] (KingdomQuest) Field test high_meadow: village_1 built and checked
+[23:34:10] [Server thread/INFO] (KingdomQuest) Field test high_meadow: town_1 built and checked
+[23:34:16] [Server thread/INFO] (KingdomQuest) Field test high_meadow: castle_1 built and checked
+[23:34:23] [Server thread/INFO] (KingdomQuest) Field test high_meadow: castle_2 built and checked
+[23:34:27] [Server thread/INFO] (KingdomQuest) Field test high_meadow: citadel_1 built and checked
+[23:34:30] [Server thread/INFO] (KingdomQuest) Field test high_meadow done in 66 s
+[23:34:30] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:34:30] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

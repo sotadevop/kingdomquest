@@ -1,0 +1,17 @@
+[23:33:04] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:09] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: looking for a site
+[23:33:13] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: site BlockPos{x=332, y=106, z=7128}
+[23:33:19] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: chunks loaded
+[23:33:23] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: tent_2 built and checked
+[23:33:23] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: tent_3 built and checked
+[23:33:25] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: hamlet_1 built and checked
+[23:33:29] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: hamlet_2 built and checked
+[23:33:32] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: hamlet_3 built and checked
+[23:33:34] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: village_1 built and checked
+[23:33:40] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: town_1 built and checked
+[23:33:45] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: castle_1 built and checked
+[23:33:49] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: castle_2 built and checked
+[23:33:52] [Server thread/INFO] (KingdomQuest) Field test ice_spikes: citadel_1 built and checked
+[23:33:54] [Server thread/INFO] (KingdomQuest) Field test ice_spikes done in 44 s
+[23:33:54] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:33:54] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

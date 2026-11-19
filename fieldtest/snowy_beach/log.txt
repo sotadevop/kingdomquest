@@ -1,0 +1,17 @@
+[23:36:19] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:36:26] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: looking for a site
+[23:36:29] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: site BlockPos{x=-4656, y=72, z=6180}
+[23:36:33] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: chunks loaded
+[23:36:37] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: tent_2 built and checked
+[23:36:38] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: tent_3 built and checked
+[23:36:39] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: hamlet_1 built and checked
+[23:36:42] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: hamlet_2 built and checked
+[23:36:45] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: hamlet_3 built and checked
+[23:36:46] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: village_1 built and checked
+[23:36:52] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: town_1 built and checked
+[23:36:58] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: castle_1 built and checked
+[23:37:02] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: castle_2 built and checked
+[23:37:05] [Server thread/INFO] (KingdomQuest) Field test snowy_beach: citadel_1 built and checked
+[23:37:07] [Server thread/INFO] (KingdomQuest) Field test snowy_beach done in 40 s
+[23:37:07] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:37:07] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

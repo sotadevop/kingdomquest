@@ -1,0 +1,17 @@
+[23:33:13] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:19] [Server thread/INFO] (KingdomQuest) Field test big_hill: looking for a site
+[23:33:48] [Server thread/INFO] (KingdomQuest) Field test big_hill: site BlockPos{x=-4044, y=120, z=11344}
+[23:33:55] [Server thread/INFO] (KingdomQuest) Field test big_hill: chunks loaded
+[23:33:58] [Server thread/INFO] (KingdomQuest) Field test big_hill: tent_2 built and checked
+[23:33:59] [Server thread/INFO] (KingdomQuest) Field test big_hill: tent_3 built and checked
+[23:34:01] [Server thread/INFO] (KingdomQuest) Field test big_hill: hamlet_1 built and checked
+[23:34:04] [Server thread/INFO] (KingdomQuest) Field test big_hill: hamlet_2 built and checked
+[23:34:08] [Server thread/INFO] (KingdomQuest) Field test big_hill: hamlet_3 built and checked
+[23:34:09] [Server thread/INFO] (KingdomQuest) Field test big_hill: village_1 built and checked
+[23:34:16] [Server thread/INFO] (KingdomQuest) Field test big_hill: town_1 built and checked
+[23:34:21] [Server thread/INFO] (KingdomQuest) Field test big_hill: castle_1 built and checked
+[23:34:26] [Server thread/INFO] (KingdomQuest) Field test big_hill: castle_2 built and checked
+[23:34:29] [Server thread/INFO] (KingdomQuest) Field test big_hill: citadel_1 built and checked
+[23:34:31] [Server thread/INFO] (KingdomQuest) Field test big_hill done in 72 s
+[23:34:31] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:34:31] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

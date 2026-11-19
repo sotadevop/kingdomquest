@@ -1,0 +1,17 @@
+[23:33:13] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:18] [Server thread/INFO] (KingdomQuest) Field test knoll: looking for a site
+[23:33:43] [Server thread/INFO] (KingdomQuest) Field test knoll: site BlockPos{x=6628, y=71, z=6828}
+[23:33:50] [Server thread/INFO] (KingdomQuest) Field test knoll: chunks loaded
+[23:33:54] [Server thread/INFO] (KingdomQuest) Field test knoll: tent_2 built and checked
+[23:33:54] [Server thread/INFO] (KingdomQuest) Field test knoll: tent_3 built and checked
+[23:33:56] [Server thread/INFO] (KingdomQuest) Field test knoll: hamlet_1 built and checked
+[23:33:59] [Server thread/INFO] (KingdomQuest) Field test knoll: hamlet_2 built and checked
+[23:34:01] [Server thread/INFO] (KingdomQuest) Field test knoll: hamlet_3 built and checked
+[23:34:03] [Server thread/INFO] (KingdomQuest) Field test knoll: village_1 built and checked
+[23:34:10] [Server thread/INFO] (KingdomQuest) Field test knoll: town_1 built and checked
+[23:34:15] [Server thread/INFO] (KingdomQuest) Field test knoll: castle_1 built and checked
+[23:34:18] [Server thread/INFO] (KingdomQuest) Field test knoll: castle_2 built and checked
+[23:34:21] [Server thread/INFO] (KingdomQuest) Field test knoll: citadel_1 built and checked
+[23:34:23] [Server thread/INFO] (KingdomQuest) Field test knoll done in 64 s
+[23:34:23] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:34:23] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

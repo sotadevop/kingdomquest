@@ -1,0 +1,17 @@
+[23:35:15] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:35:20] [Server thread/INFO] (KingdomQuest) Field test frozen_river: looking for a site
+[23:35:24] [Server thread/INFO] (KingdomQuest) Field test frozen_river: site BlockPos{x=5864, y=63, z=5700}
+[23:35:28] [Server thread/INFO] (KingdomQuest) Field test frozen_river: chunks loaded
+[23:35:31] [Server thread/INFO] (KingdomQuest) Field test frozen_river: tent_2 built and checked
+[23:35:32] [Server thread/INFO] (KingdomQuest) Field test frozen_river: tent_3 built and checked
+[23:35:33] [Server thread/INFO] (KingdomQuest) Field test frozen_river: hamlet_1 built and checked
+[23:35:36] [Server thread/INFO] (KingdomQuest) Field test frozen_river: hamlet_2 built and checked
+[23:35:40] [Server thread/INFO] (KingdomQuest) Field test frozen_river: hamlet_3 built and checked
+[23:35:41] [Server thread/INFO] (KingdomQuest) Field test frozen_river: village_1 built and checked
+[23:35:47] [Server thread/INFO] (KingdomQuest) Field test frozen_river: town_1 built and checked
+[23:35:52] [Server thread/INFO] (KingdomQuest) Field test frozen_river: castle_1 built and checked
+[23:35:56] [Server thread/INFO] (KingdomQuest) Field test frozen_river: castle_2 built and checked
+[23:36:00] [Server thread/INFO] (KingdomQuest) Field test frozen_river: citadel_1 built and checked
+[23:36:01] [Server thread/INFO] (KingdomQuest) Field test frozen_river done in 41 s
+[23:36:01] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:36:01] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

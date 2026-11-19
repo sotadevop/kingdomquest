@@ -1,0 +1,17 @@
+[23:34:55] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:35:03] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: looking for a site
+[23:35:13] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: site BlockPos{x=3744, y=176, z=5304}
+[23:35:20] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: chunks loaded
+[23:35:26] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: tent_2 built and checked
+[23:35:27] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: tent_3 built and checked
+[23:35:30] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: hamlet_1 built and checked
+[23:35:35] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: hamlet_2 built and checked
+[23:35:41] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: hamlet_3 built and checked
+[23:35:43] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: village_1 built and checked
+[23:35:53] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: town_1 built and checked
+[23:36:01] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: castle_1 built and checked
+[23:36:09] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: castle_2 built and checked
+[23:36:14] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks: citadel_1 built and checked
+[23:36:17] [Server thread/INFO] (KingdomQuest) Field test jagged_peaks done in 74 s
+[23:36:17] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:36:17] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

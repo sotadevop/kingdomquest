@@ -1,0 +1,17 @@
+[23:35:37] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:35:43] [Server thread/INFO] (KingdomQuest) Field test ridge: looking for a site
+[23:36:03] [Server thread/INFO] (KingdomQuest) Field test ridge: site BlockPos{x=3072, y=112, z=11216}
+[23:36:11] [Server thread/INFO] (KingdomQuest) Field test ridge: chunks loaded
+[23:36:15] [Server thread/INFO] (KingdomQuest) Field test ridge: tent_2 built and checked
+[23:36:17] [Server thread/INFO] (KingdomQuest) Field test ridge: tent_3 built and checked
+[23:36:18] [Server thread/INFO] (KingdomQuest) Field test ridge: hamlet_1 built and checked
+[23:36:21] [Server thread/INFO] (KingdomQuest) Field test ridge: hamlet_2 built and checked
+[23:36:25] [Server thread/INFO] (KingdomQuest) Field test ridge: hamlet_3 built and checked
+[23:36:27] [Server thread/INFO] (KingdomQuest) Field test ridge: village_1 built and checked
+[23:36:33] [Server thread/INFO] (KingdomQuest) Field test ridge: town_1 built and checked
+[23:36:39] [Server thread/INFO] (KingdomQuest) Field test ridge: castle_1 built and checked
+[23:36:43] [Server thread/INFO] (KingdomQuest) Field test ridge: castle_2 built and checked
+[23:36:45] [Server thread/INFO] (KingdomQuest) Field test ridge: citadel_1 built and checked
+[23:36:47] [Server thread/INFO] (KingdomQuest) Field test ridge done in 64 s
+[23:36:47] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:36:47] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

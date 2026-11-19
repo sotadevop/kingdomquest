@@ -1,0 +1,19 @@
+[23:34:49] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:34:54] [Server thread/INFO] (KingdomQuest) Field test hillside_down: looking for a site
+[23:35:21] [Server thread/INFO] (KingdomQuest) Field test hillside_down: site BlockPos{x=1116, y=76, z=9168}
+[23:35:29] [Server thread/INFO] (KingdomQuest) Field test hillside_down: chunks loaded
+[23:35:34] [Server thread/INFO] (KingdomQuest) Field test hillside_down: tent_2 built and checked
+[23:35:35] [Server thread/INFO] (KingdomQuest) Field test hillside_down: tent_3 built and checked
+[23:35:36] [Server thread/INFO] (KingdomQuest) Field test hillside_down: hamlet_1 built and checked
+[23:35:40] [Server thread/INFO] (KingdomQuest) Field test hillside_down: hamlet_2 built and checked
+[23:35:42] [Server thread/INFO] (KingdomQuest) Field test hillside_down: hamlet_3 built and checked
+[23:35:44] [Server thread/INFO] (KingdomQuest) Field test hillside_down: village_1 built and checked
+[23:35:50] [Server thread/INFO] (KingdomQuest) Field test hillside_down: town_1 built and checked
+[23:35:53] [Server thread/INFO] (KingdomQuest) Way out check: out true
+[23:35:53] [Server thread/INFO] (KingdomQuest) Way out of FT hillside_down: road of 12 blocks from BlockPos{x=1116, y=75, z=9218} to BlockPos{x=1115, y=66, z=9228}
+[23:35:54] [Server thread/INFO] (KingdomQuest) Field test hillside_down: castle_1 built and checked
+[23:35:59] [Server thread/INFO] (KingdomQuest) Field test hillside_down: castle_2 built and checked
+[23:36:02] [Server thread/INFO] (KingdomQuest) Field test hillside_down: citadel_1 built and checked
+[23:36:04] [Server thread/INFO] (KingdomQuest) Field test hillside_down done in 69 s
+[23:36:04] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:36:04] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

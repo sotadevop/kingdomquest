@@ -1,0 +1,17 @@
+[23:34:50] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:34:56] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: looking for a site
+[23:35:19] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: site BlockPos{x=-200, y=109, z=11892}
+[23:35:26] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: chunks loaded
+[23:35:31] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: tent_2 built and checked
+[23:35:32] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: tent_3 built and checked
+[23:35:33] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: hamlet_1 built and checked
+[23:35:36] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: hamlet_2 built and checked
+[23:35:38] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: hamlet_3 built and checked
+[23:35:40] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: village_1 built and checked
+[23:35:47] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: town_1 built and checked
+[23:35:53] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: castle_1 built and checked
+[23:35:56] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: castle_2 built and checked
+[23:36:00] [Server thread/INFO] (KingdomQuest) Field test cliff_toward: citadel_1 built and checked
+[23:36:01] [Server thread/INFO] (KingdomQuest) Field test cliff_toward done in 65 s
+[23:36:01] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:36:01] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

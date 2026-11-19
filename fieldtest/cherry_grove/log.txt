@@ -1,0 +1,17 @@
+[23:33:07] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:12] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: looking for a site
+[23:33:19] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: site BlockPos{x=-3072, y=103, z=6960}
+[23:33:22] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: chunks loaded
+[23:33:27] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: tent_2 built and checked
+[23:33:28] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: tent_3 built and checked
+[23:33:30] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: hamlet_1 built and checked
+[23:33:33] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: hamlet_2 built and checked
+[23:33:35] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: hamlet_3 built and checked
+[23:33:37] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: village_1 built and checked
+[23:33:44] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: town_1 built and checked
+[23:33:48] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: castle_1 built and checked
+[23:33:54] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: castle_2 built and checked
+[23:33:57] [Server thread/INFO] (KingdomQuest) Field test cherry_grove: citadel_1 built and checked
+[23:33:59] [Server thread/INFO] (KingdomQuest) Field test cherry_grove done in 47 s
+[23:33:59] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:33:59] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

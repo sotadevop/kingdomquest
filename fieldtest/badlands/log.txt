@@ -1,0 +1,17 @@
+[23:33:13] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:18] [Server thread/INFO] (KingdomQuest) Field test badlands: looking for a site
+[23:33:21] [Server thread/INFO] (KingdomQuest) Field test badlands: site BlockPos{x=1680, y=79, z=-2280}
+[23:33:25] [Server thread/INFO] (KingdomQuest) Field test badlands: chunks loaded
+[23:33:29] [Server thread/INFO] (KingdomQuest) Field test badlands: tent_2 built and checked
+[23:33:30] [Server thread/INFO] (KingdomQuest) Field test badlands: tent_3 built and checked
+[23:33:31] [Server thread/INFO] (KingdomQuest) Field test badlands: hamlet_1 built and checked
+[23:33:34] [Server thread/INFO] (KingdomQuest) Field test badlands: hamlet_2 built and checked
+[23:33:36] [Server thread/INFO] (KingdomQuest) Field test badlands: hamlet_3 built and checked
+[23:33:38] [Server thread/INFO] (KingdomQuest) Field test badlands: village_1 built and checked
+[23:33:43] [Server thread/INFO] (KingdomQuest) Field test badlands: town_1 built and checked
+[23:33:48] [Server thread/INFO] (KingdomQuest) Field test badlands: castle_1 built and checked
+[23:33:51] [Server thread/INFO] (KingdomQuest) Field test badlands: castle_2 built and checked
+[23:33:53] [Server thread/INFO] (KingdomQuest) Field test badlands: citadel_1 built and checked
+[23:33:55] [Server thread/INFO] (KingdomQuest) Field test badlands done in 36 s
+[23:33:55] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:33:55] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

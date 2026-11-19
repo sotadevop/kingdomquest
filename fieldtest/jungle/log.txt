@@ -1,0 +1,17 @@
+[23:34:36] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:34:43] [Server thread/INFO] (KingdomQuest) Field test jungle: looking for a site
+[23:34:45] [Server thread/INFO] (KingdomQuest) Field test jungle: site BlockPos{x=-6928, y=70, z=964}
+[23:34:52] [Server thread/INFO] (KingdomQuest) Field test jungle: chunks loaded
+[23:34:56] [Server thread/INFO] (KingdomQuest) Field test jungle: tent_2 built and checked
+[23:34:57] [Server thread/INFO] (KingdomQuest) Field test jungle: tent_3 built and checked
+[23:34:58] [Server thread/INFO] (KingdomQuest) Field test jungle: hamlet_1 built and checked
+[23:35:01] [Server thread/INFO] (KingdomQuest) Field test jungle: hamlet_2 built and checked
+[23:35:05] [Server thread/INFO] (KingdomQuest) Field test jungle: hamlet_3 built and checked
+[23:35:07] [Server thread/INFO] (KingdomQuest) Field test jungle: village_1 built and checked
+[23:35:14] [Server thread/INFO] (KingdomQuest) Field test jungle: town_1 built and checked
+[23:35:18] [Server thread/INFO] (KingdomQuest) Field test jungle: castle_1 built and checked
+[23:35:23] [Server thread/INFO] (KingdomQuest) Field test jungle: castle_2 built and checked
+[23:35:25] [Server thread/INFO] (KingdomQuest) Field test jungle: citadel_1 built and checked
+[23:35:27] [Server thread/INFO] (KingdomQuest) Field test jungle done in 44 s
+[23:35:27] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:35:27] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

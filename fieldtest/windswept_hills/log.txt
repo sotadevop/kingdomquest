@@ -1,0 +1,17 @@
+[23:34:50] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:34:55] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: looking for a site
+[23:34:59] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: site BlockPos{x=-1132, y=99, z=624}
+[23:35:03] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: chunks loaded
+[23:35:07] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: tent_2 built and checked
+[23:35:08] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: tent_3 built and checked
+[23:35:09] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: hamlet_1 built and checked
+[23:35:13] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: hamlet_2 built and checked
+[23:35:17] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: hamlet_3 built and checked
+[23:35:19] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: village_1 built and checked
+[23:35:24] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: town_1 built and checked
+[23:35:29] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: castle_1 built and checked
+[23:35:33] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: castle_2 built and checked
+[23:35:36] [Server thread/INFO] (KingdomQuest) Field test windswept_hills: citadel_1 built and checked
+[23:35:37] [Server thread/INFO] (KingdomQuest) Field test windswept_hills done in 42 s
+[23:35:37] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:35:37] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

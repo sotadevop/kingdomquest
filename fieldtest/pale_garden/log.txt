@@ -1,0 +1,17 @@
+[23:33:06] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:12] [Server thread/INFO] (KingdomQuest) Field test pale_garden: looking for a site
+[23:33:19] [Server thread/INFO] (KingdomQuest) Field test pale_garden: site BlockPos{x=-780, y=107, z=1896}
+[23:33:21] [Server thread/INFO] (KingdomQuest) Field test pale_garden: chunks loaded
+[23:33:25] [Server thread/INFO] (KingdomQuest) Field test pale_garden: tent_2 built and checked
+[23:33:26] [Server thread/INFO] (KingdomQuest) Field test pale_garden: tent_3 built and checked
+[23:33:28] [Server thread/INFO] (KingdomQuest) Field test pale_garden: hamlet_1 built and checked
+[23:33:32] [Server thread/INFO] (KingdomQuest) Field test pale_garden: hamlet_2 built and checked
+[23:33:35] [Server thread/INFO] (KingdomQuest) Field test pale_garden: hamlet_3 built and checked
+[23:33:36] [Server thread/INFO] (KingdomQuest) Field test pale_garden: village_1 built and checked
+[23:33:42] [Server thread/INFO] (KingdomQuest) Field test pale_garden: town_1 built and checked
+[23:33:46] [Server thread/INFO] (KingdomQuest) Field test pale_garden: castle_1 built and checked
+[23:33:50] [Server thread/INFO] (KingdomQuest) Field test pale_garden: castle_2 built and checked
+[23:33:53] [Server thread/INFO] (KingdomQuest) Field test pale_garden: citadel_1 built and checked
+[23:33:55] [Server thread/INFO] (KingdomQuest) Field test pale_garden done in 43 s
+[23:33:55] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:33:55] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

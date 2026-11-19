@@ -1,0 +1,17 @@
+[23:34:55] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:35:01] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: looking for a site
+[23:35:04] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: site BlockPos{x=3524, y=70, z=9548}
+[23:35:09] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: chunks loaded
+[23:35:13] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: tent_2 built and checked
+[23:35:14] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: tent_3 built and checked
+[23:35:16] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: hamlet_1 built and checked
+[23:35:19] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: hamlet_2 built and checked
+[23:35:22] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: hamlet_3 built and checked
+[23:35:23] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: village_1 built and checked
+[23:35:30] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: town_1 built and checked
+[23:35:35] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: castle_1 built and checked
+[23:35:39] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: castle_2 built and checked
+[23:35:41] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields: citadel_1 built and checked
+[23:35:43] [Server thread/INFO] (KingdomQuest) Field test mushroom_fields done in 41 s
+[23:35:43] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:35:43] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

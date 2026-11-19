@@ -1,0 +1,17 @@
+[23:33:14] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:23] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: looking for a site
+[23:33:29] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: site BlockPos{x=6788, y=70, z=-392}
+[23:33:35] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: chunks loaded
+[23:33:40] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: tent_2 built and checked
+[23:33:41] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: tent_3 built and checked
+[23:33:43] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: hamlet_1 built and checked
+[23:33:47] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: hamlet_2 built and checked
+[23:33:51] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: hamlet_3 built and checked
+[23:33:54] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: village_1 built and checked
+[23:34:02] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: town_1 built and checked
+[23:34:10] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: castle_1 built and checked
+[23:34:16] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: castle_2 built and checked
+[23:34:20] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau: citadel_1 built and checked
+[23:34:23] [Server thread/INFO] (KingdomQuest) Field test savanna_plateau done in 59 s
+[23:34:23] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:34:23] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

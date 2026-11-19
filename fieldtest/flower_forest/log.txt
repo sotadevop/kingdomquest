@@ -1,0 +1,17 @@
+[23:33:14] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:18] [Server thread/INFO] (KingdomQuest) Field test flower_forest: looking for a site
+[23:33:22] [Server thread/INFO] (KingdomQuest) Field test flower_forest: site BlockPos{x=7300, y=63, z=828}
+[23:33:26] [Server thread/INFO] (KingdomQuest) Field test flower_forest: chunks loaded
+[23:33:29] [Server thread/INFO] (KingdomQuest) Field test flower_forest: tent_2 built and checked
+[23:33:30] [Server thread/INFO] (KingdomQuest) Field test flower_forest: tent_3 built and checked
+[23:33:32] [Server thread/INFO] (KingdomQuest) Field test flower_forest: hamlet_1 built and checked
+[23:33:35] [Server thread/INFO] (KingdomQuest) Field test flower_forest: hamlet_2 built and checked
+[23:33:38] [Server thread/INFO] (KingdomQuest) Field test flower_forest: hamlet_3 built and checked
+[23:33:39] [Server thread/INFO] (KingdomQuest) Field test flower_forest: village_1 built and checked
+[23:33:46] [Server thread/INFO] (KingdomQuest) Field test flower_forest: town_1 built and checked
+[23:33:51] [Server thread/INFO] (KingdomQuest) Field test flower_forest: castle_1 built and checked
+[23:33:56] [Server thread/INFO] (KingdomQuest) Field test flower_forest: castle_2 built and checked
+[23:33:59] [Server thread/INFO] (KingdomQuest) Field test flower_forest: citadel_1 built and checked
+[23:34:01] [Server thread/INFO] (KingdomQuest) Field test flower_forest done in 42 s
+[23:34:01] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:34:01] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

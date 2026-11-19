@@ -1,0 +1,17 @@
+[23:33:14] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:19] [Server thread/INFO] (KingdomQuest) Field test swamp: looking for a site
+[23:33:22] [Server thread/INFO] (KingdomQuest) Field test swamp: site BlockPos{x=-1156, y=65, z=164}
+[23:33:27] [Server thread/INFO] (KingdomQuest) Field test swamp: chunks loaded
+[23:33:32] [Server thread/INFO] (KingdomQuest) Field test swamp: tent_2 built and checked
+[23:33:33] [Server thread/INFO] (KingdomQuest) Field test swamp: tent_3 built and checked
+[23:33:34] [Server thread/INFO] (KingdomQuest) Field test swamp: hamlet_1 built and checked
+[23:33:36] [Server thread/INFO] (KingdomQuest) Field test swamp: hamlet_2 built and checked
+[23:33:38] [Server thread/INFO] (KingdomQuest) Field test swamp: hamlet_3 built and checked
+[23:33:40] [Server thread/INFO] (KingdomQuest) Field test swamp: village_1 built and checked
+[23:33:45] [Server thread/INFO] (KingdomQuest) Field test swamp: town_1 built and checked
+[23:33:49] [Server thread/INFO] (KingdomQuest) Field test swamp: castle_1 built and checked
+[23:33:53] [Server thread/INFO] (KingdomQuest) Field test swamp: castle_2 built and checked
+[23:33:55] [Server thread/INFO] (KingdomQuest) Field test swamp: citadel_1 built and checked
+[23:33:57] [Server thread/INFO] (KingdomQuest) Field test swamp done in 37 s
+[23:33:57] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:33:57] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings

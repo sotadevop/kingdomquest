@@ -1,0 +1,17 @@
+[23:33:12] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[23:33:20] [Server thread/INFO] (KingdomQuest) Field test old_birch: looking for a site
+[23:33:23] [Server thread/INFO] (KingdomQuest) Field test old_birch: site BlockPos{x=-7488, y=97, z=4376}
+[23:33:31] [Server thread/INFO] (KingdomQuest) Field test old_birch: chunks loaded
+[23:33:37] [Server thread/INFO] (KingdomQuest) Field test old_birch: tent_2 built and checked
+[23:33:38] [Server thread/INFO] (KingdomQuest) Field test old_birch: tent_3 built and checked
+[23:33:41] [Server thread/INFO] (KingdomQuest) Field test old_birch: hamlet_1 built and checked
+[23:33:45] [Server thread/INFO] (KingdomQuest) Field test old_birch: hamlet_2 built and checked
+[23:33:50] [Server thread/INFO] (KingdomQuest) Field test old_birch: hamlet_3 built and checked
+[23:33:53] [Server thread/INFO] (KingdomQuest) Field test old_birch: village_1 built and checked
+[23:34:03] [Server thread/INFO] (KingdomQuest) Field test old_birch: town_1 built and checked
+[23:34:12] [Server thread/INFO] (KingdomQuest) Field test old_birch: castle_1 built and checked
+[23:34:18] [Server thread/INFO] (KingdomQuest) Field test old_birch: castle_2 built and checked
+[23:34:23] [Server thread/INFO] (KingdomQuest) Field test old_birch: citadel_1 built and checked
+[23:34:26] [Server thread/INFO] (KingdomQuest) Field test old_birch done in 66 s
+[23:34:26] [Server thread/INFO] (KingdomQuest) Field test finished: 1 sites with findings
+[23:34:26] [Server thread/INFO] (Minecraft) System chat: Field test finished: 1 sites with findings
