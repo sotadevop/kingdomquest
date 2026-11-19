@@ -2534,7 +2534,9 @@ public final class Settlements {
 			// checked after every build (last, on the stored state: the roads update above writes the settlement too),
 			// since any build's slopes and banks could cover the road
 			Settlement fresh = byHeart(server, s.heart());
-			if (fresh != null && fresh.level(Progression.WALLS) >= 1 && fresh.level(Progression.GATE) >= 3) {
+			// not while the drawbridge is up: the gate is shut on purpose then (user's world: with the bridge raised the
+			// check found no way out after every build, laid a 2-block road and said so each time)
+			if (fresh != null && fresh.level(Progression.WALLS) >= 1 && fresh.level(Progression.GATE) >= 3 && fresh.level(Drawbridge.STATE) != 1) {
 				Set<Long> allNow = new HashSet<>();
 				fresh.built().values().forEach(allNow::addAll);
 				RoadLink.wayOut(server, fresh, allNow);
