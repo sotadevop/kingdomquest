@@ -221,8 +221,8 @@ public final class FieldTest {
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
 				.append(", facing ").append(rot).append(", relief ").append(relief).append(", walkable out before founding: ").append(OUT_BEFORE).append(", style ")
 				.append(Style.forBiome(biome)).append(", ground ").append(SiteWork.surface(level, heart).getBlock().getDescriptionId().replace("block.minecraft.", ""))
-				.append(".").append(SHAPE_NOTE).append("\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost | road steep | stumps |\n|")
-				.append("---|".repeat(23)).append('\n');
+				.append(".").append(SHAPE_NOTE).append("\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost | road steep | stumps | road high | road bank |\n|")
+				.append("---|".repeat(25)).append('\n');
 		Settlement s = new Settlement(UUID.randomUUID(), OWNER, "FT " + sc.name(), 11, Identifier.withDefaultNamespace("stone_bricks"),
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
@@ -1207,6 +1207,52 @@ public final class FieldTest {
 				}
 			}
 		}
+		// roads higher than the buildings they lead to (user, 2026-11-19: "weirdly high, higher than the stairs of the
+		// buildings"): a road cell beside a building's bottom-half stair stands above that stair's top, or beside a door
+		// above its sill; and roads riding a bank, land 2+ lower on both sides across the road
+		int roadHigh = 0, roadBank = 0;
+		for (Map.Entry<Long, Integer> e : roadTop.entrySet()) {
+			int x = BlockPos.getX(e.getKey()), z = BlockPos.getZ(e.getKey());
+			BlockPos rb = new BlockPos(x, e.getValue(), z);
+			double rf = e.getValue() + (level.getBlockState(rb).getBlock() instanceof net.minecraft.world.level.block.SlabBlock ? 0.5 : 1.0);
+			boolean high = false;
+			for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+				for (int dy = -4; dy <= 2 && !high; dy++) {
+					BlockPos q = new BlockPos(x + d[0], e.getValue() + dy, z + d[1]);
+					String tr = owner.get(q.asLong());
+					if (tr == null || Progression.ROADS.equals(tr) || Progression.LAMPS.equals(tr)) {
+						continue;
+					}
+					BlockState qs = level.getBlockState(q);
+					if (qs.getBlock() instanceof net.minecraft.world.level.block.StairBlock
+							&& qs.getValue(net.minecraft.world.level.block.StairBlock.HALF) == net.minecraft.world.level.block.state.properties.Half.BOTTOM
+							&& level.getBlockState(q.above()).isAir() && rf > q.getY() + 1.01) {
+						high = true;
+						sample(samples, "road high", rel(s, rb) + " above " + tr + " step " + rel(s, q));
+					} else if (qs.getBlock() instanceof DoorBlock && qs.getValue(DoorBlock.HALF) == DoubleBlockHalf.LOWER && rf > q.getY() + 0.51) {
+						high = true;
+						sample(samples, "road high", rel(s, rb) + " above " + tr + " door " + rel(s, q));
+					}
+				}
+			}
+			if (high) {
+				roadHigh++;
+				marks.add(new Mark(x, z, 0xFF40FF));
+			}
+			for (int[] d : new int[][] {{1, 0}, {0, 1}}) {
+				long a1 = BlockPos.asLong(x + d[0], 0, z + d[1]), a2 = BlockPos.asLong(x - d[0], 0, z - d[1]);
+				if (roadTop.containsKey(a1) || roadTop.containsKey(a2) || builtCols.contains(a1) || builtCols.contains(a2)) {
+					continue;
+				}
+				int g1 = SiteWork.groundDeep(level, x + d[0], z + d[1], h.getY(), owner.keySet());
+				int g2 = SiteWork.groundDeep(level, x - d[0], z - d[1], h.getY(), owner.keySet());
+				if (e.getValue() - g1 >= 2 && e.getValue() - g2 >= 2) {
+					roadBank++;
+					sample(samples, "road bank", rel(s, rb) + " over " + (e.getValue() - g1) + "/" + (e.getValue() - g2));
+					break;
+				}
+			}
+		}
 		c.put("road gaps", roadGaps);
 		c.put("road steps", roadSteps);
 		int wallGaps = 0;
@@ -1302,6 +1348,8 @@ public final class FieldTest {
 			}
 		}
 		c.put("stumps", stumps);
+		c.put("road high", roadHigh);
+		c.put("road bank", roadBank);
 
 		StringBuilder row = new StringBuilder("| ").append(stage).append(" | ").append(ms);
 		for (int v : c.values()) {
