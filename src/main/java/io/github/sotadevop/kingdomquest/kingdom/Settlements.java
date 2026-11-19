@@ -1918,10 +1918,19 @@ public final class Settlements {
 					BlockPos above = p.offset().above();
 					boolean rough = st.is(Blocks.COBBLESTONE) || st.is(Blocks.MOSSY_COBBLESTONE) || st.is(Blocks.GRAVEL);
 					if (stepStair) {
-						// a stepped lane: the stair takes the road block's own place (its back is the cell's walking level, its
-						// front half a block lower), so a flight starts half a step above the street, not one and a half
-						stairAt.put(p.offset().asLong(),
-								(rough ? Blocks.COBBLESTONE_STAIRS : Blocks.STONE_BRICK_STAIRS).defaultBlockState().setValue(net.minecraft.world.level.block.StairBlock.FACING, stepUp));
+						// a stepped lane: on a whole planned height the stair takes the road block's own place (its back is the
+						// cell's walking level); on a half height it stands on the road block, where the slab would be (its front
+						// is the walking level). Either way each stair meets the next half a block apart (field test: the half
+						// was lost and the flight met the music hall's landing 1.5 high)
+						BlockState stairState = (rough ? Blocks.COBBLESTONE_STAIRS : Blocks.STONE_BRICK_STAIRS).defaultBlockState()
+								.setValue(net.minecraft.world.level.block.StairBlock.FACING, stepUp);
+						if (streets.slab(stepCol)) {
+							if (!others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
+								steps.add(new Template.Placement(above, stairState, p.segment(), p.anchor()));
+							}
+						} else {
+							stairAt.put(p.offset().asLong(), stairState);
+						}
 					} else if (stepSlab && !others.contains(s.heart().offset(above).asLong()) && placed.add(above.asLong())) {
 						steps.add(new Template.Placement(above, (rough ? Blocks.COBBLESTONE_SLAB : Blocks.STONE_BRICK_SLAB).defaultBlockState(),
 								p.segment(), p.anchor()));
