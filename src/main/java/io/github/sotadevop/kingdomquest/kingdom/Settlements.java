@@ -537,7 +537,7 @@ public final class Settlements {
 
 	/** Blocks (walking, along the grid) from the nearest door of {@code t} to the main building's plot; large if unknown. */
 	/** How far above or below the square a plot may follow its street. */
-	static final int STREET_LIFT = 10;
+	static final int STREET_LIFT = 16; // as far as the site plan itself fills or cuts
 
 	/**
 	 * The street's feet height (relative to the heart) where the building's way in meets it: straight out from its
@@ -554,6 +554,12 @@ public final class Settlements {
 		Integer best = null;
 		int bestK = Integer.MAX_VALUE;
 		List<Template.Placement> list = t.placements(dye(s.color()), r);
+		Set<Long> body = new HashSet<>(); // the building's own blocks: a way out through them is no way out
+		for (Template.Placement p : list) {
+			if (!p.state().isAir()) {
+				body.add(h.offset(p.offset()).asLong());
+			}
+		}
 		for (Template.Placement p : list) {
 			BlockState st = p.state();
 			boolean door = st.getBlock() instanceof net.minecraft.world.level.block.DoorBlock
@@ -565,6 +571,9 @@ public final class Settlements {
 			for (net.minecraft.core.Direction side : new net.minecraft.core.Direction[] {f, f.getOpposite()}) {
 				for (int k = 1; k <= 6 && k < bestK; k++) {
 					BlockPos c = h.offset(p.offset()).relative(side, k);
+					if (body.contains(c.asLong()) || body.contains(c.above().asLong())) {
+						break; // into the building: the street behind it is not this door's
+					}
 					Integer feet = streets.feetAt(BlockPos.asLong(c.getX(), 0, c.getZ()));
 					if (feet != null) {
 						best = feet;
