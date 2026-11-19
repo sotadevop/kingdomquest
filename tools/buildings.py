@@ -93,6 +93,20 @@ def a_frame(b, s, x0, z0, length, width=5, open_front=True, crossed=False, rise=
         for zz in (z0 - 1, z0 + length):
             b.put(x0 + half - 1, half + rise, zz, s["wood"] + "_fence")
             b.put(x0 + half + 1, half + rise, zz, s["wood"] + "_fence")
+    # a plank floor with a rug down the middle, and nothing inside but what the tent holds: no grass, saplings or
+    # bamboo growing through, no holes under the bed or chest (user, 2026-11-19: bamboo grew in a jungle tent and the
+    # chest stood over a pit). Furniture put in after this takes its cell.
+    for z in range(z0 + 1, z0 + length + 1):
+        for x in range(x0 + 1, x0 + width - 1):
+            b.put(x, -1, z, s["wood"] + "_planks")
+    for z in range(z0 + 1, z0 + length):
+        for y in range(half + rise):
+            lo = x0 + 1 + max(0, y - rise + 1)
+            hi = x0 + width - 2 - max(0, y - rise + 1)
+            for x in range(lo, hi + 1):
+                if (x, y, z) not in b.b:
+                    b.put(x, y, z, "air")
+        b.put(x0 + half, 0, z, "{color}_carpet")
     # entrance flaps
     tz = z0 + length
     for x in (x0 + 1, x0 + width - 2):

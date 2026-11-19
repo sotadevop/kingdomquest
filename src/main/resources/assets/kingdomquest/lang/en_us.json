@@ -25,6 +25,8 @@
 	"kingdomquest.req.iron_tools": "Craft an iron pickaxe",
 	"kingdomquest.menu.build": "Build",
 	"kingdomquest.menu.rebuild": "Rebuild all",
+	"kingdomquest.menu.undo": "Undo (%s)",
+	"kingdomquest.menu.undo_hint": "You changed %s blocks of your buildings. Repairs and upgrades leave them as you made them. Click to put the plan back: removed blocks return, blocks you added where the plan has nothing stay.",
 	"kingdomquest.rebuild.start": "The builders rebuild the realm from the newest plans: %s works, one after another.",
 	"kingdomquest.rebuild.last": "Last work of the rebuild has begun.",
 	"kingdomquest.rebuild.busy": "The builders are busy. Wait until they have finished.",

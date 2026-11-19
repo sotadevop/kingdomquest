@@ -17,7 +17,7 @@ import java.util.List;
  * One {@link Option} per track that has a next step.
  */
 public record KingdomInfoPayload(BlockPos heart, String name, int color, Identifier logo, String levelTitle, int percent,
-		List<Option> options, int bridge, int damaged) implements CustomPacketPayload {
+		List<Option> options, int bridge, int damaged, int changed) implements CustomPacketPayload {
 	/**
 	 * One upgrade track as the menu shows it.
 	 *
@@ -61,7 +61,8 @@ public record KingdomInfoPayload(BlockPos heart, String name, int color, Identif
 			Codec.INT.fieldOf("percent").forGetter(KingdomInfoPayload::percent),
 			Option.CODEC.listOf().fieldOf("options").forGetter(KingdomInfoPayload::options),
 			Codec.INT.fieldOf("bridge").forGetter(KingdomInfoPayload::bridge),
-			Codec.INT.fieldOf("damaged").forGetter(KingdomInfoPayload::damaged)
+			Codec.INT.fieldOf("damaged").forGetter(KingdomInfoPayload::damaged),
+			Codec.INT.optionalFieldOf("changed", 0).forGetter(KingdomInfoPayload::changed)
 	).apply(i, KingdomInfoPayload::new));
 	public static final StreamCodec<RegistryFriendlyByteBuf, KingdomInfoPayload> CODEC = ByteBufCodecs.fromCodec(DATA).cast();
 
