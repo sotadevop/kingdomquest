@@ -153,12 +153,23 @@ public class KingdomScreen extends Screen {
 			Button repair = Button.builder(Component.translatable("kingdomquest.menu.repair", this.info.damaged()), b -> {
 				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "repair"));
 				this.onClose();
-			}).bounds(fx, this.top + H - 24, 110, 18).build();
+			}).bounds(fx, this.top + H - 24, 80, 18).build();
 			this.tabButtons.add(this.addRenderableWidget(repair));
 		}
+		int ux = fx + (this.info.damaged() > 0 ? 84 : 0);
 		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.percent() < 0) {
 			// rebuilds everything from the mod's current plans (after an update to the buildings)
-			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.menu.rebuild", "rebuild", fx + (this.info.damaged() > 0 ? 114 : 0), 70)));
+			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.menu.rebuild", "rebuild", ux, 70)));
+			ux += 74;
+		}
+		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.changed() > 0 && this.info.percent() < 0) {
+			// the lord's own changes (blocks he broke or placed): repair leaves them; this puts the plan back
+			Button undo = Button.builder(Component.translatable("kingdomquest.menu.undo", this.info.changed()), b -> {
+				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "undo_changes"));
+				this.onClose();
+			}).bounds(ux, this.top + H - 24, 54, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(
+					Component.translatable("kingdomquest.menu.undo_hint", this.info.changed()))).build();
+			this.tabButtons.add(this.addRenderableWidget(undo));
 		}
 		// the realm: map of all settlements, villages and roads, plus the register of buildings, people and animals
 		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.open"), b ->

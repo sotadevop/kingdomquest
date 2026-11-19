@@ -102,6 +102,7 @@ public final class Settlements {
 		});
 		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
 		People.register();
+		LordChanges.register();
 		Guild.register();
 		Companion.register();
 		PayloadTypeRegistry.clientboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
@@ -897,6 +898,17 @@ public final class Settlements {
 		}
 		sweepDrops(level, lo, hi);
 		gradeSite(server, s, job);
+		{
+			// the plan being replaced, to see which spots the upgrade changes (the lord's changes stay where it doesn't)
+			Map<Long, BlockState> was = new HashMap<>();
+			Progression.Step cur = Progression.current(s, track0);
+			if (cur != null && !LordChanges.of(server, s).isEmpty()) {
+				for (Template.Placement p : placements(s, s.style() + "/" + cur.building())) {
+					was.put(s.heart().offset(p.offset()).asLong(), p.state());
+				}
+			}
+			OLD_PLAN.put(s.id() + "|" + job, was);
+		}
 		put(server, s.withJob(job, track0, 0).withLevel(track0, step.level()).withBuilt(track0, kept));
 		People.sendWorkers(level, s, list.size(), server.getPlayerList().getPlayer(s.owner()));
 	}
@@ -917,6 +929,7 @@ public final class Settlements {
 			case "link_kingdom" -> RoadLink.connect(player, s, false);
 			case "link_village" -> RoadLink.connect(player, s, true);
 			case "repair" -> startRepair(player, s);
+			case "undo_changes" -> undoChanges(player, s);
 			case "rebuild" -> startRebuild(player, s);
 			default -> {
 				if (action.equals("realm")) {
@@ -971,13 +984,65 @@ public final class Settlements {
 		}
 	}
 
+	/** Per job: how many of the lord's changes the new plan replaced (told when the job is done). */
+	private static final Map<String, Integer> REPLACED = new HashMap<>();
+	/** Per job: the plan of the level being replaced (position -> block), to see which spots an upgrade changes. */
+	private static final Map<String, Map<Long, BlockState>> OLD_PLAN = new HashMap<>();
+
+	/** What the current level of the job's track had at each spot (empty for a first build). */
+	private static Map<Long, BlockState> oldPlan(Settlement s) {
+		// kept from the job's start (the track's level is raised then); after a restart nothing is known: the
+		// lord's changes are then all kept, the safe side
+		return OLD_PLAN.getOrDefault(s.id() + "|" + s.job(), null);
+	}
+
+	/** Puts the plan back where the lord changed it: every changed spot of a built level gets its planned block again. */
+	private static void undoChanges(ServerPlayer player, Settlement s) {
+		MinecraftServer server = player.level().getServer();
+		ServerLevel level = server.overworld();
+		Map<Long, BlockState> changes = LordChanges.of(server, s);
+		if (changes.isEmpty() || !s.job().isEmpty()) {
+			return;
+		}
+		int restored = 0;
+		Settlement now = s;
+		for (String track : Progression.ORDER) {
+			Progression.Step step = Progression.current(s, track);
+			if (step == null) {
+				continue;
+			}
+			List<Long> built = new ArrayList<>(now.built().getOrDefault(track, List.of()));
+			Set<Long> builtSet = new HashSet<>(built);
+			for (Template.Placement p : placements(s, s.style() + "/" + step.building())) {
+				BlockPos pos = s.heart().offset(p.offset());
+				if (!changes.containsKey(pos.asLong()) || p.state().isAir() || p.state().getBlock() instanceof CropBlock) {
+					continue;
+				}
+				if (level.getBlockState(pos).getBlock() != p.state().getBlock()) {
+					level.destroyBlock(pos, true); // what the lord put there drops for him
+					level.setBlock(pos, neighbourShaped(p.state(), level, pos), NO_DROPS);
+					restored++;
+				}
+				if (builtSet.add(pos.asLong())) {
+					built.add(pos.asLong());
+				}
+			}
+			now = now.withBuilt(track, built);
+		}
+		put(server, now);
+		LordChanges.forget(server, s, changes.keySet());
+		People.say(player, "Architect", restored == 0 ? "Everything is as you left it; I only forgot your changes."
+				: "I put " + restored + (restored == 1 ? " block" : " blocks") + " back as planned. Blocks you added where the plan has nothing stay.");
+	}
+
 	private static final Map<UUID, List<Template.Placement>> REPAIRS = new HashMap<>();
 	private static final Map<UUID, int[]> REPAIR_AT = new HashMap<>();
 
 	/** Blocks of all built levels that are missing or wrong in the world (attacks, griefing). Doors etc. count by type. */
 	static List<Template.Placement> damaged(ServerLevel level, Settlement s) {
 		List<Template.Placement> out = new ArrayList<>();
-		Set<Long> unfixable = UNFIXABLE.getOrDefault(s.id(), Set.of());
+		Set<Long> unfixable = new HashSet<>(UNFIXABLE.getOrDefault(s.id(), Set.of()));
+		unfixable.addAll(LordChanges.of(level.getServer(), s).keySet()); // the lord's own changes are not damage
 		for (String track : Progression.ORDER) {
 			Progression.Step step = Progression.current(s, track);
 			if (step == null) {
@@ -2285,10 +2350,27 @@ public final class Settlements {
 		Set<Long> builtSet = new HashSet<>(built);
 		BlockPos first = null;
 		BlockPos last = null;
+		Map<Long, BlockState> changes = LordChanges.of(server, s);
+		Map<Long, BlockState> oldPlan = changes.isEmpty() ? Map.of() : oldPlan(s);
+		List<Long> replaced = new ArrayList<>();
 		if (index >= cols) {
 			for (int n = 0; n < perTick && index < cols + list.size(); n++, index++) {
 				Template.Placement p = list.get(index - cols);
 				BlockPos pos = s.heart().offset(p.offset());
+				BlockState was = changes.get(pos.asLong());
+				if (was != null) {
+					// the lord changed this spot: it stays his where the new plan has the same block as the old one
+					// here (the upgrade doesn't touch it); where the plan changes, the upgrade wins
+					if (oldPlan == null) {
+						continue;
+					}
+					BlockState planned = oldPlan.get(pos.asLong());
+					BlockState plannedOld = planned == null ? Blocks.AIR.defaultBlockState() : planned;
+					if (plannedOld.getBlock() == p.state().getBlock()) {
+						continue;
+					}
+					replaced.add(pos.asLong());
+				}
 				BlockState state = neighbourShaped(p.state(), level, pos);
 				if (t.follow) {
 					SiteWork.clearAbove(level, pos, allBuilt); // grass and flowers go, trees go whole
@@ -2321,7 +2403,18 @@ public final class Settlements {
 		if (first != null) {
 			sweepDrops(level, first, last);
 		}
+		if (!replaced.isEmpty()) {
+			LordChanges.forget(server, s, replaced);
+			REPLACED.merge(s.id() + "|" + s.job(), replaced.size(), Integer::sum);
+		}
 		if (index >= cols + list.size()) {
+			Integer gone = REPLACED.remove(s.id() + "|" + s.job());
+			OLD_PLAN.remove(s.id() + "|" + s.job());
+			ServerPlayer lord = server.getPlayerList().getPlayer(s.owner());
+			if (gone != null && lord != null) {
+				People.say(lord, "Architect", "The new plan needed " + gone + (gone == 1 ? " spot" : " spots")
+						+ " you had changed. The rest of your changes stay as you made them.");
+			}
 			if (Progression.DOCK.equals(s.jobTrack())) {
 				// the pier's posts go down to the bed, however deep the water is here
 				List<Long> posts = new ArrayList<>();
@@ -2531,6 +2624,7 @@ public final class Settlements {
 			for (Map.Entry<String, List<Long>> e : s.built().entrySet()) {
 				if (e.getValue().contains(pos.asLong())) {
 					level.setBlock(pos, Blocks.AIR.defaultBlockState(), NO_DROPS);
+					LordChanges.noteBreak(level, player, pos); // the lord's own change: repair leaves it
 					List<Long> built = new ArrayList<>(e.getValue());
 					built.remove(pos.asLong());
 					put(server, s.withBuilt(e.getKey(), built));
@@ -2566,8 +2660,9 @@ public final class Settlements {
 		Progression.Step current = Progression.current(s, Settlement.MAIN);
 		int bridge = s.level(Progression.GATE) >= 3 ? s.level(Drawbridge.STATE) : -1;
 		int broken = s.job().isEmpty() && !REPAIRS.containsKey(s.id()) ? damaged((ServerLevel) player.level().getServer().overworld(), s).size() : 0;
+		int changed = mine ? LordChanges.of(player.level().getServer(), s).size() : 0;
 		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),
-				current == null ? "" : current.titleKey(), percent, options, bridge, broken));
+				current == null ? "" : current.titleKey(), percent, options, bridge, broken, changed));
 	}
 
 	/**

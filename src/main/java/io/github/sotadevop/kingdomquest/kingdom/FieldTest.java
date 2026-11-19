@@ -213,6 +213,7 @@ public final class FieldTest {
 		s = finish(server, s);
 		check(level, s, base, "tent_1", (System.nanoTime() - t) / 1_000_000, problems, dir, sc.name(), destroyedBefore);
 		s = countryRoad(server, level, s);
+		boolean lordChanged = false;
 		Set<String> skipped = new HashSet<>();
 		int guard = 0;
 		while (guard++ < 400) {
@@ -257,9 +258,14 @@ public final class FieldTest {
 				break;
 			}
 			long t2 = System.nanoTime();
+			long[] lordTest = lordChanged ? null : lordChange(level, s, main);
+			lordChanged = true;
 			try {
 				Settlements.start(server, s, Settlement.MAIN, main);
 				s = finish(server, Settlements.byHeart(server, heart));
+				if (lordTest != null) {
+					lordCheck(level, s, main, lordTest, problems);
+				}
 			} catch (Throwable e) {
 				problems.add("main " + main.building() + " crashed: " + e + " at " + top(e));
 				break;
@@ -427,6 +433,58 @@ public final class FieldTest {
 		RoadLink.runAll(server);
 		REPORT.append("Country road to ").append(target.toShortString()).append(" (").append(bestWet * 2).append(" blocks of water on the way).\n\n");
 		return Settlements.byHeart(server, s.heart());
+	}
+
+	/**
+	 * The lord's own changes (user, 2026-11-19): before the first main upgrade, the lord breaks two blocks of the
+	 * current level, one where the next level's plan has the same block (it must stay broken: repair and upgrade leave
+	 * it) and one where the plan changes (the upgrade must win). Returns {kept, replaced} positions, -1 if none found.
+	 */
+	private static long[] lordChange(ServerLevel level, Settlement s, Progression.Step next) {
+		Map<Long, BlockState> nextPlan = new HashMap<>();
+		for (Template.Placement p : Settlements.placements(s, s.style() + "/" + next.building())) {
+			nextPlan.put(s.heart().offset(p.offset()).asLong(), p.state());
+		}
+		long kept = -1, replaced = -1;
+		for (long pos : s.built().getOrDefault(Settlement.MAIN, List.of())) {
+			BlockState here = level.getBlockState(BlockPos.of(pos));
+			if (here.isAir() || !here.isCollisionShapeFullBlock(level, BlockPos.of(pos)) || BlockPos.of(pos).getY() < s.heart().getY()) {
+				continue;
+			}
+			BlockState planned = nextPlan.get(pos);
+			if (kept < 0 && planned != null && planned.getBlock() == here.getBlock()) {
+				kept = pos;
+			} else if (replaced < 0 && planned != null && !planned.isAir() && planned.getBlock() != here.getBlock()) {
+				replaced = pos;
+			}
+		}
+		for (long pos : new long[] {kept, replaced}) {
+			if (pos != -1) {
+				level.setBlock(BlockPos.of(pos), Blocks.AIR.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+				LordChanges.record(level.getServer(), s, pos, Blocks.AIR.defaultBlockState());
+			}
+		}
+		boolean repairs = false;
+		for (Template.Placement p : Settlements.damaged(level, s)) {
+			long pos = s.heart().offset(p.offset()).asLong();
+			repairs |= pos == kept || pos == replaced;
+		}
+		REPORT.append("Lord's changes: broke 2 blocks before ").append(next.building()).append("; repair ")
+				.append(repairs ? "WOULD PUT THEM BACK" : "leaves them").append(".\n\n");
+		return new long[] {kept, replaced, repairs ? 1 : 0};
+	}
+
+	private static void lordCheck(ServerLevel level, Settlement s, Progression.Step next, long[] t, List<String> problems) {
+		boolean keptOk = t[0] == -1 || level.getBlockState(BlockPos.of(t[0])).isAir();
+		boolean replacedOk = t[1] == -1 || !level.getBlockState(BlockPos.of(t[1])).isAir();
+		Map<Long, BlockState> left = LordChanges.of(level.getServer(), s);
+		REPORT.append("Lord's changes after ").append(next.building()).append(": unchanged spot ")
+				.append(t[0] == -1 ? "none found" : keptOk ? "kept broken" : "REBUILT").append(", changed spot ")
+				.append(t[1] == -1 ? "none found" : replacedOk ? "rebuilt by the new plan" : "STILL BROKEN").append(", ")
+				.append(left.size()).append(" change(s) remembered.\n\n");
+		if (!keptOk || !replacedOk || t[2] == 1) {
+			problems.add("lord's changes: kept " + keptOk + ", replaced " + replacedOk + ", repair skips " + (t[2] == 0));
+		}
 	}
 
 	/** Whether the country road built after the tent is still there at the end: cells near the castle without road. */
