@@ -259,7 +259,9 @@ final class StreetPlan {
 			halfV[i] = fixed[i] ? 0 : (int) Math.round(v[i] * 2);
 		}
 		// rounding may leave two units a whole block apart where the grade allows less: pulled together again
-		for (int pass = 0; pass < 8; pass++) {
+		boolean moved = true;
+		for (int pass = 0; moved && pass < 1000; pass++) { // until it holds everywhere (8 passes left 1.5 joints on long flights)
+			moved = false;
 			for (int i = 0; i < n; i++) {
 				if (fixed[i]) {
 					continue;
@@ -268,8 +270,10 @@ final class StreetPlan {
 					int most = (int) Math.ceil(2 * Math.max(grade[i], grade[j]) - 1e-9);
 					if (halfV[i] - halfV[j] > most) {
 						halfV[i] = halfV[j] + most;
+						moved = true;
 					} else if (halfV[j] - halfV[i] > most) {
 						halfV[i] = halfV[j] - most;
+						moved = true;
 					}
 				}
 			}
@@ -336,7 +340,7 @@ final class StreetPlan {
 						}
 						level.setBlock(q, high ? wall : y == top ? surface : SiteWork.subsoil(surface), SiteWork.FLAGS);
 					}
-					if (high) { // a wall at the road's edge carries a parapet
+					if (high && !nearEntrance(x + d[0], z + d[1], builtCols, keep, plan)) { // a wall at the road's edge carries a parapet
 						BlockPos q = new BlockPos(x + d[0], top + 1, z + d[1]);
 						if (open(level, q, built)) {
 							level.setBlock(q, parapet, Block.UPDATE_ALL);
@@ -373,6 +377,19 @@ final class StreetPlan {
 				}
 			}
 		}
+	}
+
+	/** Within 2 of a building or a door's way in (not a street): no parapet there, it would close an entrance. */
+	private static boolean nearEntrance(int x, int z, Set<Long> builtCols, Set<Long> keep, StreetPlan plan) {
+		for (int dx = -2; dx <= 2; dx++) {
+			for (int dz = -2; dz <= 2; dz++) {
+				long c = BlockPos.asLong(x + dx, 0, z + dz);
+				if (keep.contains(c) || builtCols.contains(c) && !plan.half.containsKey(c)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** Air or a plant: room for made ground. */

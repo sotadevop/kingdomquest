@@ -29,7 +29,7 @@ import java.util.Set;
  */
 final class DoorSteps {
 	/** How far from a door the route to walkable ground may run. */
-	private static final int RANGE = 24;
+	private static final int RANGE = 40;
 	private static final int MAX_STEP = 8;
 
 	private DoorSteps() {
@@ -124,7 +124,7 @@ final class DoorSteps {
 		}
 		long goal = Long.MIN_VALUE;
 		int seen = 0;
-		while (!pq.isEmpty() && seen++ < 20_000) {
+		while (!pq.isEmpty() && seen++ < 60_000) {
 			Map.Entry<Long, Double> top = pq.poll();
 			long k = top.getKey();
 			if (top.getValue() > cost.getOrDefault(k, Double.MAX_VALUE)) {
@@ -173,7 +173,10 @@ final class DoorSteps {
 		List<Long> placed = new ArrayList<>();
 		// the streets are planned: steps never go on a street column (a lane laid later would run into them)
 		StreetPlan streets = StreetPlan.of(level.getServer(), s);
-		Set<Long> reserved = streets == null ? Set.of() : streets.columns();
+		Set<Long> reserved = new HashSet<>(streets == null ? Set.of() : streets.columns());
+		for (long p : s.built().getOrDefault(Progression.ROADS, List.of())) {
+			reserved.remove(BlockPos.asLong(BlockPos.getX(p), 0, BlockPos.getZ(p))); // a road already laid may get a step patched in
+		}
 		Block[] mat = material(level, s);
 		for (int i = 0; i + 1 < path.size(); i++) {
 			long[] a = path.get(i), b = path.get(i + 1);
