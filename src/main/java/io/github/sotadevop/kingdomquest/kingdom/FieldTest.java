@@ -11,6 +11,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.DoorBlock;
@@ -108,6 +109,8 @@ public final class FieldTest {
 	/** Per door (lower half): the ground 1 and 2 blocks in front of it after each build, when it changed. */
 	private static final Map<Long, List<String>> DOOR_GROUND = new HashMap<>();
 	private static final List<String> SUMMARY = new ArrayList<>();
+	/** Road top per column at the last check of the current site. */
+	private static final Map<Long, Integer> ROAD_LAST = new HashMap<>();
 
 	/** Runs the given scenarios (all when empty). Returns the number of sites with problems. */
 	public static int run(MinecraftServer server, Set<String> only) {
@@ -221,14 +224,15 @@ public final class FieldTest {
 		REPORT.append("## ").append(sc.name()).append("\n\n").append(biome).append(" at ").append(heart.toShortString())
 				.append(", facing ").append(rot).append(", relief ").append(relief).append(", walkable out before founding: ").append(OUT_BEFORE).append(", style ")
 				.append(Style.forBiome(biome)).append(", ground ").append(SiteWork.surface(level, heart).getBlock().getDescriptionId().replace("block.minecraft.", ""))
-				.append(".").append(SHAPE_NOTE).append("\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost | road steep | stumps | road high | road bank |\n|")
-				.append("---|".repeat(25)).append('\n');
+				.append(".").append(SHAPE_NOTE).append("\n\n| stage | ms | float built | float land | floating feet | buried | destroyed | doors unreached | walk out | breach | wet inside | wet moat | new cliffs | tall walls | pits | road gaps | road steps | wall gaps | cut trees | foreign ground | snow lost | road steep | stumps | road high | road bank | road moved |\n|")
+				.append("---|".repeat(26)).append('\n');
 		Settlement s = new Settlement(UUID.randomUUID(), OWNER, "FT " + sc.name(), 11, Identifier.withDefaultNamespace("stone_bricks"),
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
 		Settlements.prepareSite(level, heart, Template.get(s.job()), rot);
 		Settlements.put(server, s);
 		DOOR_GROUND.clear();
+		ROAD_LAST.clear();
 		List<String> problems = new ArrayList<>();
 		Map<String, Integer> destroyedBefore = new HashMap<>();
 		long t = System.nanoTime();
@@ -1253,6 +1257,24 @@ public final class FieldTest {
 				}
 			}
 		}
+		// streets keep their height once laid (road first, 2026-11-19): road columns whose top moved since the last check
+		int roadMoved = 0;
+		Map<Long, Integer> roadBase = new HashMap<>(); // the road block itself: slabs and stairs come with the paving level
+		for (long p : s.built().getOrDefault(Progression.ROADS, List.of())) {
+			BlockPos b = BlockPos.of(p);
+			Block blk = level.getBlockState(b).getBlock();
+			if (!level.getBlockState(b).isAir() && !(blk instanceof net.minecraft.world.level.block.SlabBlock) && !(blk instanceof net.minecraft.world.level.block.StairBlock)) {
+				roadBase.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b.getY(), Math::max);
+			}
+		}
+		for (Map.Entry<Long, Integer> e : roadBase.entrySet()) {
+			Integer was = ROAD_LAST.get(e.getKey());
+			if (was != null && !was.equals(e.getValue())) {
+				roadMoved++;
+				sample(samples, "road moved", rel(s, new BlockPos(BlockPos.getX(e.getKey()), e.getValue(), BlockPos.getZ(e.getKey()))) + " from " + (was - h.getY()));
+			}
+		}
+		ROAD_LAST.putAll(roadBase);
 		c.put("road gaps", roadGaps);
 		c.put("road steps", roadSteps);
 		int wallGaps = 0;
@@ -1350,6 +1372,7 @@ public final class FieldTest {
 		c.put("stumps", stumps);
 		c.put("road high", roadHigh);
 		c.put("road bank", roadBank);
+		c.put("road moved", roadMoved);
 
 		StringBuilder row = new StringBuilder("| ").append(stage).append(" | ").append(ms);
 		for (int v : c.values()) {
