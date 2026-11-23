@@ -71,7 +71,7 @@ public class StorehouseScreen extends Screen {
 
 	/** Opens the ledger, or refreshes it in place when it is already shown for this storehouse. */
 	public static void open(StorePayload data) {
-		if (shown != null && Minecraft.getInstance().screen == shown && shown.data.heart().equals(data.heart())) {
+		if (shown != null && shown.data.heart().equals(data.heart())) {
 			shown.data = data;
 			shown.rebuildWidgets();
 			return;
@@ -84,9 +84,11 @@ public class StorehouseScreen extends Screen {
 	}
 
 	@Override
-	public void onClose() {
-		shown = null;
-		super.onClose();
+	public void removed() {
+		if (shown == this) {
+			shown = null;
+		}
+		super.removed();
 	}
 
 	// ---- layout ----
