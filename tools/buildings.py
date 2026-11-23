@@ -1205,7 +1205,7 @@ ROAD_TRUNKS = [
     ("place_s", (2, 12), (53, 63), ("x", 7), "gate", [("main", 8)]),
 ]
 # a plot kept free for a building of a later wave (the church on the highest hill of a hill town): no lane crosses it
-RESERVED = {"church": (-110, -50, -80, -25)}
+RESERVED = {"church": (-96, -56, -70, -32)}
 # the streets a building keeps 3 blocks of clear ground from (main and side streets; not lanes, alleys or the square)
 WIDE_STREETS = {t[0] for t in ROAD_TRUNKS if not t[0].startswith(("castle_", "plaza", "place_"))}
 # places without a door that still need a way to them: track -> [(level, (x, z))], in the frame of the templates

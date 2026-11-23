@@ -64,7 +64,7 @@ final class Grade {
 	/** Settlement level key of the castle shape (founding menu): 0 square, 1 round (not built yet). */
 	static final String SHAPE = "castle_shape";
 	/** Flat ground beyond the wall line: the moat, its bank and the landing in front of the gate. */
-	static final int PAD = 14;
+	static final int PAD = 16;
 	/** How far beyond the flat ground the plan reaches with its slopes back to the untouched land. */
 	static final int MARGIN = 48;
 	/** The plateau lies at most this far above or below the ground where the charter was used. */
@@ -75,7 +75,7 @@ final class Grade {
 	/** Hill castle: the motte with the keep and the upper square stands this high over the bailey. */
 	static final int MOUND = 9;
 	/** Hill town: the church hill and the lord's hill. */
-	static final int CHURCH_HILL = 14;
+	static final int CHURCH_HILL = 12;
 	static final int LORD_HILL = 9;
 	/** Hills inside the walls climb at most this much per block (about 1 in 1.6: a natural hill, not a pyramid). */
 	private static final double HILL_SLOPE = 0.62;
@@ -85,6 +85,8 @@ final class Grade {
 	private static final byte PLATEAU = 1;
 	private static final byte MADE = 2;
 	private static final byte SLOPE = 3;
+	/** A hill inside the walls (hill looks), not on a plot: grown over like the land around until a building comes. */
+	private static final byte HILL = 4;
 	private static final int FORMAT = 0x4B514731; // "KQG1"
 
 	private static final Map<UUID, Grade> GRADES = new HashMap<>();
@@ -151,7 +153,7 @@ final class Grade {
 	/** True when the column lies on the plateau inside the walls (or its flat band outside them). */
 	boolean onPlateau(int x, int z) {
 		int i = index(x, z);
-		return i >= 0 && (this.kind[i] == PLATEAU || this.kind[i] == MADE);
+		return i >= 0 && (this.kind[i] == PLATEAU || this.kind[i] == MADE || this.kind[i] == HILL);
 	}
 
 	/** Share of the site that is shaped, 0..100. */
@@ -397,11 +399,11 @@ final class Grade {
 					double dx = Math.max(0, Math.max(h[0] - bx, bx - h[2]));
 					double dz = Math.max(0, Math.max(h[1] - bz, bz - h[3]));
 					double dist = Math.sqrt(dx * dx + dz * dz) + noise(x0 + i, z0 + k, 7) * 2.5;
-					hgt = Math.max(hgt, h[4] - Math.max(0, dist) * HILL_SLOPE);
+					hgt = Math.max(hgt, h[4] - Math.max(0, dist) * h[5]);
 				}
-				// the walls and the moat lie on the plateau itself: no hill climbs them
+				// the walls and the moat lie on the plateau itself: no hill climbs them (a hill's back may fall steeply to them)
 				int inWall = Math.min(Math.min(bx - wall[0], wall[1] - bx), Math.min(bz - wall[2], wall[3] - bz));
-				hgt = Math.min(hgt, Math.max(0, (inWall - 6) * HILL_SLOPE));
+				hgt = Math.min(hgt, Math.max(0, inWall - 6));
 				relief[i * d + k] = Math.max(0, hgt);
 				if (inWall < 6) {
 					fixed[i * d + k] = true;
@@ -409,6 +411,7 @@ final class Grade {
 			}
 		}
 		Map<String, Integer> lifts = new HashMap<>();
+		boolean[] plot = new boolean[n];
 		if (!hills.isEmpty()) {
 			// every plot is a level terrace: at the height of the hill where it stands (its median), two blocks around it
 			for (Map.Entry<String, int[]> e : plots.entrySet()) {
@@ -422,6 +425,7 @@ final class Grade {
 				for (int c : idx) {
 					relief[c] = lvl;
 					fixed[c] = true;
+					plot[c] = true;
 				}
 				lifts.put(e.getKey(), lvl);
 			}
@@ -441,9 +445,11 @@ final class Grade {
 		for (int i = 0; i < w; i++) {
 			for (int k = 0; k < d; k++) {
 				int c = i * d + k, x = x0 + i, z = z0 + k;
-				int pad = PAD + (int) Math.round(noise(x, z, 6) * 1.6);
-				boolean flat = x >= ring[0] - pad && x <= ring[2] + pad && z >= ring[1] - pad && z <= ring[3] + pad;
-				double vary = 0.8 + 0.4 * (noise(x + 913, z - 377, 5) * 0.5 + 0.5);
+				// the flat band's edge wanders (never closer than the moat and the landing need) and its corners are round
+				double pad = PAD + 1 + noise(x, z, 14) * 3.5 + noise(x - 71, z + 29, 5) * 1.2;
+				double ox = Math.max(0, Math.max(ring[0] - x, x - ring[2])), oz = Math.max(0, Math.max(ring[1] - z, z - ring[3]));
+				boolean flat = Math.sqrt(ox * ox + oz * oz) <= Math.max(PAD - 3, pad);
+				double vary = 0.65 + 0.7 * (noise(x + 913, z - 377, 9) * 0.5 + 0.5);
 				cut[c] = (float) (vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 2.0; default -> 1.0; });
 				fill[c] = (float) (vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 1.4; default -> 1.0; });
 				if (flat) {
@@ -469,17 +475,24 @@ final class Grade {
 			}
 			top[c] = (short) t;
 			if (kind[c] == PLATEAU) {
-				kind[c] = t == g && surf[c] == g ? PLATEAU : MADE;
+				kind[c] = relief[c] >= 1 && !plot[c] ? HILL : t == g && surf[c] == g ? PLATEAU : MADE;
 			} else if (t != g) {
 				kind[c] = SLOPE;
 			}
 		}
-		// the plan's own edge always meets the land as it is
+		// the plan's own edge always meets the land as it is: near it a slope eases back to the land, no step at the edge
 		for (int i = 0; i < w; i++) {
 			for (int k = 0; k < d; k++) {
-				if (i == 0 || k == 0 || i == w - 1 || k == d - 1) {
-					top[i * d + k] = (short) bed[i * d + k];
-					kind[i * d + k] = UNTOUCHED;
+				int c = i * d + k, edge = Math.min(Math.min(i, k), Math.min(w - 1 - i, d - 1 - k));
+				if (edge == 0) {
+					top[c] = (short) bed[c];
+					kind[c] = UNTOUCHED;
+				} else if (edge < 12 && kind[c] == SLOPE) {
+					int t = Math.max(bed[c] - edge, Math.min(bed[c] + edge, top[c]));
+					top[c] = (short) t;
+					if (t == bed[c]) {
+						kind[c] = UNTOUCHED;
+					}
 				}
 			}
 		}
@@ -489,7 +502,7 @@ final class Grade {
 		return new Planned(grade, heart, lifts);
 	}
 
-	/** Hills of a look in the base frame: x0, z0, x1, z1 of the flat top, its height over the plateau. */
+	/** Hills of a look in the base frame: x0, z0, x1, z1 of the flat top, its height over the plateau, its flanks' slope. */
 	private static List<double[]> hills(int look) {
 		List<double[]> out = new ArrayList<>();
 		if (look == HILL_CASTLE) {
@@ -497,18 +510,19 @@ final class Grade {
 			int[] main = Layout.plot(Settlement.MAIN);
 			int[] sq = Layout.square();
 			if (main != null) {
+				// a motte's flanks are steeper than a natural hill's (about 1 in 1.25)
 				out.add(new double[] {Math.min(main[0], sq[0]) - 3, Math.min(main[1], sq[1]) - 3, Math.max(main[2], sq[2]) + 3,
-						Math.max(main[3], sq[3]) + 3, MOUND});
+						Math.max(main[3], sq[3]) + 3, MOUND, 0.8});
 			}
 		} else if (look == HILL_TOWN) {
 			// Bamberg: the church on the highest hill, the lord's house on the second, the market in the valley between
 			int[] church = Layout.reserved().get("church");
 			int[] lord = Layout.plot(Progression.ROYAL);
 			if (church != null) {
-				out.add(new double[] {church[0] - 3, church[1] - 3, church[2] + 3, church[3] + 3, CHURCH_HILL});
+				out.add(new double[] {church[0] - 3, church[1] - 3, church[2] + 3, church[3] + 3, CHURCH_HILL, HILL_SLOPE});
 			}
 			if (lord != null) {
-				out.add(new double[] {lord[0] - 3, lord[1] - 3, lord[2] + 3, lord[3] + 3, LORD_HILL});
+				out.add(new double[] {lord[0] - 3, lord[1] - 3, lord[2] + 3, lord[3] + 3, LORD_HILL, HILL_SLOPE});
 			}
 		}
 		return out;
@@ -813,11 +827,12 @@ final class Grade {
 		BlockState surface = SiteWork.surface(level, s.heart());
 		List<BlockState> fallback = List.of(surface, SiteWork.subsoil(surface), SiteWork.subsoil(surface), SiteWork.subsoil(surface));
 		int ax = this.x0 + si * SECTION, az = this.z0 + sk * SECTION;
+		Map<Long, List<BlockState>> nearby = new HashMap<>(); // layers of the nearest dry land, per 8 x 8 cell
 		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
 			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
 				byte kd = this.kind[i * this.d + k];
 				if (kd != UNTOUCHED) {
-					column(level, this.x0 + i, this.z0 + k, this.top[i * this.d + k], kd, built, fallback);
+					column(level, this.x0 + i, this.z0 + k, this.top[i * this.d + k], kd, built, fallback, nearby);
 				}
 			}
 		}
@@ -847,15 +862,18 @@ final class Grade {
 	}
 
 	/** One column to its planned top {@code t}. */
-	private void column(ServerLevel level, int x, int z, int t, byte kd, Set<Long> built, List<BlockState> fallback) {
+	private void column(ServerLevel level, int x, int z, int t, byte kd, Set<Long> built, List<BlockState> fallback, Map<Long, List<BlockState>> nearby) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		int[] l = land(level, x, z);
 		int g = l[0], water = l[1];
 		boolean wet = water > g;
-		List<BlockState> stack = wet ? reference(level, x, z, fallback) : layers(level, x, g, z, fallback);
+		// made ground where there was water: inside the walls the site's own ground (a filled lake is no beach), outside
+		// the layers of the nearest dry land
+		List<BlockState> stack = wet ? kd == SLOPE ? nearby.computeIfAbsent(BlockPos.asLong(x >> 3, 0, z >> 3), c -> reference(level, x, z, fallback)) : fallback
+				: layers(level, x, g, z, fallback);
 		boolean snowed = !wet && level.getBlockState(pos.set(x, g + 1, z)).is(Blocks.SNOW);
 		// trees standing on this column go whole: on the plateau, and wherever the ground under them moves
-		if (kd == PLATEAU || kd == MADE || t != g) {
+		if (kd != SLOPE || t != g) {
 			for (int y = g + 1; y <= g + 3; y++) {
 				BlockState st = level.getBlockState(pos.set(x, y, z));
 				if ((SiteWork.trunk(st) || st.is(BlockTags.LEAVES)) && !built.contains(pos.asLong())) {
@@ -1044,7 +1062,7 @@ final class Grade {
 		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
 			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
 				byte kd = this.kind[i * this.d + k];
-				if (kd != MADE && kd != SLOPE) {
+				if (kd != MADE && kd != SLOPE && kd != HILL) {
 					continue;
 				}
 				int x = this.x0 + i, z = this.z0 + k, t = this.top[i * this.d + k];
@@ -1058,12 +1076,14 @@ final class Grade {
 						|| ground.is(Blocks.MYCELIUM) || ground.is(Blocks.MOSS_BLOCK) || ground.is(Blocks.MUD);
 				boolean sandy = ground.is(BlockTags.SAND) || ground.is(BlockTags.TERRACOTTA);
 				double r = random.nextDouble();
-				if (kd == SLOPE && material(ground) == 2 && r < (steepness(x, z) >= 2 ? 1 / 70.0 : 1 / 160.0)) {
+				boolean wild = kd == SLOPE || kd == HILL; // free land: trees and stones; on the plateau's plots only meadow
+				double woods = kd == HILL ? Math.max(this.trees * 1.1, 0.012) : this.trees * 1.1;
+				if (wild && (material(ground) == 2 || kd == HILL) && r < (steepness(x, z) >= 2 ? 1 / 70.0 : 1 / 160.0)) {
 					boulder(level, at, ground, random, built);
-				} else if (kd == SLOPE && soil && r < this.trees * 1.1) {
-					place(level, gen, random, at, true);
+				} else if (wild && soil && r < woods) {
+					place(level, gen, random, at, true, s.heart());
 				} else if ((soil || sandy) && r < (kd == MADE ? 1 / 28.0 : 1 / 22.0)) {
-					place(level, gen, random, at, false);
+					place(level, gen, random, at, false, s.heart());
 				}
 			}
 		}
@@ -1074,20 +1094,32 @@ final class Grade {
 	}
 
 	/** One of the biome's own vegetation features at {@code at}: a tree, or a patch of flowers, grass or bushes. */
-	private static void place(ServerLevel level, ChunkGenerator gen, RandomSource random, BlockPos at, boolean tree) {
-		List<HolderSet<PlacedFeature>> steps = level.getBiome(at).value().getGenerationSettings().features();
+	private static void place(ServerLevel level, ChunkGenerator gen, RandomSource random, BlockPos at, boolean tree, BlockPos heart) {
+		// the land's biome: a filled river or beach is grown over like the land around the site
+		Holder<net.minecraft.world.level.biome.Biome> biome = level.getBiome(at);
+		String b = biome.getRegisteredName();
+		if (b.contains("river") || b.contains("ocean") || b.contains("beach") || b.contains("shore")) {
+			biome = level.getBiome(heart);
+		}
+		List<HolderSet<PlacedFeature>> steps = biome.value().getGenerationSettings().features();
 		int step = GenerationStep.Decoration.VEGETAL_DECORATION.ordinal();
 		if (steps.size() <= step) {
 			return;
 		}
+		// grass, ferns and flowers make up most of a meadow; pumpkins, melons and berries are a rare find, as in the wild
 		List<Holder<PlacedFeature>> pick = new ArrayList<>();
 		for (Holder<PlacedFeature> h : steps.get(step).stream().toList()) {
 			String name = h.getRegisteredName();
+			if (name.contains("sea") || name.contains("kelp") || name.contains("sugar_cane") || name.contains("waterlily") || name.contains("lily")) {
+				continue; // water plants
+			}
 			boolean isTree = isTree(h.value().feature(), 0) || name.contains("bamboo");
-			boolean ground = !isTree && (name.contains("flower") || name.contains("grass") || name.contains("fern") || name.contains("bush")
-					|| name.contains("patch") || name.contains("berr")) && !name.contains("sugar_cane") && !name.contains("waterlily");
+			boolean common = name.contains("flower") || name.contains("grass") || name.contains("fern") || name.contains("dead_bush");
+			boolean ground = !isTree && (common || name.contains("bush") || name.contains("patch") || name.contains("berr"));
 			if (tree ? isTree : ground) {
-				pick.add(h);
+				for (int w = tree || common ? 12 : 1; w > 0; w--) {
+					pick.add(h);
+				}
 			}
 		}
 		if (pick.isEmpty()) {

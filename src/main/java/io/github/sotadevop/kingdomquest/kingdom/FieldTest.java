@@ -1328,7 +1328,7 @@ public final class FieldTest {
 		for (int i = 0; i < n; i++) {
 			for (int k = 0; k < n; k++) {
 				int x = base.x0() + i, z = base.z0() + k;
-				if (Math.abs(x - h.getX()) > 70 || Math.abs(z - h.getZ()) > 70 || !open[i * n + k]) {
+				if (Math.abs(x - h.getX()) > R - 20 || Math.abs(z - h.getZ()) > R - 20 || !open[i * n + k]) {
 					continue;
 				}
 				cols++;
@@ -1354,7 +1354,7 @@ public final class FieldTest {
 		for (int i = 0; i < n; i++) {
 			for (int k = 0; k < n; k++) {
 				int x = base.x0() + i, z = base.z0() + k;
-				if (Math.abs(x - h.getX()) <= 70 && Math.abs(z - h.getZ()) <= 70 && open[i * n + k] && base.snow().get(i * n + k) && !now2.snow().get(i * n + k)) {
+				if (Math.abs(x - h.getX()) <= R - 20 && Math.abs(z - h.getZ()) <= R - 20 && open[i * n + k] && base.snow().get(i * n + k) && !now2.snow().get(i * n + k)) {
 					bare++;
 					if (bare % 50 == 1) {
 						marks.add(new Mark(x, z, 0xFFFFFF));
