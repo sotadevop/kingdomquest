@@ -497,12 +497,12 @@ public final class Fealty {
 			return;
 		}
 		int t = c.t - c.ringAt;
-		if (c.rung < RINGS && t == c.rung * RING) {
+		if (c.rung < RINGS && t >= c.rung * RING) {
 			c.gathered[c.rung] = near(level, c, 8);
 			ring(level, c.bell);
 			c.rung++;
 		}
-		if (c.pole != null && c.raised <= POLE && t == RAISE + c.raised * RAISE_STEP) {
+		if (c.pole != null && c.raised <= POLE && t >= RAISE + c.raised * RAISE_STEP) {
 			raise(level, c, c.raised++);
 		}
 		if (t == PROCLAIM) {
