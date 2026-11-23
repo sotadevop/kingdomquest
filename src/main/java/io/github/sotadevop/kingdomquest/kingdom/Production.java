@@ -48,7 +48,7 @@ public final class Production {
 	enum Milestone {
 		NETHER("story/enter_the_nether"), FORTRESS("nether/find_fortress"), BASTION("nether/find_bastion"), END("story/enter_the_end"),
 		END_CITY("end/find_end_city"), DRAGON("end/kill_dragon"), DIAMONDS("story/mine_diamond"), SNIFFER("husbandry/obtain_sniffer_egg"),
-		ARMADILLO("husbandry/brush_armadillo"), TRIALS("adventure/minecraft_trials_edition");
+		TRIALS("adventure/minecraft_trials_edition");
 
 		final String advancement;
 
@@ -120,7 +120,7 @@ public final class Production {
 			producer("herder", Progression.FARM, 2, "lead", "husbandry/tame_an_animal", "husbandry/bred_all_animals",
 					out("beef", 192), out("porkchop", 192), out("chicken", 128), out("egg", 128), out("feather", 128), out("leather", 128),
 					rare("rabbit", 32, 4, NO), rare("rabbit_hide", 32, 4, NO), rare("rabbit_foot", 4, 4, NO),
-					rare("armadillo_scute", 8, 5, Milestone.ARMADILLO), rare("turtle_scute", 4, 5, NO)),
+					rare("armadillo_scute", 8, 5, NO), rare("turtle_scute", 4, 5, NO)),
 			producer("hunter", "tannery", 1, "arrow", "adventure/kill_a_mob", "adventure/kill_all_mobs",
 					out("rotten_flesh", 384), out("bone", 256), out("string", 192), out("gunpowder", 128), out("arrow", 256), out("spider_eye", 64),
 					rare("slime_ball", 32, 4, NO), rare("phantom_membrane", 8, 4, NO), rare("ender_pearl", 8, 4, Milestone.END),

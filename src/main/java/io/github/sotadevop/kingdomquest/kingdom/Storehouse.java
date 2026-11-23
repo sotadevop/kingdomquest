@@ -635,7 +635,8 @@ public final class Storehouse {
 		if (ledger == null || !(level.getBlockState(ledger).getBlock() instanceof LecternBlock)) {
 			problems.add("storehouse: no ledger lectern at " + ledger);
 		}
-		long now = level.getGameTime();
+		// a clock ten days on: a fresh test world has hardly any game time behind it
+		long now = level.getGameTime() + 10L * Production.DAY;
 		// one game day at level 1, then two more: output on game time, no limit while away
 		Stock fresh = stock(server, s);
 		fresh.lines.clear();
@@ -656,7 +657,7 @@ public final class Storehouse {
 		if (day1 <= 0) {
 			problems.add("production: nothing delivered in a game day");
 		}
-		if (day3 < Math.min(2 * day1, (long) capacity) && stock.used < capacity) {
+		if (day3 < 2 * day1 && stock.used < capacity) {
 			problems.add("production: 3 days gave " + day3 + " items, 1 day " + day1);
 		}
 		int fills = shown(level, s);
@@ -725,12 +726,14 @@ public final class Storehouse {
 		if (a != b || saved.lines().size() != back.lines().size()) {
 			problems.add("storehouse: save round trip " + a + " items in " + saved.lines().size() + " lines, back " + b + " in " + back.lines().size());
 		}
+		stock.last = level.getGameTime(); // back to the world's clock
 		stock.save(server, max);
 		updateFill(level, max, stock);
-		report.append("Production: level 1 made ").append(day1).append(" items in a game day, ").append(day3).append(" in three (store ")
-				.append(capacity).append(" stacks); level 5 with every milestone ").append(top).append(" items of ").append(kinds)
-				.append(" kinds a day. Storehouse goods shown: ").append(fills).append(" blocks; unloaded ").append(moved)
-				.append(" items into the chests.\n\n");
+		String line = "Production: level 1 made " + day1 + " items in a game day, " + day3 + " in three (store " + capacity
+				+ " stacks); level 5 with every milestone " + top + " items of " + kinds + " kinds a day. Storehouse goods shown: " + fills
+				+ " blocks; unloaded " + moved + " items into the chests.";
+		report.append(line).append("\n\n");
+		KingdomQuest.LOG.info("Field test storehouse: {} Problems: {}", line, problems);
 		return problems;
 	}
 }
