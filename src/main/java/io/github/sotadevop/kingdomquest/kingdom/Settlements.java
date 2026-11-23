@@ -51,8 +51,8 @@ public final class Settlements {
 			.initializer(List::of)
 			.buildAndRegister(Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "settlements"));
 
-	/** Minimum distance between two hearts. */
-	private static final int SPACING = 200;
+	/** Minimum distance between two hearts: two sites with their slopes never overlap (ring about 260 x 200, plan reach 62). */
+	private static final int SPACING = 400;
 	private static final int CONFIRM_TICKS = 200;
 	/** Replaced or removed builder blocks never drop items (banners, beds, torches popping off...). */
 	private static final int NO_DROPS = Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS;
@@ -1273,8 +1273,8 @@ public final class Settlements {
 					// the land beyond the plateau's flat band on this side: where the graded slope falls or climbs far, the
 					// slope is the side's defence
 					int side = ringSide(p.offset(), turn);
-					int[] out = side == SOUTH ? new int[] {0, 1} : side == 0 ? new int[] {0, -1} : side == 2 ? new int[] {-1, 0} : new int[] {1, 0};
-					BlockPos dir = Template.rotate(new BlockPos(out[0], 0, out[1]), turn);
+					int[] outward = side == SOUTH ? new int[] {0, 1} : side == 0 ? new int[] {0, -1} : side == 2 ? new int[] {-1, 0} : new int[] {1, 0};
+					BlockPos dir = Template.rotate(new BlockPos(outward[0], 0, outward[1]), turn);
 					int far = Grade.PAD + 6;
 					int beyond = plannedTop(level, s, here.getX() + dir.getX() * far, here.getZ() + dir.getZ() * far, mine);
 					int local = plannedTop(level, s, here.getX(), here.getZ(), mine);
