@@ -22,8 +22,8 @@ import java.util.UUID;
  */
 final class Drawbridge {
 	/** The gate opening in the base frame (heart at 7,0,10): x 6..8 at the wall's south side, z = 40. */
-	private static final int GX = 7;
-	private static final int GZ = 50;
+	private static final int GX = io.github.sotadevop.kingdomquest.building.Layout.gateX();
+	private static final int GZ = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
 	static final String STATE = "drawbridge";
 	private static final Map<UUID, int[]> MOVING = new HashMap<>(); // settlement -> {step, raising}
 

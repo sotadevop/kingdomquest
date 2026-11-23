@@ -61,8 +61,9 @@ final class Defense {
 		return m;
 	}
 
+	/** A column of the base frame of tools/buildings.py (already where it lies in the site). */
 	private static BlockPos at(Settlement s, int bx, int bz) {
-		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, 0, bz - 10), Rotation.values()[s.rotation()]));
+		return s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], bx, 0, bz));
 	}
 
 	/** A guard's fixed post: where he stands, and whether he is a tower guard (bow, never leaves). */
@@ -91,7 +92,8 @@ final class Defense {
 	static List<Post> posts(ServerLevel level, Settlement s) {
 		List<Post> out = new ArrayList<>();
 		int y = s.heart().getY();
-		for (int[] p : new int[][] {{4, 46}, {10, 46}, {4, 7}, {10, 7}}) {
+		int gz = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
+		for (int[] p : new int[][] {{4, gz - 4}, {10, gz - 4}, {4, 7}, {10, 7}}) {
 			BlockPos at = at(s, p[0], p[1]);
 			BlockPos stand = level.isLoaded(at) ? standAt(level, at.getX(), at.getZ(), y) : null;
 			if (stand != null) {
@@ -101,14 +103,9 @@ final class Defense {
 		int walls = s.level(Progression.WALLS);
 		if (walls >= 2 && !Progression.WALLS.equals(s.jobTrack())) {
 			java.util.Set<Long> built = new java.util.HashSet<>(s.built().getOrDefault(Progression.WALLS, List.of()));
-			int x0 = -56, x1 = 76, z0 = -46, z1 = 50, gx = 7; // the wall ring of tools/buildings.py (WALL, tower_spots)
-			List<int[]> spots = new ArrayList<>(List.of(new int[] {x0, z0}, new int[] {x1, z0}, new int[] {x0, z1}, new int[] {x1, z1},
-					new int[] {gx - 6, z1}, new int[] {gx + 6, z1}));
-			if (walls >= 4) {
-				int mz = (z0 + z1) / 2;
-				spots.addAll(List.of(new int[] {x0, mz}, new int[] {x1, mz}, new int[] {(x0 + x1) / 2, z0}, new int[] {x0 + 33, z0},
-						new int[] {x1 - 33, z0}, new int[] {x0 + 33, z1}, new int[] {x1 - 33, z1}));
-			}
+			int[] ring = io.github.sotadevop.kingdomquest.building.Layout.wall(); // the wall ring and towers of tools/buildings.py (WALL, tower_spots)
+			int x0 = ring[0], x1 = ring[1], z0 = ring[2], z1 = ring[3];
+			List<int[]> spots = io.github.sotadevop.kingdomquest.building.Layout.towers(walls);
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 			for (int[] spot : spots) {
 				// stone towers stand one block inside the ring line, wooden ones on it
@@ -189,7 +186,7 @@ final class Defense {
 			npc.setTier(lvl);
 		}
 		for (int i = patrols; i < want; i++) {
-			BlockPos yard = at(s, 16, 33);
+			BlockPos yard = io.github.sotadevop.kingdomquest.building.Layout.at(s.heart(), Rotation.values()[s.rotation()], Progression.BARRACKS, 16, 0, 33);
 			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, yard.getX(), yard.getZ());
 			spawnGuard(level, s, lvl, new BlockPos(yard.getX(), y, yard.getZ()), null);
 		}
@@ -256,7 +253,7 @@ final class Defense {
 			int castle = Math.max(1, s.level(Settlement.MAIN) - 8);
 			int size = 4 + 3 * castle;
 			for (int i = 0; i < size; i++) {
-				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, 94 + i / 7 * 2));
+				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, io.github.sotadevop.kingdomquest.building.Layout.gateZ() + 44 + i / 7 * 2));
 			}
 			if (owner != null) {
 				People.say(owner, "Warchief", "They're here! " + size + " raiders at the gate. Man the walls!");
@@ -270,7 +267,7 @@ final class Defense {
 			}
 			return;
 		}
-		BlockPos gate = at(s, 7, 56);
+		BlockPos gate = at(s, io.github.sotadevop.kingdomquest.building.Layout.gateX(), io.github.sotadevop.kingdomquest.building.Layout.gateZ() + 6);
 		Set<Long> built = new java.util.HashSet<>();
 		s.built().values().forEach(built::addAll);
 		for (Mob m : raiders) {

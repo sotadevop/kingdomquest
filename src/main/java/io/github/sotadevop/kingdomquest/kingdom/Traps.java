@@ -22,8 +22,8 @@ import java.util.Map;
  * volleys while their roof lever is on) and the secret door of the vault (cellar level 3, button; closes by itself).
  */
 final class Traps {
-	private static final int GX = 7;
-	private static final int GZ = 50;
+	private static final int GX = io.github.sotadevop.kingdomquest.building.Layout.gateX();
+	private static final int GZ = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
 	private record Timer(long until, List<BlockPos> blocks, BlockState restore) {
 	}
 

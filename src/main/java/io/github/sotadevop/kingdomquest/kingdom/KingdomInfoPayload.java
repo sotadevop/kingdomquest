@@ -13,11 +13,12 @@ import net.minecraft.resources.Identifier;
 import java.util.List;
 
 /**
- * Server -> client: everything the kingdom menu shows. {@code percent} is -1 when nothing is being built.
+ * Server -> client: everything the kingdom menu shows. {@code percent} is -1 when nothing is being built, {@code site} -1
+ * once the land of the whole site is shaped (else how much of it is).
  * One {@link Option} per track that has a next step.
  */
 public record KingdomInfoPayload(BlockPos heart, String name, int color, Identifier logo, String levelTitle, int percent,
-		List<Option> options, int bridge, int damaged, int changed) implements CustomPacketPayload {
+		List<Option> options, int bridge, int damaged, int changed, int site) implements CustomPacketPayload {
 	/**
 	 * One upgrade track as the menu shows it.
 	 *
@@ -62,7 +63,8 @@ public record KingdomInfoPayload(BlockPos heart, String name, int color, Identif
 			Option.CODEC.listOf().fieldOf("options").forGetter(KingdomInfoPayload::options),
 			Codec.INT.fieldOf("bridge").forGetter(KingdomInfoPayload::bridge),
 			Codec.INT.fieldOf("damaged").forGetter(KingdomInfoPayload::damaged),
-			Codec.INT.optionalFieldOf("changed", 0).forGetter(KingdomInfoPayload::changed)
+			Codec.INT.optionalFieldOf("changed", 0).forGetter(KingdomInfoPayload::changed),
+			Codec.INT.optionalFieldOf("site", -1).forGetter(KingdomInfoPayload::site)
 	).apply(i, KingdomInfoPayload::new));
 	public static final StreamCodec<RegistryFriendlyByteBuf, KingdomInfoPayload> CODEC = ByteBufCodecs.fromCodec(DATA).cast();
 

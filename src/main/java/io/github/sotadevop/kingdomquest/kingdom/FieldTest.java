@@ -2,6 +2,7 @@ package io.github.sotadevop.kingdomquest.kingdom;
 
 import com.mojang.datafixers.util.Pair;
 import io.github.sotadevop.kingdomquest.KingdomQuest;
+import io.github.sotadevop.kingdomquest.building.Layout;
 import io.github.sotadevop.kingdomquest.building.Template;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -100,7 +101,7 @@ public final class FieldTest {
 
 	private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-00000000f1e1");
 	/** Half size of the inspected square around the heart: the wall ring, the moat, the beach and a margin. */
-	static final int R = 100;
+	static final int R = 190;
 	private static final Set<String> IMAGE_STAGES = Set.of("tent_1", "hamlet_1", "village_1", "castle_1", "final");
 
 	private static final StringBuilder REPORT = new StringBuilder();
@@ -127,14 +128,20 @@ public final class FieldTest {
 		List<BlockPos> used = new ArrayList<>();
 		int bad = 0;
 		int i = 0;
+		// a site may ask for a look of the founding menu: "knoll@hill" (hill castle), "knoll@town" (hill town)
+		Map<String, Integer> looks = new HashMap<>();
+		for (String o : only) {
+			String[] p = o.split("@");
+			looks.put(p[0], p.length < 2 ? Grade.FLAT : p[1].startsWith("town") ? Grade.HILL_TOWN : p[1].startsWith("hill") ? Grade.HILL_CASTLE : Grade.FLAT);
+		}
 		for (Scenario sc : SCENARIOS) {
-			if (!only.isEmpty() && !only.contains(sc.name())) {
+			if (!only.isEmpty() && !looks.containsKey(sc.name())) {
 				i++;
 				continue;
 			}
 			long t0 = System.nanoTime();
 			try {
-				bad += runSite(server, level, sc, i, used, dir) ? 0 : 1;
+				bad += runSite(server, level, sc, i, used, dir, looks.getOrDefault(sc.name(), Grade.FLAT)) ? 0 : 1;
 			} catch (Throwable e) {
 				KingdomQuest.LOG.error("Field test {} crashed", sc.name(), e);
 				REPORT.append("## ").append(sc.name()).append("\n\nCRASH: ").append(e).append(" at ").append(top(e)).append("\n\n");
@@ -172,7 +179,7 @@ public final class FieldTest {
 
 	// ---- one site ----
 
-	private static boolean runSite(MinecraftServer server, ServerLevel level, Scenario sc, int index, List<BlockPos> used, Path dir) {
+	private static boolean runSite(MinecraftServer server, ServerLevel level, Scenario sc, int index, List<BlockPos> used, Path dir, int look) {
 		BlockPos origin = new BlockPos((index % 6) * 2500 - 6000, 80, (index / 6) * 2500 - 2500);
 		KingdomQuest.LOG.info("Field test {}: looking for a site", sc.name());
 		SHAPE_TURN = null;
@@ -185,8 +192,11 @@ public final class FieldTest {
 			return true;
 		}
 		used.add(heart);
-		int cx0 = (heart.getX() - R - 16) >> 4, cx1 = (heart.getX() + R + 16) >> 4;
-		int cz0 = (heart.getZ() - R - 16) >> 4, cz1 = (heart.getZ() + R + 16) >> 4;
+		// the inspected square, and the grading plan's reach with a chunk to spare (its sections are shaped when their
+		// neighbouring chunks are loaded)
+		int load = Math.max(R, Grade.PAD + Grade.MARGIN + Math.max(Math.max(-Layout.ring()[0], Layout.ring()[2]), Math.max(-Layout.ring()[1], Layout.ring()[3]))) + 32;
+		int cx0 = (heart.getX() - load) >> 4, cx1 = (heart.getX() + load) >> 4;
+		int cz0 = (heart.getZ() - load) >> 4, cz1 = (heart.getZ() + load) >> 4;
 		for (int cx = cx0; cx <= cx1; cx++) {
 			for (int cz = cz0; cz <= cz1; cz++) {
 				level.setChunkForced(cx, cz, true);
@@ -212,7 +222,7 @@ public final class FieldTest {
 					q0.add(new long[] {heart.above(dy).asLong()});
 				}
 			}
-			OUT_BEFORE = spread(level, heart, seen, q0, Set.of(), 400_000);
+			OUT_BEFORE = spread(level, heart, seen, q0, Set.of(), 1_600_000);
 		}
 		{
 			// what already hangs in the untouched land (cave ceilings over water, tree branches) is not the mod's doing
@@ -229,8 +239,12 @@ public final class FieldTest {
 		Settlement s = new Settlement(UUID.randomUUID(), OWNER, "FT " + sc.name(), 11, Identifier.withDefaultNamespace("stone_bricks"),
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
-		Settlements.prepareSite(level, heart, Template.get(s.job()), rot);
-		Settlements.put(server, s);
+		long tf = System.nanoTime();
+		s = Settlements.found(level, s, look, 0, true);
+		heart = s.heart();
+		REPORT.append("Founded as ").append(new String[] {"flat castle", "hill castle", "hill town"}[look]).append(": plateau at ")
+				.append(Grade.of(server, s).plateau - heart.getY() + 1).append(" (relative to the heart), site shaped in ")
+				.append((System.nanoTime() - tf) / 1_000_000).append(" ms.\n\n");
 		DOOR_GROUND.clear();
 		ROAD_LAST.clear();
 		List<String> problems = new ArrayList<>();
@@ -741,7 +755,7 @@ public final class FieldTest {
 			double best = -2;
 			for (Rotation r : Rotation.values()) {
 				BlockPos g = Template.rotate(new BlockPos(0, 0, 40), r);
-				double dot = (g.getX() * DIRS[bDir][0] + g.getZ() * DIRS[bDir][1]) / 40.0;
+				double dot = (g.getX() * DIRS[bDir][0] + g.getZ() * DIRS[bDir][1]) / 40.0; // only the direction matters
 				if (dot > best) {
 					best = dot;
 					SHAPE_TURN = r;
@@ -1055,9 +1069,9 @@ public final class FieldTest {
 
 		// 4 water
 		Rotation r = Rotation.values()[s.rotation()];
-		// the wall ring relative to the heart (tools/buildings.py WALL, as SitePlan uses it)
-		BlockPos ra = h.offset(Template.rotate(new BlockPos(-63, 0, -56), r));
-		BlockPos rb = h.offset(Template.rotate(new BlockPos(69, 0, 40), r));
+		// the wall ring relative to the heart (tools/buildings.py WALL, layout.json)
+		BlockPos ra = h.offset(Template.rotate(new BlockPos(Layout.ring()[0], 0, Layout.ring()[1]), r));
+		BlockPos rb = h.offset(Template.rotate(new BlockPos(Layout.ring()[2], 0, Layout.ring()[3]), r));
 		int wet = 0;
 		int wetMoat = 0;
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -1565,8 +1579,8 @@ public final class FieldTest {
 				}
 			}
 		}
-		w.out = spread(level, h, reach, queue, Set.of(), 400_000);
-		if (!w.out && reach.size() >= 400_000) {
+		w.out = spread(level, h, reach, queue, Set.of(), 1_600_000);
+		if (!w.out && reach.size() >= 1_600_000) {
 			sample(samples, "way out", "walk budget used up (" + reach.size() + " cells)");
 		}
 		if (!w.out) {
@@ -1580,7 +1594,7 @@ public final class FieldTest {
 					}
 				}
 			}
-			Set<Long> back = reverse(level, h, edge, 400_000);
+			Set<Long> back = reverse(level, h, edge, 1_600_000);
 			sample(samples, "way out", gap(level, s, reach, back));
 			// where the two walks end: is the gate reached from inside, its outside reached from the edge?
 			Rotation turn = Rotation.values()[s.rotation()];
@@ -1702,14 +1716,15 @@ public final class FieldTest {
 		BlockPos h = s.heart();
 		Rotation r = Rotation.values()[s.rotation()];
 		Map<String, BlockPos> centres = new LinkedHashMap<>();
-		centres.put("gate", h.offset(Template.rotate(new BlockPos(0, 0, 40), r)));
-		centres.put("corner", h.offset(Template.rotate(new BlockPos(-60, 0, -52), r)));
+		int[] ring = Layout.ring();
+		centres.put("gate", h.offset(Template.rotate(new BlockPos(0, 0, ring[3]), r)));
+		centres.put("corner", h.offset(Template.rotate(new BlockPos(ring[0] + 4, 0, ring[1] + 4), r)));
 		centres.put("square", h);
 		// the town's four quarters, for looking at the roads inside the walls as a whole (user, 2026-11-19)
-		centres.put("town_a", h.offset(Template.rotate(new BlockPos(-30, 0, -28), r)));
-		centres.put("town_b", h.offset(Template.rotate(new BlockPos(34, 0, -28), r)));
-		centres.put("town_c", h.offset(Template.rotate(new BlockPos(-30, 0, 20), r)));
-		centres.put("town_d", h.offset(Template.rotate(new BlockPos(34, 0, 20), r)));
+		centres.put("town_a", h.offset(Template.rotate(new BlockPos(ring[0] / 2, 0, ring[1] / 2), r)));
+		centres.put("town_b", h.offset(Template.rotate(new BlockPos(ring[2] / 2, 0, ring[1] / 2), r)));
+		centres.put("town_c", h.offset(Template.rotate(new BlockPos(ring[0] / 2, 0, ring[3] / 2), r)));
+		centres.put("town_d", h.offset(Template.rotate(new BlockPos(ring[2] / 2, 0, ring[3] / 2), r)));
 		if (RoadLink.WAY_OUT.containsKey(s.id())) {
 			centres.put("way_out", RoadLink.WAY_OUT.get(s.id()));
 		}

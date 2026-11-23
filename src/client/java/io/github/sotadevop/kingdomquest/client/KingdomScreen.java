@@ -221,6 +221,15 @@ public class KingdomScreen extends Screen {
 			g.text(this.font, Component.translatable("kingdomquest.menu.building", this.info.percent()), bx, this.top + 7, t.text(), false);
 			Ui.roundedFill(g, bx, this.top + 19, 110, 6, 3, t.panelDark());
 			Ui.roundedFill(g, bx, this.top + 19, Math.max(6, 110 * this.info.percent() / 100), 6, 3, t.done());
+		} else if (this.info.site() >= 0) {
+			// the land of the site is still being shaped: only near the lord, the rest follows when he comes closer
+			int bx = this.left + W - 8 - 110;
+			g.text(this.font, Component.translatable("kingdomquest.menu.site_short", this.info.site()), bx, this.top + 7, t.text(), false);
+			Ui.roundedFill(g, bx, this.top + 19, 110, 6, 3, t.panelDark());
+			Ui.roundedFill(g, bx, this.top + 19, Math.max(6, 110 * this.info.site() / 100), 6, 3, t.done());
+			if (mouseX >= bx && mouseX < bx + 110 && mouseY >= this.top + 5 && mouseY < this.top + 26) {
+				g.setTooltipForNextFrame(this.font, Component.translatable("kingdomquest.menu.site", this.info.site()), mouseX, mouseY);
+			}
 		}
 		List<KingdomInfoPayload.Option> cards = cards();
 		for (int i = 0; i < cards.size(); i++) {

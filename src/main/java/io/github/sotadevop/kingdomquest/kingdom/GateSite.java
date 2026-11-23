@@ -13,8 +13,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
  * plus water to bridge. Runs on the client (placement preview) and the server (founding) with the same result.
  */
 public final class GateSite {
-	/** Template z of the gate line; the approach starts beyond the moat. */
-	private static final int GATE_Z = 40;
+	/** Template z of the gate line (relative to the heart); the approach starts beyond the moat. */
+	private static final int GATE_Z = io.github.sotadevop.kingdomquest.building.Layout.gateZ() - io.github.sotadevop.kingdomquest.building.Layout.HZ;
 	private static final int[] OUT = {8, 12, 16, 20, 26, 32, 40};
 	private static final int[] ACROSS = {-6, 0, 6};
 	/** Above this on every side there is no gentle way in at all (a hollow 30 deep scores about 480, open plains under 20). */
