@@ -778,7 +778,7 @@ final class Grade {
 	}
 
 	/**
-	 * Every tick: the builders shape the sections near the lord (or any player), one section a tick, nearest first. Minecraft
+	 * Every other tick: the builders shape the section nearest to the lord (or any player), then plant one. Minecraft
 	 * only runs the land around a player, so the rest of the site follows when someone comes near.
 	 */
 	static void work(MinecraftServer server, Settlement s) {
@@ -792,8 +792,8 @@ final class Grade {
 				return;
 			}
 		}
-		if (g.complete()) {
-			return;
+		if (g.complete() || server.getTickCount() % 2 != 0) {
+			return; // a section every other tick: about 10 ms of work, the server keeps its pace
 		}
 		ServerLevel level = server.overworld();
 		List<ServerPlayer> players = level.players();
@@ -1132,9 +1132,9 @@ final class Grade {
 				if (wild && (material(ground) == 2 || kd == HILL) && r < (steepness(x, z) >= 2 ? 1 / 70.0 : 1 / 160.0)) {
 					boulder(level, at, ground, random, built);
 				} else if (wild && soil && r < woods) {
-					place(level, gen, random, at, true, s.heart());
-				} else if ((soil || sandy) && r < (kd == MADE ? 1 / 28.0 : 1 / 22.0)) {
-					place(level, gen, random, at, false, s.heart());
+					place(level, gen, random, at, true, s.heart(), false);
+				} else if ((soil || sandy) && r < (kd == MADE ? 1 / 90.0 : 1 / 36.0)) {
+					place(level, gen, random, at, false, s.heart(), kd == MADE);
 				}
 			}
 		}
@@ -1145,7 +1145,7 @@ final class Grade {
 	}
 
 	/** One of the biome's own vegetation features at {@code at}: a tree, or a patch of flowers, grass or bushes. */
-	private static void place(ServerLevel level, ChunkGenerator gen, RandomSource random, BlockPos at, boolean tree, BlockPos heart) {
+	private static void place(ServerLevel level, ChunkGenerator gen, RandomSource random, BlockPos at, boolean tree, BlockPos heart, boolean meadow) {
 		// the land's biome: a filled river or beach is grown over like the land around the site
 		Holder<net.minecraft.world.level.biome.Biome> biome = level.getBiome(at);
 		String b = biome.getRegisteredName();
@@ -1166,7 +1166,8 @@ final class Grade {
 			}
 			boolean isTree = isTree(h.value().feature(), 0) || name.contains("bamboo");
 			boolean common = name.contains("flower") || name.contains("grass") || name.contains("fern") || name.contains("dead_bush");
-			boolean ground = !isTree && (common || name.contains("bush") || name.contains("patch") || name.contains("berr"));
+			// inside the walls only grass and flowers: no leaf litter, pumpkins or berry bushes on the plots
+			boolean ground = !isTree && !name.contains("leaf_litter") && (common || !meadow && (name.contains("bush") || name.contains("patch") || name.contains("berr")));
 			if (tree ? isTree : ground) {
 				for (int w = tree || common ? 12 : 1; w > 0; w--) {
 					pick.add(h);

@@ -1303,6 +1303,7 @@ public final class Settlements {
 						boolean level0 = p.anchor().getX() == 0 && p.anchor().getZ() == 0;
 						int g = level0 ? trackLift(s, Progression.GATE) : ground.computeIfAbsent(col.asLong(), c -> plannedTop(level, s, col.getX(),
 								col.getZ(), Set.of()) + 1 - s.heart().getY());
+						g -= trackLift(s, Progression.GATE); // the gate's own blocks already stand at its level
 						if (Math.abs(g) > 16) {
 							continue; // a cliff: no ditch needed there
 						}
