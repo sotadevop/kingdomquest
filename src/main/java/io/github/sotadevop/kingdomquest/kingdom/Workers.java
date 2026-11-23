@@ -31,8 +31,8 @@ final class Workers {
 			new Spec("farm", 1, "Farmer", "iron_hoe", 26, 11, "The fields are growing well. The harvest goes to the storehouse."),
 			new Spec("farm", 2, "Shepherd", "shears", 39, 11, "The sheep are fat and happy. Wool, eggs and meat for the storehouse."),
 			new Spec("stables", 1, "Stable Hand", "lead", 47, 25, "The horses are brushed and fed, my lord."),
-			new Spec("apiary", 1, "Beekeeper", "glass_bottle", 52, 11, "Mind the bees! The honey is in the barrel."),
-			new Spec("smith", 1, "Blacksmith", "iron_ingot", -12, 9, "Iron in, steel out. Fresh ingots in the barrel."),
+			new Spec("apiary", 1, "Beekeeper", "glass_bottle", 52, 11, "Mind the bees! The honey goes to the storehouse."),
+			new Spec("smith", 1, "Blacksmith", "iron_ingot", -12, 9, "Iron in, steel out. Fresh ingots go to the storehouse."),
 			new Spec("wood", 1, "Lumberjack", "iron_axe", -29, 20, "Plenty of logs stacked and ready."),
 			new Spec("library", 1, "Librarian", "book", -28, 5, "Knowledge is power. More shelves, stronger enchantments."),
 			new Spec("brewery", 1, "Alchemist", "blaze_rod", -16, 25, "Healing draughts are brewing. Don't drink the green one."),
@@ -49,7 +49,7 @@ final class Workers {
 			new Spec("nether", 1, "Nether Trader", "gold_ingot", -43, 14, "The piglins drive a hard bargain, but gold speaks every language."),
 			new Spec(Progression.STOREHOUSE, 1, "Storekeeper", "writable_book", Storehouse.FROM_TEMPLATE, Storehouse.FROM_TEMPLATE,
 					"Everything that comes in is written in the ledger, my lord. It lies on the lectern by the door."),
-			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch is in the barrel on the pier."));
+			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch goes to the storehouse."));
 
 	/** Inside the houses (base frame): main house, then the three houses on the street. */
 	private static final int[][] HOMES = {{7, 1}, {-5, 26}, {19, 26}, {31, 26}};

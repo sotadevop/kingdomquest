@@ -4600,7 +4600,7 @@ def storehouse(style, level):
             continue
         out = 1 if side == x1 else -1
         zc = (z0 + z1) // 2
-        y = h + 2
+        y = h - 1 if style == "arid" else h + 2      # under the flat roof's edge in the desert, else out of the gable
         b.put(side + out, y, zc, w + "_fence")
         b.put(side + 2 * out, y, zc, w + "_fence")
         for yy in range(3, y):
