@@ -430,7 +430,7 @@ public class StorehouseScreen extends Screen {
 					break;
 				}
 				g.item(o.item(), ix, iy);
-				boolean open = o.perDay() > 0 || !o.on() && p.level() >= o.level() && o.reached();
+				boolean open = Math.max(1, p.level()) >= o.level() && o.reached(); // made at this level (unless switched off)
 				g.itemDecorations(this.font, o.item(), ix, iy, open && o.on() ? compact(o.perDay()) : "");
 				if (!open || !o.on()) {
 					g.nextStratum();
@@ -438,7 +438,7 @@ public class StorehouseScreen extends Screen {
 					if (!o.on()) {
 						g.text(this.font, "x", ix + 5, iy + 4, 0xFFFF5555, true);
 					} else {
-						g.text(this.font, String.valueOf(o.level()), ix + 5, iy + 4, 0xFFFFFFFF, true);
+						g.text(this.font, Math.max(1, p.level()) < o.level() ? String.valueOf(o.level()) : "!", ix + 5, iy + 4, 0xFFFFFFFF, true);
 					}
 				}
 				if (mouseX >= ix && mouseX < ix + 16 && mouseY >= iy && mouseY < iy + 16) {
@@ -509,7 +509,7 @@ public class StorehouseScreen extends Screen {
 				for (int k = 0; k < p.outs().size(); k++) {
 					int ix = this.left + 14 + k * 18;
 					StorePayload.Out o = p.outs().get(k);
-					if (mx >= ix && mx < ix + 16 && my >= iy && my < iy + 16 && p.level() >= o.level() && o.reached()) {
+					if (mx >= ix && mx < ix + 16 && my >= iy && my < iy + 16 && Math.max(1, p.level()) >= o.level() && o.reached()) {
 						send("toggle|" + p.id() + "|" + o.spec(), 0, 0);
 						return true;
 					}
