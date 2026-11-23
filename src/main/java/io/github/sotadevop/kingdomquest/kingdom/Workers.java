@@ -28,7 +28,7 @@ final class Workers {
 	static final List<Spec> SPECS = List.of(
 			new Spec("main", 4, "Steward", "writable_book", 9, 8, ""),
 			new Spec("main", 9, "Warchief", "iron_sword", 12, 44, ""),
-			new Spec("farm", 1, "Farmer", "iron_hoe", 26, 11, "The fields are growing well. The harvest goes into the barrel by the gate."),
+			new Spec("farm", 1, "Farmer", "iron_hoe", 26, 11, "The fields are growing well. The harvest goes to the storehouse."),
 			new Spec("farm", 2, "Shepherd", "shears", 39, 11, "The sheep are fat and happy. Wool, eggs and meat for the storehouse."),
 			new Spec("stables", 1, "Stable Hand", "lead", 47, 25, "The horses are brushed and fed, my lord."),
 			new Spec("apiary", 1, "Beekeeper", "glass_bottle", 52, 11, "Mind the bees! The honey is in the barrel."),
@@ -47,6 +47,8 @@ final class Workers {
 			new Spec("archaeology", 1, "Archaeologist", "brush", 63, 23, "Every sherd tells a story of the old world."),
 			new Spec("mine", 1, "Miner", "iron_pickaxe", 65, 11, "The deep galleries are rich today."),
 			new Spec("nether", 1, "Nether Trader", "gold_ingot", -43, 14, "The piglins drive a hard bargain, but gold speaks every language."),
+			new Spec(Progression.STOREHOUSE, 1, "Storekeeper", "writable_book", Storehouse.FROM_TEMPLATE, Storehouse.FROM_TEMPLATE,
+					"Everything that comes in is written in the ledger, my lord. It lies on the lectern by the door."),
 			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch is in the barrel on the pier."));
 
 	/** Inside the houses (base frame): main house, then the three houses on the street. */
@@ -62,6 +64,9 @@ final class Workers {
 	static BlockPos home(Settlement s, Spec spec) {
 		if (spec.track().equals(Progression.DOCK)) {
 			return Settlements.dockPoint(s, 0, 1, 6);
+		}
+		if (spec.track().equals(Progression.STOREHOUSE) && Storehouse.keeperPost(s) != null) {
+			return Storehouse.keeperPost(s);
 		}
 		int lift = Settlements.LIFTED.contains(spec.track()) ? s.level("lift_" + spec.track()) : 0;
 		return s.heart().offset(Template.rotate(new BlockPos(spec.x() - 7, lift, spec.z() - 10), Rotation.values()[s.rotation()]));

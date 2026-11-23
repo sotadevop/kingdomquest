@@ -305,6 +305,7 @@ public final class FieldTest {
 		check(level, s, base, "final", 0, problems, dir, sc.name(), destroyedBefore);
 		roadIntact(level, s, problems);
 		gateReport(level, s, base);
+		problems.addAll(Storehouse.fieldTest(level, Settlements.byHeart(server, heart), REPORT));
 		StringBuilder levels = new StringBuilder();
 		for (String track : Progression.ORDER) {
 			List<Progression.Step> steps = Progression.steps(track);

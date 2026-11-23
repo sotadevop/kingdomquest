@@ -2,69 +2,403 @@ package io.github.sotadevop.kingdomquest.kingdom;
 
 import io.github.sotadevop.kingdomquest.building.Template;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.Potion;
 import net.minecraft.world.item.alchemy.PotionContents;
 import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Buildings that produce goods put them into their storage container (the template's "storage" barrel).
- * Runs every {@link #INTERVAL} ticks while the settlement is loaded; a full container loses the overflow.
- * Main track from Hamlet II on: taxes into the barrel by the fire.
+ * The production system: every producing building has a worker whose output is worked out, not grown or killed.
+ * What each producer makes is one entry in {@link #PRODUCERS}; adding a producer is adding an entry.
+ * <ul>
+ * <li>Production levels 1-5 per producer (bought in the storehouse ledger): x1, x2, x4, x4 plus a rarer drop, x8 plus
+ * the rarest drop. Levels 4 and 5 need a quest (a vanilla advancement until StoryQuest has the Kingdom questline).</li>
+ * <li>Rare drops can also need a vanilla milestone of the lord (the Nether, the End, ...), remembered on the settlement.</li>
+ * <li>Output runs on game time with no limit: every round works out everything made since the last one, also after
+ * the lord was away for days. Only room limits it: a full store (or stock limit) makes that output wait, nothing is
+ * thrown away.</li>
+ * <li>Everything goes to the {@link Storehouse}; before one is built, into the building's own barrel.</li>
+ * </ul>
  */
 public final class Production {
-	/** 5 minutes. */
-	public static final int INTERVAL = 6000;
+	/** Every 30 seconds while the settlement is loaded; output is worked out from the game time since the last round. */
+	public static final int INTERVAL = 600;
+	static final int DAY = 24000;
+	public static final int MAX_LEVEL = 5;
+	private static final int[] MULTIPLIER = {0, 1, 2, 4, 4, 8};
 
-	private static final List<Item> SMITH_GEAR = List.of(Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
-			Items.IRON_SWORD, Items.IRON_PICKAXE, Items.IRON_AXE, Items.IRON_SHOVEL, Items.SHIELD, Items.BUCKET, Items.SHEARS);
+	/** Vanilla milestones that gate rare drops (the advancement the lord must have). */
+	enum Milestone {
+		NETHER("story/enter_the_nether"), FORTRESS("nether/find_fortress"), BASTION("nether/find_bastion"), END("story/enter_the_end"),
+		END_CITY("end/find_end_city"), DRAGON("end/kill_dragon"), DIAMONDS("story/mine_diamond"), SNIFFER("husbandry/obtain_sniffer_egg"),
+		ARMADILLO("husbandry/brush_armadillo"), TRIALS("adventure/minecraft_trials_edition");
+
+		final String advancement;
+
+		Milestone(String advancement) {
+			this.advancement = advancement;
+		}
+
+		String key() {
+			return "ms_" + name().toLowerCase();
+		}
+	}
+
+	/**
+	 * @param item      item id ("wheat"; "{wood}" is the style's wood, "potion:healing" a potion)
+	 * @param perDay    items per game day at production level 1 (multiplied by the level)
+	 * @param level     production level that unlocks it (4 = rarer drop, 5 = rarest)
+	 * @param milestone also needed before it is made, or null
+	 */
+	record Output(String item, double perDay, int level, Milestone milestone) {
+	}
+
+	/**
+	 * @param host      track of the building the worker works in, and the level it needs
+	 * @param levels    false: no production levels (taxes, treasury)
+	 * @param upgrade   item paid (with emeralds) for each production level
+	 * @param quest4    advancement needed for level 4 (the quest placeholder), quest5 for level 5
+	 */
+	record Producer(String id, String host, int hostLevel, boolean levels, String upgrade, String quest4, String quest5, List<Output> outputs) {
+	}
+
+	private static Output out(String item, double perDay) {
+		return new Output(item, perDay, 1, null);
+	}
+
+	private static Output rare(String item, double perDay, int level, Milestone milestone) {
+		return new Output(item, perDay, level, milestone);
+	}
+
+	private static Producer producer(String id, String host, int hostLevel, String upgrade, String quest4, String quest5, Output... outputs) {
+		return new Producer(id, host, hostLevel, true, upgrade, quest4, quest5, List.of(outputs));
+	}
+
+	private static List<Output> each(List<String> items, double perDay, int level, Milestone milestone) {
+		return items.stream().map(i -> new Output(i, perDay, level, milestone)).toList();
+	}
+
+	private static Producer with(Producer p, List<Output> more) {
+		List<Output> all = new ArrayList<>(p.outputs());
+		all.addAll(more);
+		return new Producer(p.id(), p.host(), p.hostLevel(), p.levels(), p.upgrade(), p.quest4(), p.quest5(), List.copyOf(all));
+	}
+
+	private static final Milestone NO = null;
+
+	/**
+	 * Who makes what. Level 1 of a raw-goods producer makes about a chest a game day. The hunter works from the
+	 * tannery until it gets its own lodge (production chains); a new producer is one more entry here.
+	 */
+	static final List<Producer> PRODUCERS = List.of(
+			producer("farmer", Progression.FARM, 1, "hay_block", "adventure/trade", "husbandry/plant_any_sniffer_seed",
+					out("wheat", 448), out("carrot", 256), out("potato", 256), out("beetroot", 128), out("wheat_seeds", 128),
+					out("beetroot_seeds", 64), out("pumpkin", 64), out("melon_slice", 128), out("sugar_cane", 128),
+					rare("sweet_berries", 32, 4, NO), rare("glow_berries", 16, 4, NO), rare("cocoa_beans", 16, 4, NO),
+					rare("nether_wart", 16, 4, Milestone.NETHER), rare("torchflower_seeds", 2, 5, Milestone.SNIFFER),
+					rare("pitcher_pod", 2, 5, Milestone.SNIFFER), rare("chorus_fruit", 8, 5, Milestone.END)),
+			producer("shepherd", Progression.FARM, 2, "lead", "husbandry/tame_an_animal", "husbandry/bred_all_animals",
+					out("white_wool", 384), out("mutton", 192), rare("light_gray_wool", 32, 4, NO), rare("gray_wool", 32, 4, NO),
+					rare("black_wool", 32, 4, NO), rare("brown_wool", 32, 4, NO), rare("pink_wool", 8, 5, NO)),
+			producer("herder", Progression.FARM, 2, "lead", "husbandry/tame_an_animal", "husbandry/bred_all_animals",
+					out("beef", 192), out("porkchop", 192), out("chicken", 128), out("egg", 128), out("feather", 128), out("leather", 128),
+					rare("rabbit", 32, 4, NO), rare("rabbit_hide", 32, 4, NO), rare("rabbit_foot", 4, 4, NO),
+					rare("armadillo_scute", 8, 5, Milestone.ARMADILLO), rare("turtle_scute", 4, 5, NO)),
+			producer("hunter", "tannery", 1, "arrow", "adventure/kill_a_mob", "adventure/kill_all_mobs",
+					out("rotten_flesh", 384), out("bone", 256), out("string", 192), out("gunpowder", 128), out("arrow", 256), out("spider_eye", 64),
+					rare("slime_ball", 32, 4, NO), rare("phantom_membrane", 8, 4, NO), rare("ender_pearl", 8, 4, Milestone.END),
+					rare("blaze_rod", 8, 4, Milestone.NETHER), rare("magma_cream", 8, 4, Milestone.NETHER),
+					rare("ghast_tear", 2, 5, Milestone.NETHER), rare("shulker_shell", 2, 5, Milestone.END_CITY),
+					rare("wither_skeleton_skull", 0.25, 5, Milestone.FORTRESS), rare("breeze_rod", 4, 5, Milestone.TRIALS)),
+			producer("tanner", "tannery", 1, "leather", "husbandry/breed_an_animal", "husbandry/bred_all_animals",
+					out("leather", 192), out("rabbit_hide", 64), rare("bundle", 1, 4, NO), rare("saddle", 0.5, 4, NO),
+					rare("leather_horse_armor", 1, 5, NO)),
+			producer("beekeeper", Progression.APIARY, 1, "honeycomb", "husbandry/safely_harvest_honey", "husbandry/silk_touch_nest",
+					out("honeycomb", 192), out("honey_bottle", 64), out("poppy", 32), out("dandelion", 32), rare("honey_block", 16, 4, NO),
+					rare("bee_nest", 0.5, 5, NO)),
+			producer("fisher", Progression.DOCK, 1, "string", "husbandry/tactical_fishing", "husbandry/axolotl_in_a_bucket",
+					out("cod", 384), out("salmon", 256), out("tropical_fish", 64), out("pufferfish", 32), out("ink_sac", 64), out("kelp", 192),
+					out("lily_pad", 32), rare("nautilus_shell", 2, 4, NO), rare("name_tag", 1, 4, NO), rare("saddle", 1, 4, NO),
+					rare("glow_ink_sac", 16, 4, NO), rare("prismarine_shard", 32, 5, NO), rare("prismarine_crystals", 16, 5, NO),
+					rare("wet_sponge", 0.5, 5, NO)),
+			producer("lumberjack", Progression.WOOD, 1, "iron_ingot", "story/upgrade_tools", "adventure/trade",
+					out("{wood}_log", 960), out("stick", 256), out("{wood}_sapling", 64), out("apple", 32), out("charcoal", 64),
+					rare("birch_log", 64, 4, NO), rare("cherry_log", 64, 4, NO), rare("dark_oak_log", 64, 4, NO),
+					rare("pale_oak_log", 32, 5, NO), rare("crimson_stem", 32, 5, Milestone.NETHER), rare("warped_stem", 32, 5, Milestone.NETHER)),
+			producer("miner", "mine", 1, "torch", "story/mine_diamond", "nether/obtain_ancient_debris",
+					out("cobblestone", 448), out("coal", 384), out("raw_iron", 128), out("raw_copper", 192), out("redstone", 128),
+					out("lapis_lazuli", 64), out("flint", 64), out("cobbled_deepslate", 192), rare("raw_gold", 64, 4, NO),
+					rare("amethyst_shard", 32, 4, NO), rare("emerald", 4, 4, NO), rare("obsidian", 16, 5, NO),
+					rare("diamond", 2, 5, Milestone.DIAMONDS)),
+			with(producer("smith", Progression.SMITH, 1, "iron_ingot", "story/mine_diamond", "end/kill_dragon",
+					out("iron_ingot", 64), out("iron_nugget", 128), out("gold_ingot", 16), rare("crossbow", 0.5, 4, NO),
+					rare("netherite_scrap", 0.5, 5, Milestone.NETHER), rare("elytra", 0.125, 5, Milestone.DRAGON)),
+					concat(each(List.of("iron_helmet", "iron_chestplate", "iron_leggings", "iron_boots", "iron_sword", "iron_pickaxe", "iron_axe",
+							"iron_shovel", "shield", "bucket", "shears"), 0.25, 1, NO),
+							each(List.of("diamond_sword", "diamond_pickaxe", "diamond_helmet", "diamond_chestplate", "diamond_leggings", "diamond_boots"),
+									0.125, 4, Milestone.DIAMONDS))),
+			with(producer("armorer", "armorer", 1, "iron_ingot", "story/mine_diamond", "nether/netherite_armor",
+					out("iron_ingot", 32), rare("netherite_upgrade_smithing_template", 0.25, 5, Milestone.BASTION)),
+					concat(each(List.of("chainmail_helmet", "chainmail_chestplate", "chainmail_leggings", "chainmail_boots"), 0.25, 1, NO),
+							each(List.of("coast_armor_trim_smithing_template", "dune_armor_trim_smithing_template", "wild_armor_trim_smithing_template",
+									"sentry_armor_trim_smithing_template", "vex_armor_trim_smithing_template", "tide_armor_trim_smithing_template",
+									"rib_armor_trim_smithing_template"), 0.25, 4, NO))),
+			producer("tinkerer", "workshop", 1, "copper_ingot", "husbandry/wax_on", "adventure/minecraft_trials_edition",
+					out("copper_ingot", 64), out("redstone", 64), rare("repeater", 4, 4, NO), rare("comparator", 2, 4, NO),
+					rare("trial_key", 1, 5, Milestone.TRIALS)),
+			with(producer("merchant", "market", 1, "emerald", "adventure/trade", "adventure/trade_at_world_height",
+					rare("name_tag", 1, 4, NO), rare("globe_banner_pattern", 0.25, 5, NO)),
+					concat(each(List.of("red_dye", "blue_dye", "yellow_dye", "green_dye", "white_dye", "black_dye"), 8, 1, NO),
+							each(List.of("oak_sapling", "birch_sapling", "cherry_sapling", "acacia_sapling", "spruce_sapling"), 2, 1, NO))),
+			producer("cartographer", "cartographer", 1, "paper", "story/follow_ender_eye", "end/find_end_city",
+					out("paper", 64), out("compass", 1), rare("map", 4, 4, NO), rare("spyglass", 0.5, 5, NO)),
+			with(producer("bard", "music", 1, "note_block", "adventure/play_jukebox_in_meadows", "nether/find_bastion",
+					out("note_block", 8), rare("jukebox", 1, 4, NO), rare("music_disc_pigstep", 0.125, 5, Milestone.BASTION)),
+					each(List.of("music_disc_13", "music_disc_cat", "music_disc_blocks", "music_disc_chirp", "music_disc_far", "music_disc_mall",
+							"music_disc_mellohi", "music_disc_stal", "music_disc_strad", "music_disc_ward", "music_disc_wait"), 0.05, 1, NO)),
+			with(producer("archaeologist", "archaeology", 1, "brush", "adventure/salvage_sherd", "husbandry/obtain_sniffer_egg",
+					out("brush", 0.5), rare("sniffer_egg", 0.125, 5, Milestone.SNIFFER)),
+					concat(each(List.of("archer_pottery_sherd", "arms_up_pottery_sherd", "prize_pottery_sherd", "skull_pottery_sherd"), 0.25, 1, NO),
+							each(List.of("heart_pottery_sherd", "howl_pottery_sherd", "miner_pottery_sherd"), 0.25, 4, NO))),
+			producer("librarian", Progression.LIBRARY, 1, "book", "story/enchant_item", "adventure/read_power_of_chiseled_bookshelf",
+					out("paper", 64), out("book", 32), out("lapis_lazuli", 32), rare("experience_bottle", 16, 4, NO),
+					rare("chiseled_bookshelf", 2, 5, NO)),
+			producer("alchemist", Progression.BREWERY, 1, "glass_bottle", "nether/brew_potion", "nether/all_potions",
+					out("potion:healing", 4), out("glass_bottle", 32), rare("potion:swiftness", 2, 4, NO), rare("potion:regeneration", 2, 4, NO),
+					rare("potion:strong_healing", 2, 5, Milestone.NETHER), rare("potion:fire_resistance", 2, 5, Milestone.NETHER)),
+			producer("innkeeper", "tavern", 1, "bread", "adventure/trade", "husbandry/balanced_diet",
+					out("bread", 64), out("cooked_cod", 32), out("pumpkin_pie", 16), rare("cake", 2, 4, NO), rare("golden_carrot", 16, 5, NO)),
+			producer("stable_hand", Progression.STABLES, 1, "hay_block", "husbandry/breed_an_animal", "story/mine_diamond",
+					out("leather", 32), out("wheat", 64), rare("golden_carrot", 16, 4, NO), rare("saddle", 1, 4, NO),
+					rare("diamond_horse_armor", 0.25, 5, Milestone.DIAMONDS)),
+			producer("nether_trader", Progression.NETHER, 1, "gold_ingot", "nether/distract_piglin", "nether/find_bastion",
+					out("quartz", 64), out("soul_sand", 32), out("obsidian", 16), out("ender_pearl", 4), rare("crying_obsidian", 16, 4, NO),
+					rare("potion:fire_resistance", 2, 4, NO), rare("ancient_debris", 0.5, 5, Milestone.BASTION)),
+			// no production levels: the lord's income
+			new Producer("taxes", Settlement.MAIN, 5, false, "", "", "", List.of(out("emerald", 8), out("cooked_beef", 12), out("bread", 12))),
+			new Producer("town_taxes", Settlement.MAIN, 8, false, "", "", "", List.of(out("emerald", 16), out("gold_ingot", 8))),
+			new Producer("treasury", Progression.CELLAR, 2, false, "", "", "", List.of(out("emerald", 8), out("gold_ingot", 8))));
+
+	private static List<Output> concat(List<Output> a, List<Output> b) {
+		List<Output> all = new ArrayList<>(a);
+		all.addAll(b);
+		return all;
+	}
+
+	private static final Map<String, Holder<Potion>> POTIONS = Map.of("healing", Potions.HEALING, "strong_healing", Potions.STRONG_HEALING,
+			"swiftness", Potions.SWIFTNESS, "regeneration", Potions.REGENERATION, "fire_resistance", Potions.FIRE_RESISTANCE);
 
 	private Production() {
 	}
 
+	/** Output multiplier of a production level. */
+	public static int multiplier(int level) {
+		return MULTIPLIER[Math.max(0, Math.min(MAX_LEVEL, level))];
+	}
+
+	static Producer producer(String id) {
+		return PRODUCERS.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
+	}
+
+	/** The producer works: its building stands at the level it needs. */
+	static boolean active(Settlement s, Producer p) {
+		return s.level(p.host()) >= p.hostLevel();
+	}
+
+	/** Production level 1-5 (1 for producers without levels). */
+	static int level(Settlement s, Producer p) {
+		return p.levels() ? Math.max(1, Math.min(MAX_LEVEL, s.level("prod_" + p.id()))) : 1;
+	}
+
+	static boolean unlocked(Settlement s, Producer p, Output o) {
+		return level(s, p) >= o.level() && (o.milestone() == null || s.level(o.milestone().key()) > 0);
+	}
+
+	/** Items a game day at the producer's current level (0 while locked). */
+	static double perDay(Settlement s, Producer p, Output o) {
+		return unlocked(s, p, o) ? o.perDay() * MULTIPLIER[level(s, p)] : 0;
+	}
+
+	static String woodOf(String style) {
+		return switch (style) {
+			case Style.FROZEN, Style.HIGHLAND -> "spruce";
+			case Style.ARID -> "acacia";
+			case Style.WILD -> "jungle";
+			default -> "oak";
+		};
+	}
+
+	/** The stack (count 1) an output stands for in this style; empty if the item doesn't exist. */
+	static ItemStack stack(String spec, String style) {
+		if (spec.startsWith("potion:")) {
+			Holder<Potion> potion = POTIONS.get(spec.substring(7));
+			return potion == null ? ItemStack.EMPTY : PotionContents.createItemStack(Items.POTION, potion);
+		}
+		Item item = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(spec.replace("{wood}", woodOf(style))));
+		return item == Items.AIR ? ItemStack.EMPTY : new ItemStack(item);
+	}
+
+	/** The key of one output of one producer: for the drop toggles and the fractions carried between rounds. */
+	static String key(Producer p, Output o) {
+		return p.id() + "|" + o.item();
+	}
+
 	static void run(ServerLevel level, Settlement s) {
-		if (!level.isLoaded(s.heart())) {
-			return;
-		}
-		Progression.Step gate = Progression.current(s, Progression.GATE);
-		if (gate != null && gate.level() >= 4 && !Progression.GATE.equals(s.jobTrack())) {
-			Template t = Template.get(s.style() + "/" + gate.building());
-			if (t != null) {
-				armTraps(level, s, t.placements(Settlements.dye(s.color()), Rotation.values()[s.rotation()]));
-			}
-		}
-		boolean any = false;
-		for (String track : Progression.ORDER) {
-			Progression.Step step = Progression.current(s, track);
-			if (step == null || track.equals(s.jobTrack())) {
-				continue;
-			}
-			List<ItemStack> goods = goods(track, step.level(), s.style(), level.getRandom());
-			Container box = goods.isEmpty() ? null : storage(level, s, s.style() + "/" + step.building());
-			if (box != null) {
-				goods.forEach(stack -> insert(box, stack));
-				box.setChanged();
-				any = true;
-			}
-		}
-		ServerPlayer owner = level.getServer().getPlayerList().getPlayer(s.owner());
-		if (any && owner != null && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 64 * 64) {
-			owner.sendOverlayMessage(Component.translatable("kingdomquest.production", s.name()));
+		if (level.isLoaded(s.heart())) {
+			produce(level, s, level.getGameTime());
 		}
 	}
+
+	/**
+	 * Works out everything the producers made since the last round (game time, no limit) and delivers it. Returns
+	 * the number of items delivered.
+	 */
+	static long produce(ServerLevel level, Settlement given, long now) {
+		MinecraftServer server = level.getServer();
+		Settlement s = milestones(server, Settlements.byHeart(server, given.heart()));
+		if (s == null) {
+			return 0;
+		}
+		if (server.getTickCount() % 6000 < INTERVAL) {
+			Progression.Step gate = Progression.current(s, Progression.GATE);
+			if (gate != null && gate.level() >= 4 && !Progression.GATE.equals(s.jobTrack())) {
+				Template t = Template.get(s.style() + "/" + gate.building());
+				if (t != null) {
+					armTraps(level, s, t.placements(Settlements.dye(s.color()), Rotation.values()[s.rotation()]));
+				}
+			}
+		}
+		Storehouse.Stock stock = Storehouse.stock(server, s);
+		long last = stock.last;
+		if (last <= 0 || now <= last) {
+			if (last <= 0) {
+				stock.last = now; // the first round only starts the clock
+				stock.save(server, s);
+			}
+			return 0;
+		}
+		long elapsed = now - last;
+		boolean stored = Storehouse.built(s);
+		int capacity = Storehouse.capacity(s);
+		long delivered = 0;
+		Map<String, Double> carry = new HashMap<>();
+		for (Producer p : PRODUCERS) {
+			if (!active(s, p)) {
+				continue;
+			}
+			Container barrel = stored ? null : barrel(level, s, p.host());
+			if (!stored && barrel == null) {
+				continue;
+			}
+			for (Output o : p.outputs()) {
+				String key = key(p, o);
+				ItemStack item = stack(o.item(), s.style());
+				if (item.isEmpty() || !unlocked(s, p, o) || stock.off.contains(key)) {
+					continue;
+				}
+				double amount = perDay(s, p, o) * elapsed / DAY + stock.carry.getOrDefault(key, 0.0);
+				long n = (long) Math.floor(amount);
+				long got = n <= 0 ? 0 : stored ? stock.add(item, n, capacity, true, now) : intoBarrel(barrel, item, n);
+				delivered += got;
+				if (got == n && amount - n > 1e-9) {
+					carry.put(key, amount - n); // a full store makes the output wait: no time is banked meanwhile
+				}
+			}
+			if (barrel != null) {
+				barrel.setChanged();
+			}
+		}
+		stock.carry.clear();
+		stock.carry.putAll(carry);
+		stock.last = now;
+		stock.save(server, s);
+		if (stored) {
+			Storehouse.updateFill(level, s, stock);
+		}
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		if (delivered > 0 && elapsed >= DAY / 2 && owner != null && owner.distanceToSqr(Vec3.atCenterOf(s.heart())) < 96 * 96) {
+			owner.sendOverlayMessage(Component.translatable("kingdomquest.production", s.name()));
+		}
+		return delivered;
+	}
+
+	/** Remembers on the settlement every rare-drop milestone the lord has reached (he must be online to check). */
+	static Settlement milestones(MinecraftServer server, Settlement s) {
+		if (s == null) {
+			return null;
+		}
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		if (owner == null) {
+			return s;
+		}
+		Settlement next = s;
+		for (Milestone m : Milestone.values()) {
+			if (next.level(m.key()) == 0) {
+				var holder = server.getAdvancements().get(Identifier.withDefaultNamespace(m.advancement));
+				if (holder != null && owner.getAdvancements().getOrStartProgress(holder).isDone()) {
+					next = next.withLevel(m.key(), 1);
+				}
+			}
+		}
+		if (next != s) {
+			Settlements.put(server, next);
+		}
+		return next;
+	}
+
+	// ---- production levels ----
+
+	/** The step to the next production level (costs and quest), or null at the top or without levels. */
+	static Progression.Step nextLevel(Settlement s, Producer p) {
+		int lvl = level(s, p);
+		if (!p.levels() || lvl >= MAX_LEVEL) {
+			return null;
+		}
+		int next = lvl + 1;
+		String quest = next == 4 ? p.quest4() : next == 5 ? p.quest5() : "";
+		Item material = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(p.upgrade()));
+		int count = Math.min(material.getDefaultMaxStackSize() * 2, 8 << (next - 1));
+		List<Progression.Cost> costs = List.of(
+				new Progression.Cost(p.upgrade().replace('_', ' '), count, st -> st.is(material)),
+				new Progression.Cost("emerald", 4 << (next - 1), st -> st.is(Items.EMERALD)));
+		return new Progression.Step("prod_" + p.id(), "", next, "kingdomquest.producer." + p.id(), 0,
+				quest.isEmpty() ? null : Identifier.withDefaultNamespace(quest), quest.isEmpty() ? null : advancementTitle(quest), costs);
+	}
+
+	/** Vanilla's own title of an advancement ("story/mine_diamond" -> its "Diamonds!" key). */
+	static String advancementTitle(String path) {
+		return "advancements." + path.replace('/', '.') + ".title";
+	}
+
+	/** Buys the next production level (server side, all checks here). */
+	static boolean upgrade(ServerPlayer player, Settlement s, Producer p) {
+		Progression.Step step = p == null || !active(s, p) ? null : nextLevel(s, p);
+		if (step == null || !Progression.requirementMet(player, step) || !Progression.canPay(player, step)) {
+			return false;
+		}
+		Progression.pay(player, step);
+		Settlements.put(player.level().getServer(), s.withLevel("prod_" + p.id(), step.level()));
+		return true;
+	}
+
+	// ---- containers ----
 
 	/** Fills every dispenser among the given placements with arrows (gate traps), up to a full stack each. */
 	static void armTraps(ServerLevel level, Settlement s, List<io.github.sotadevop.kingdomquest.building.Template.Placement> placements) {
@@ -83,210 +417,25 @@ public final class Production {
 		}
 	}
 
-	static List<ItemStack> goods(String track, int lvl, String style, RandomSource random) {
-		List<ItemStack> g = new ArrayList<>();
-		switch (track) {
-			case Settlement.MAIN -> {
-				if (lvl >= 5) { // taxes
-					g.add(new ItemStack(Items.EMERALD, lvl >= 6 ? 4 : 2));
-					g.add(new ItemStack(Items.COOKED_BEEF, 3));
-				}
-			}
-			case Progression.FARM -> {
-				g.add(new ItemStack(Items.WHEAT, 6));
-				g.add(new ItemStack(Items.CARROT, 3));
-				g.add(new ItemStack(Items.POTATO, 3));
-				if (lvl >= 2) { // pasture; meat comes cooked once the smokehouse stands
-					boolean smoked = lvl >= 3;
-					g.add(new ItemStack(Items.EGG, 3));
-					g.add(new ItemStack(item("white_wool"), 2));
-					g.add(new ItemStack(Items.LEATHER, 1));
-					g.add(new ItemStack(smoked ? Items.COOKED_BEEF : Items.BEEF, 2));
-					g.add(new ItemStack(smoked ? Items.COOKED_MUTTON : Items.MUTTON, 2));
-					g.add(new ItemStack(smoked ? Items.COOKED_CHICKEN : Items.CHICKEN, 1));
-				}
-				if (lvl >= 3) {
-					g.add(new ItemStack(Items.BREAD, 3));
-					g.add(new ItemStack(Items.BAKED_POTATO, 3));
-				}
-			}
-			case Progression.SMITH -> {
-				g.add(new ItemStack(Items.IRON_INGOT, 3));
-				g.add(new ItemStack(Items.IRON_NUGGET, 6));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.GOLD_INGOT, 1));
-					if (random.nextInt(3) == 0) {
-						g.add(new ItemStack(SMITH_GEAR.get(random.nextInt(SMITH_GEAR.size()))));
-					}
-				}
-				if (lvl >= 2 && random.nextInt(5) == 0) {
-					g.add(new ItemStack(Items.CROSSBOW));
-				}
-				if (lvl >= 3 && random.nextInt(4) == 0) {
-					g.add(new ItemStack(List.of(Items.DIAMOND_SWORD, Items.DIAMOND_PICKAXE, Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE,
-							Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS).get(random.nextInt(6))));
-				}
-				if (lvl >= 3) { // the citadel smith: elytra only after the dragon
-					if (random.nextInt(6) == 0) {
-						g.add(new ItemStack(Items.NETHERITE_SCRAP));
-					}
-					if (random.nextInt(24) == 0) {
-						g.add(new ItemStack(Items.ELYTRA));
-					}
-				}
-			}
-			case Progression.WOOD -> {
-				String wood = Style.FROZEN.equals(style) ? "spruce" : "oak";
-				g.add(new ItemStack(item(wood + "_log"), 16));
-				g.add(new ItemStack(Items.STICK, 8));
-				if (lvl >= 2) {
-					g.add(new ItemStack(item(wood + "_planks"), 32));
-					g.add(new ItemStack(Items.CHARCOAL, 4));
-				}
-			}
-			case Progression.APIARY -> {
-				g.add(new ItemStack(Items.HONEY_BOTTLE, 2));
-				g.add(new ItemStack(Items.HONEYCOMB, lvl >= 2 ? 4 : 2));
-			}
-			case "tavern" -> {
-				g.add(new ItemStack(Items.BREAD, 3));
-				g.add(new ItemStack(Items.COOKED_COD, 2));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.PUMPKIN_PIE, 2));
-				}
-			}
-			case "market" -> {
-				g.add(new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(
-						List.of("red_dye", "blue_dye", "yellow_dye", "green_dye", "white_dye", "black_dye").get(random.nextInt(6)))), 2));
-				g.add(new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(
-						List.of("oak_sapling", "birch_sapling", "cherry_sapling", "acacia_sapling", "spruce_sapling").get(random.nextInt(5))))));
-				if (lvl >= 2 && random.nextInt(4) == 0) {
-					g.add(new ItemStack(Items.NAME_TAG));
-				}
-			}
-			case "cartographer" -> {
-				g.add(new ItemStack(Items.PAPER, 4));
-				if (random.nextInt(3) == 0) {
-					g.add(new ItemStack(Items.COMPASS));
-				}
-				if (lvl >= 2) {
-					g.add(new ItemStack(item("map"), 2));
-				}
-			}
-			case "music" -> {
-				g.add(new ItemStack(Items.NOTE_BLOCK));
-				if (random.nextInt(lvl >= 2 ? 3 : 6) == 0) {
-					g.add(new ItemStack(item(List.of("music_disc_13", "music_disc_cat", "music_disc_blocks", "music_disc_chirp", "music_disc_far",
-							"music_disc_mall", "music_disc_mellohi", "music_disc_stal", "music_disc_strad", "music_disc_ward", "music_disc_wait")
-							.get(random.nextInt(11)))));
-				}
-			}
-			case "workshop" -> {
-				g.add(new ItemStack(Items.COPPER_INGOT, 4));
-				g.add(new ItemStack(Items.REDSTONE, 6));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.REPEATER, 2));
-					g.add(new ItemStack(Items.COMPARATOR));
-				}
-			}
-			case "armorer" -> {
-				g.add(new ItemStack(Items.IRON_INGOT, 2));
-				if (lvl >= 2 && random.nextInt(5) == 0) {
-					g.add(new ItemStack(item(List.of("coast_armor_trim_smithing_template", "dune_armor_trim_smithing_template",
-							"wild_armor_trim_smithing_template", "sentry_armor_trim_smithing_template", "vex_armor_trim_smithing_template",
-							"tide_armor_trim_smithing_template", "rib_armor_trim_smithing_template").get(random.nextInt(7)))));
-				}
-			}
-			case "tannery" -> {
-				g.add(new ItemStack(Items.LEATHER, 3));
-				g.add(new ItemStack(Items.RABBIT_HIDE, 2));
-				if (lvl >= 2 && random.nextInt(4) == 0) {
-					g.add(new ItemStack(item("bundle")));
-				}
-			}
-			case "archaeology" -> {
-				if (random.nextInt(3) == 0) {
-					g.add(new ItemStack(Items.BRUSH));
-				}
-				if (random.nextInt(lvl >= 2 ? 2 : 4) == 0) {
-					g.add(new ItemStack(item(List.of("archer_pottery_sherd", "arms_up_pottery_sherd", "prize_pottery_sherd", "skull_pottery_sherd",
-							"heart_pottery_sherd", "howl_pottery_sherd", "miner_pottery_sherd").get(random.nextInt(7)))));
-				}
-			}
-			case "mine" -> {
-				g.add(new ItemStack(Items.COAL, 6));
-				g.add(new ItemStack(Items.RAW_IRON, 3));
-				g.add(new ItemStack(Items.RAW_COPPER, 4));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.REDSTONE, 4));
-					g.add(new ItemStack(Items.LAPIS_LAZULI, 3));
-					g.add(new ItemStack(Items.RAW_GOLD, 1));
-					if (random.nextInt(10) == 0) {
-						g.add(new ItemStack(Items.DIAMOND));
-					}
-				}
-			}
-			case Progression.DOCK -> {
-				g.add(new ItemStack(Items.COD, 3));
-				g.add(new ItemStack(Items.SALMON, 2));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.TROPICAL_FISH, 1));
-					if (random.nextInt(6) == 0) {
-						g.add(new ItemStack(Items.NAUTILUS_SHELL));
-					}
-				}
-			}
-			case Progression.NETHER -> { // the piglin traders' barter
-				g.add(new ItemStack(Items.QUARTZ, 4));
-				g.add(new ItemStack(Items.SOUL_SAND, 2));
-				g.add(new ItemStack(Items.OBSIDIAN, 1));
-				if (random.nextInt(3) == 0) {
-					g.add(new ItemStack(Items.ENDER_PEARL, 2));
-				}
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.CRYING_OBSIDIAN, 1));
-					if (random.nextInt(4) == 0) {
-						g.add(PotionContents.createItemStack(Items.POTION, Potions.FIRE_RESISTANCE));
-					}
-				}
-			}
-			case Progression.CELLAR -> {
-				if (lvl >= 2) { // treasury
-					g.add(new ItemStack(Items.EMERALD, 2));
-					g.add(new ItemStack(Items.GOLD_INGOT, 2));
-				}
-			}
-			case Progression.LIBRARY -> {
-				g.add(new ItemStack(Items.PAPER, 6));
-				g.add(new ItemStack(Items.BOOK, 2));
-				g.add(new ItemStack(Items.LAPIS_LAZULI, 3));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.EXPERIENCE_BOTTLE, 4));
-				}
-			}
-			case Progression.BREWERY -> {
-				g.add(PotionContents.createItemStack(Items.POTION, Potions.HEALING));
-				g.add(PotionContents.createItemStack(Items.POTION, Potions.HEALING));
-				g.add(new ItemStack(Items.GLASS_BOTTLE, 3));
-				if (lvl >= 2) {
-					g.add(PotionContents.createItemStack(Items.POTION, Potions.SWIFTNESS));
-					g.add(PotionContents.createItemStack(Items.POTION, Potions.REGENERATION));
-				}
-			}
-			case Progression.STABLES -> {
-				g.add(new ItemStack(Items.LEATHER, 2));
-				g.add(new ItemStack(Items.WHEAT, 6));
-				if (lvl >= 2) {
-					g.add(new ItemStack(Items.GOLDEN_CARROT, 2));
-					if (random.nextInt(4) == 0) {
-						g.add(new ItemStack(Items.SADDLE));
-					}
-				}
-			}
-			default -> {
+	/** The barrel of the host building's current level (before there is a storehouse), or null. */
+	private static Container barrel(ServerLevel level, Settlement s, String host) {
+		Progression.Step step = Progression.current(s, host);
+		return step == null || host.equals(s.jobTrack()) ? null : storage(level, s, s.style() + "/" + step.building());
+	}
+
+	/** Puts up to n of the item into a container (only what fits); returns how many went in. */
+	private static long intoBarrel(Container box, ItemStack item, long n) {
+		long left = n;
+		while (left > 0) {
+			ItemStack part = item.copyWithCount((int) Math.min(left, item.getMaxStackSize()));
+			int before = part.getCount();
+			insert(box, part);
+			left -= before - part.getCount();
+			if (!part.isEmpty()) {
+				break;
 			}
 		}
-		return g;
+		return n - left;
 	}
 
 	/**
@@ -298,8 +447,8 @@ public final class Production {
 		int stores = 0;
 		for (String track : Progression.ORDER) {
 			Progression.Step step = Progression.current(s, track);
-			if (step == null || track.equals(Progression.CELLAR) || track.equals(s.jobTrack())) {
-				continue; // the cellar is the lord's own store
+			if (step == null || track.equals(Progression.CELLAR) || track.equals(Progression.STOREHOUSE) || track.equals(s.jobTrack())) {
+				continue; // the cellar is the lord's own store, the storehouse has its ledger
 			}
 			Container box = storage(level, s, s.style() + "/" + step.building());
 			if (box == null) {
@@ -324,10 +473,6 @@ public final class Production {
 			}
 		}
 		return new int[] {items, stores};
-	}
-
-	private static Item item(String id) {
-		return BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(id));
 	}
 
 	private static Container storage(ServerLevel level, Settlement s, String job) {
