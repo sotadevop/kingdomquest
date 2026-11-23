@@ -35,6 +35,7 @@ public final class Layout {
 	private static final Map<String, int[]> RESERVED = new HashMap<>();
 	private static final Map<Integer, List<int[]>> TOWERS = new HashMap<>();
 	private static final int[] KEEP;
+	private static final List<int[]> STREETS = new ArrayList<>();
 	private static final int[] SQUARE;
 
 	static {
@@ -56,6 +57,11 @@ public final class Layout {
 		readMap(j, "relocate", MOVES);
 		readMap(j, "plots", PLOTS);
 		readMap(j, "reserved", RESERVED);
+		if (j.has("streets")) {
+			for (JsonElement e : j.getAsJsonArray("streets")) {
+				STREETS.add(ints(e.getAsJsonArray(), null));
+			}
+		}
 		if (j.has("towers")) {
 			for (Map.Entry<String, JsonElement> e : j.getAsJsonObject("towers").entrySet()) {
 				List<int[]> list = new ArrayList<>();
@@ -152,6 +158,11 @@ public final class Layout {
 	/** The main building's own plot (castle, keep, motte), north of the square: x0, z0, x1, z1. */
 	public static int[] keep() {
 		return KEEP.clone();
+	}
+
+	/** The streets (not the lanes): x0, z0, x1, z1 and 0 for one running along z (north-south), 1 along x. */
+	public static List<int[]> streets() {
+		return List.copyOf(STREETS);
 	}
 
 	/** The town square: x0, z0, x1, z1. */

@@ -30,8 +30,10 @@ final class Drawbridge {
 	private Drawbridge() {
 	}
 
+	/** A spot of the gate (base frame), at the gate's own level (below the heart on a hill castle). */
 	private static BlockPos at(Settlement s, int bx, int by, int bz) {
-		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, by, bz - 10), Rotation.values()[s.rotation()]));
+		return s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], bx,
+				by + Settlements.trackLift(s, Progression.GATE), bz));
 	}
 
 	static BlockPos lever(Settlement s) {

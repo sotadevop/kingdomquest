@@ -429,6 +429,21 @@ final class Grade {
 				}
 				lifts.put(e.getKey(), lvl);
 			}
+			// a street is level across its width wherever it crosses a hill: it climbs along, never sideways
+			for (int[] st : Layout.streets()) {
+				boolean alongZ = st[4] == 0;
+				for (int a = alongZ ? st[1] : st[0]; a <= (alongZ ? st[3] : st[2]); a++) {
+					List<Integer> across = alongZ ? cells(clicked, r, x0, z0, w, d, st[0], a, st[2], a) : cells(clicked, r, x0, z0, w, d, a, st[1], a, st[3]);
+					if (across.isEmpty() || across.stream().anyMatch(c -> plot[c])) {
+						continue;
+					}
+					double v = across.stream().mapToDouble(c -> relief[c]).average().orElse(0);
+					for (int c : across) {
+						relief[c] = v;
+						fixed[c] = true;
+					}
+				}
+			}
 			smoothRelief(relief, fixed, w, d);
 		}
 		int heartLevel = look == HILL_CASTLE ? MOUND : 0;
@@ -446,7 +461,7 @@ final class Grade {
 			for (int k = 0; k < d; k++) {
 				int c = i * d + k, x = x0 + i, z = z0 + k;
 				// the flat band's edge wanders (never closer than the moat and the landing need) and its corners are round
-				double pad = PAD + 1 + noise(x, z, 14) * 3.5 + noise(x - 71, z + 29, 5) * 1.2;
+				double pad = PAD + 3 + noise(x, z, 16) * 6 + noise(x - 71, z + 29, 5) * 1.5;
 				double ox = Math.max(0, Math.max(ring[0] - x, x - ring[2])), oz = Math.max(0, Math.max(ring[1] - z, z - ring[3]));
 				boolean flat = Math.sqrt(ox * ox + oz * oz) <= Math.max(PAD - 3, pad);
 				double vary = 0.65 + 0.7 * (noise(x + 913, z - 377, 9) * 0.5 + 0.5);
@@ -478,6 +493,26 @@ final class Grade {
 				kind[c] = relief[c] >= 1 && !plot[c] ? HILL : t == g && surf[c] == g ? PLATEAU : MADE;
 			} else if (t != g) {
 				kind[c] = SLOPE;
+			}
+		}
+		// water outside keeps its banks: land beside it is never cut below its surface (or it floods the cut)
+		for (int i = 0; i < w; i++) {
+			for (int k = 0; k < d; k++) {
+				int c = i * d + k;
+				if (kind[c] != SLOPE || surf[c] > bed[c]) {
+					continue;
+				}
+				for (int a = -2; a <= 2; a++) {
+					for (int b = -2; b <= 2; b++) {
+						int ni = i + a, nk = k + b;
+						if (ni >= 0 && nk >= 0 && ni < w && nk < d) {
+							int nc = ni * d + nk;
+							if (surf[nc] > bed[nc] && kind[nc] != PLATEAU && kind[nc] != MADE && top[c] < surf[nc]) {
+								top[c] = (short) surf[nc];
+							}
+						}
+					}
+				}
 			}
 		}
 		// the plan's own edge always meets the land as it is: near it a slope eases back to the land, no step at the edge
@@ -661,6 +696,7 @@ final class Grade {
 		while (y > min) {
 			BlockState st = level.getBlockState(pos.set(x, y, z));
 			if (st.isAir() || st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES) || SiteWork.stalk(st) || st.canBeReplaced() && st.getFluidState().isEmpty()
+					|| st.is(Blocks.MANGROVE_ROOTS) || st.is(Blocks.MUDDY_MANGROVE_ROOTS)
 					|| st.is(Blocks.BROWN_MUSHROOM_BLOCK) || st.is(Blocks.RED_MUSHROOM_BLOCK) || st.is(Blocks.MUSHROOM_STEM) || st.is(Blocks.BEE_NEST)) {
 				y--;
 			} else {
@@ -932,6 +968,21 @@ final class Grade {
 				}
 			}
 			level.setBlock(pos.set(x, t, z), stack.get(0), SiteWork.FLAGS);
+		}
+		if (kd != SLOPE) {
+			// inside the walls one meadow of the site's own ground: no patches of mud, sand or gravel (rock stays rock)
+			BlockState here = level.getBlockState(pos.set(x, t, z));
+			if (!built.contains(pos.asLong()) && here.getBlock() != fallback.get(0).getBlock() && (here.is(Blocks.MUD) || here.is(BlockTags.SAND)
+					|| here.is(Blocks.GRAVEL) || here.is(Blocks.DIRT) || here.is(Blocks.COARSE_DIRT) || here.is(Blocks.ROOTED_DIRT) || here.is(Blocks.CLAY)
+					|| here.is(Blocks.PODZOL) && !fallback.get(0).is(Blocks.GRASS_BLOCK))) {
+				level.setBlock(pos, fallback.get(0), SiteWork.FLAGS);
+			}
+		} else if (wet && t >= water && t <= water + 1) {
+			// land made out of the water outside the walls meets it with a beach, as natural shores do
+			BlockState top0 = level.getBlockState(pos.set(x, t, z));
+			if (!built.contains(pos.asLong()) && (top0.is(Blocks.GRASS_BLOCK) || top0.is(Blocks.DIRT) || top0.is(Blocks.PODZOL) || top0.is(Blocks.SNOW_BLOCK))) {
+				level.setBlock(pos, (fallback.get(0).is(Blocks.SNOW_BLOCK) ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(), SiteWork.FLAGS);
+			}
 		}
 		if (t != g) {
 			// plants and snow that stood on the old ground

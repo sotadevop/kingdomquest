@@ -15,7 +15,8 @@ import java.util.UUID;
  * The street plan: the height of every road column of the settlement, read from the grading plan ({@link Grade}) of the
  * site, so streets lie on the land the site was shaped to and never change with later builds. On the flat plateau every
  * street is level with the square; on the hills of the hill looks a street climbs with the land: a single step gets a
- * slab on its lower block, a run that climbs a block with every block becomes a flight of stairs.
+ * slab on its lower block; where it climbs two or more over four blocks it becomes a stair street (the big stairs of the
+ * motte, the stepped alleys of a hill town).
  * Heights are kept in half blocks: a .5 is a slab on the road.
  */
 final class StreetPlan {
@@ -95,12 +96,14 @@ final class StreetPlan {
 			boolean up = false;
 			for (int[] d : four) {
 				Integer n = feet.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
-				Integer o = feet.get(BlockPos.asLong(x - d[0], 0, z - d[1]));
 				if (n != null && n == f + 1) {
 					up = true;
-					if (o != null && o == f - 1) {
-						steep.add(e.getKey()); // one block up with every block along the road: a flight of stairs
-					}
+				}
+				// climbing two or more over four blocks: a stair street (big stairs, stepped alleys up the hills)
+				Integer far = feet.get(BlockPos.asLong(x + 2 * d[0], 0, z + 2 * d[1]));
+				Integer back = feet.get(BlockPos.asLong(x - 2 * d[0], 0, z - 2 * d[1]));
+				if (far != null && back != null && far - back >= 2) {
+					steep.add(e.getKey());
 				}
 			}
 			half.put(e.getKey(), 2 * f + (up ? 1 : 0));

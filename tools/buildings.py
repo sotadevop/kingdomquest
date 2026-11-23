@@ -1246,6 +1246,7 @@ def plan_roads(style, jobs):
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     hard = set()      # cells a road may never use
+    plots_of = {}     # cells of the add-ons' buildings -> track (for the clear strip along the wide streets)
     eaves = set()     # cells under a roof's edge: fine for a road, not for a lamp post
     doors = []        # (track, level, door cell, (dx, dz))
     for j in jobs:
@@ -1260,6 +1261,8 @@ def plan_roads(style, jobs):
                 continue  # (air at ground level is a stairwell or a moat: no road there either)
             if -1 <= y <= 2:
                 hard.add((x, z))
+                if track not in ("main", "walls", "gate", "cellar"):
+                    plots_of.setdefault((x, z), track)
             elif 3 <= y <= 5:
                 eaves.add((x, z))
             if bn.endswith("_door") and props.get("half") == "lower" and y <= 3:
@@ -1292,6 +1295,11 @@ def plan_roads(style, jobs):
                     cells[(x, z)][1].append(name)  # shared by two streets: there as soon as either is
                     continue
                 cells[(x, z)] = ["core" if core else "side", [name]]
+    # the 3-block clear strip (user, 2026-11-23): no add-on stands within 3 blocks of a main or side street
+    wide = {c for c, v in cells.items() if any(n in WIDE_STREETS for n in v[1])}
+    for (x, z), track in plots_of.items():
+        if any((x + dx, z + dz) in wide for dx in range(-3, 4) for dz in range(-3, 4)):
+            raise SystemExit(f"{style}: {track} at {(x, z)} stands within 3 blocks of a main or side street")
     # a lane ends at a street; the square is only paved at the village tier, so lanes cross it to the street beyond
     trunk = {c for c, v in cells.items() if v[1] != ["plaza"]}
 
@@ -4719,7 +4727,10 @@ def write_layout(jobs, plots):
          "relocate": {k: list(v) for k, v in sorted(RELOCATE.items())},
          "plots": {k: v for k, v in sorted(union.items())}, "keep": keep,
          "square": [plaza[1][0], plaza[2][0], plaza[1][1], plaza[2][1]],
-         "reserved": {k: list(v) for k, v in RESERVED.items()}}
+         "reserved": {k: list(v) for k, v in RESERVED.items()},
+         # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
+         "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS
+                     if name != "plaza" and not name.startswith("place_")]}
     with open(os.path.join(OUT, "..", "layout.json"), "w") as f:
         json.dump(j, f, indent=1)
 
