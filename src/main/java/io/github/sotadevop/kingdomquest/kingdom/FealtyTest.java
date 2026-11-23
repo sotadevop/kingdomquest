@@ -82,6 +82,7 @@ final class FealtyTest {
 		for (int a = 0; a < 16 && heart == null; a++) {
 			int x = bell.getX() + (int) Math.round(Math.cos(a * Math.PI / 8) * 240);
 			int z = bell.getZ() + (int) Math.round(Math.sin(a * Math.PI / 8) * 240);
+			level.getChunk(x >> 4, z >> 4); // heights of chunks not loaded read as the bottom of the world
 			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
 			BlockState top = level.getBlockState(new BlockPos(x, y - 1, z));
 			if (top.getFluidState().isEmpty() && SiteWork.isGround(top)) {
