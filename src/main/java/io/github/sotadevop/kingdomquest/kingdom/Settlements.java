@@ -102,10 +102,12 @@ public final class Settlements {
 			}
 		});
 		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
+		ServerTickEvents.END_SERVER_TICK.register(SignalFires::tick);
 		People.register();
 		LordChanges.register();
 		Guild.register();
 		Companion.register();
+		Fealty.register();
 		PayloadTypeRegistry.clientboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(RealmPayload.TYPE, RealmPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);

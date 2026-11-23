@@ -40,7 +40,8 @@ public class RealmScreen extends Screen {
 			"kingdomquest.realm.animals"};
 	private static int lastTab;
 
-	private record Node(String key, String name, int x, int z, boolean settlement, int color) {
+	/** {@code liege}: for a village sworn in the Fealty Ceremony, the settlement it is sworn to, else null. */
+	private record Node(String key, String name, int x, int z, boolean settlement, int color, String liege, String about) {
 	}
 
 	/** A picture of the land from above: w x h cells of {@code step} blocks from (x0, z0), 16-bit colours, 0 = unknown. */
@@ -101,11 +102,14 @@ public class RealmScreen extends Screen {
 		for (JsonElement e : arr("settlements")) {
 			JsonObject o = e.getAsJsonObject();
 			this.nodes.add(new Node(o.get("id").getAsString(), o.get("name").getAsString(), o.get("x").getAsInt(), o.get("z").getAsInt(), true,
-					o.get("color").getAsInt()));
+					o.get("color").getAsInt(), null, null));
 		}
 		for (JsonElement e : arr("villages")) {
 			JsonObject o = e.getAsJsonObject();
-			this.nodes.add(new Node(o.get("key").getAsString(), o.get("name").getAsString(), o.get("x").getAsInt(), o.get("z").getAsInt(), false, -1));
+			String liege = o.has("liege") ? o.get("liege").getAsString() : null;
+			this.nodes.add(new Node(o.get("key").getAsString(), o.get("name").getAsString(), o.get("x").getAsInt(), o.get("z").getAsInt(), false,
+					liege == null ? -1 : o.get("color").getAsInt(), liege, liege == null ? null : Component.translatable("kingdomquest.realm.vassal_of", liege,
+							o.get("day").getAsInt(), o.get("villagers").getAsInt()).getString()));
 		}
 	}
 
@@ -619,11 +623,14 @@ public class RealmScreen extends Screen {
 			if (!inMap(x - 7, y - 7) || !inMap(x + 7, y + 7)) {
 				continue;
 			}
-			int c = n.settlement() ? 0xFF000000 | DyeColor.byId(n.color()).getTextureDiffuseColor() : 0xFF4CAF50;
+			int c = n.color() >= 0 ? 0xFF000000 | DyeColor.byId(n.color()).getTextureDiffuseColor() : 0xFF4CAF50;
 			boolean sel = n.key().equals(this.selA) || n.key().equals(this.selB);
 			Ui.roundedFill(g, x - 6, y - 6, 12, 12, 3, sel ? 0xFFFFFFFF : 0xFF101010);
 			Ui.roundedFill(g, x - 4, y - 4, 8, 8, n.settlement() ? 1 : 4, c);
-			label(g, n.name(), x + 9, y - 4, n.settlement() ? 0xFFFFFFFF : 0xFFC8E6C9);
+			if (n.liege() != null) { // a vassal village: its liege's color with a light heart, like a banner
+				g.fill(x - 1, y - 1, x + 1, y + 1, 0xFFF0E0B0);
+			}
+			label(g, n.name(), x + 9, y - 4, n.settlement() || n.liege() != null ? 0xFFFFFFFF : 0xFFC8E6C9);
 			if (Math.abs(mouseX - x) <= 6 && Math.abs(mouseY - y) <= 6) {
 				hover = n;
 			}
@@ -636,13 +643,45 @@ public class RealmScreen extends Screen {
 			label(g, Component.translatable("kingdomquest.realm.you").getString(), px + 6, py - 4, 0xFFFFFFFF);
 		}
 		scaleBar(g, f);
+		vassalList(g);
 		label(g, Component.translatable("kingdomquest.realm.map_hint").getString(), mapX0() + 3, mapY0() + mapH() - 11, 0xFFE0E0E0);
 		if (hover != null) {
-			g.setTooltipForNextFrame(this.font, Component.literal(hover.name() + "  (" + hover.x() + ", " + hover.z() + ")"), mouseX, mouseY);
+			List<Component> lines = new ArrayList<>(List.of(Component.literal(hover.name() + "  (" + hover.x() + ", " + hover.z() + ")")));
+			if (hover.about() != null) {
+				lines.add(Component.literal(hover.about()));
+			}
+			g.setComponentTooltipForNextFrame(this.font, lines, mouseX, mouseY);
 		} else if (inMap(mouseX, mouseY) && mouseX < mapX0() + mapW() - 18) {
 			int wx = (int) Math.floor(f[1] + (mouseX - (mapX0() + mapW() / 2.0)) / f[0]);
 			int wz = (int) Math.floor(f[2] + (mouseY - (mapY0() + mapH() / 2.0)) / f[0]);
 			g.setTooltipForNextFrame(this.font, Component.literal(wx + ", " + wz + "  (" + direction(wx, wz) + ")"), mouseX, mouseY);
+		}
+	}
+
+	/** The realm's vassal villages, listed in the map's top left corner. */
+	private void vassalList(GuiGraphicsExtractor g) {
+		List<Node> vassals = this.nodes.stream().filter(n -> n.liege() != null).toList();
+		if (vassals.isEmpty()) {
+			return;
+		}
+		int shown = Math.min(vassals.size(), Math.max(1, (mapH() - 40) / 10 - 1));
+		String head = Component.translatable("kingdomquest.realm.vassals", vassals.size()).getString();
+		int w = this.font.width(head);
+		for (Node n : vassals.subList(0, shown)) {
+			w = Math.max(w, this.font.width(n.name() + "  " + n.liege()) + 8);
+		}
+		w = Math.min(mapW() / 2, w + 8);
+		int x = mapX0() + 3;
+		int y = mapY0() + 3;
+		g.fill(x, y, x + w, y + 14 + shown * 10, 0xB0101010);
+		g.text(this.font, head, x + 4, y + 3, 0xFFF0C070, false);
+		for (int i = 0; i < shown; i++) {
+			Node n = vassals.get(i);
+			int ly = y + 14 + i * 10;
+			g.fill(x + 4, ly + 1, x + 9, ly + 7, 0xFF000000 | DyeColor.byId(n.color()).getTextureDiffuseColor());
+			String line = i == shown - 1 && shown < vassals.size() ? Component.translatable("kingdomquest.realm.more", vassals.size() - shown + 1).getString()
+					: n.name() + "  " + n.liege();
+			g.text(this.font, Text.fit(this.font, line, w - 16), x + 12, ly, 0xFFE0E0E0, false);
 		}
 	}
 
