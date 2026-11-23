@@ -307,6 +307,7 @@ public final class FieldTest {
 		check(level, s, base, "final", 0, problems, dir, sc.name(), destroyedBefore);
 		roadIntact(level, s, problems);
 		gateReport(level, s, base);
+		signalReport(level, s, problems);
 		StringBuilder levels = new StringBuilder();
 		for (String track : Progression.ORDER) {
 			List<Progression.Step> steps = Progression.steps(track);
@@ -911,6 +912,27 @@ public final class FieldTest {
 		String way = s.names().getOrDefault("wayout", "");
 		b.append(". Way-out road ").append(way.isEmpty() ? "none" : way.split(";").length + " blocks").append(".\n\n");
 		REPORT.append(b);
+	}
+
+	/** The signal fires: one on every tower top, they light and go out, and the tower guards still find their platforms. */
+	private static void signalReport(ServerLevel level, Settlement s, List<String> problems) {
+		int walls = s.level(Progression.WALLS);
+		int towers = walls >= 4 ? 13 : walls == 2 ? 6 : 0; // tower_spots in tools/buildings.py
+		List<BlockPos> fires = SignalFires.fires(s).stream().filter(p -> level.getBlockState(p).is(Blocks.CAMPFIRE)).toList();
+		int lit = 0;
+		int out = 0;
+		for (BlockPos p : fires) {
+			lit += SignalFires.set(level, p, true) && level.getBlockState(p).getValue(net.minecraft.world.level.block.CampfireBlock.LIT) ? 1 : 0;
+		}
+		for (BlockPos p : fires) {
+			out += SignalFires.set(level, p, false) ? 1 : 0;
+		}
+		long posts = Defense.posts(level, s).stream().filter(Defense.Post::tower).count();
+		REPORT.append("Signal fires: ").append(fires.size()).append(" on ").append(towers).append(" towers, lit ").append(lit).append(", put out ")
+				.append(out).append("; tower guard posts ").append(posts).append(".\n\n");
+		if (fires.size() < towers || lit < fires.size() || out < fires.size()) {
+			problems.add("signal fires: " + fires.size() + " of " + towers + " towers, " + lit + " lit, " + out + " put out");
+		}
 	}
 
 	// ---- measuring ----

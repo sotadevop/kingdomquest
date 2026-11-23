@@ -1076,6 +1076,16 @@ def inward(cx, cz):
 
 
 GATE_TOWER = 6  # the towers flanking the gate stand this far from its middle, clear of the gatehouse
+# signal fire on every tower top: an unlit campfire the mod lights in a chain when an attack comes (SignalFires.java
+# takes every unlit campfire of a template for one, so later watchtowers only need to place this too)
+SIGNAL_FIRE = ("campfire", dict(facing="south", lit="false", signal_fire="false", waterlogged="false"))
+
+
+def outer_corner(cx, cz, x0, z0, size=5):
+    """The corner of a tower (size x size from x0, z0) that looks out of the settlement, for its signal fire."""
+    dx, dz = inward(cx, cz)
+    return (x0 if dx > 0 else x0 + size - 1 if dx < 0 else x0 if cx < HEART[0] else x0 + size - 1,
+            z0 if dz > 0 else z0 + size - 1 if dz < 0 else z0 if cz < HEART[2] else z0 + size - 1)
 
 
 def tower_spots(level):
@@ -1149,6 +1159,8 @@ def walls(style, level):
             for y in range(0, 7):
                 b.put(lx, y, lz, "ladder", facing={(1, 0): "east", (-1, 0): "west", (0, 1): "south", (0, -1): "north"}[(fx, fz)], waterlogged="false")
             b.put(ccx, 9, ccz, "lantern", hanging="true", waterlogged="false")
+            fx, fz = outer_corner(cx, cz, tx, tz)
+            b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])   # on the roof, over its outer corner post
             b.anchor = None
     return b.b
 
@@ -1661,10 +1673,16 @@ def stone_walls(style, level):
             b.put(mx, 8, mz, "lantern", hanging="true", waterlogged="false")
             if style in TURRET_ROOF:        # a roof over the archers' platform in the region's way
                 blk, st, rise, up, fin = TURRET_ROOF[style]
+                fin = SIGNAL_FIRE                               # the signal fire crowns the roof in place of its finial
                 if cz == z1 and abs(cx - gx) <= GATE_TOWER:     # beside the gatehouse's roof: no eave
                     pyramid_roof(b, tx0, tz0, 5, 12, blk, st, rise, up, fin)
                 else:
                     pyramid_roof(b, tx0 - 1, tz0 - 1, 7, 12, blk, st, rise, up, fin)
+            else:                           # an open platform: the fire stands on the parapet in place of a merlon
+                fx, fz = outer_corner(cx, cz, tx0, tz0)
+                if (fx + fz) % 2:
+                    fx += 1 if fx == tx0 else -1
+                b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])
     b.anchor = None
     return b.b
 

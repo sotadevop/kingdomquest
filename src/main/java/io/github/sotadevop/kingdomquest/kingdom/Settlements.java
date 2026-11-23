@@ -102,6 +102,7 @@ public final class Settlements {
 			}
 		});
 		ServerTickEvents.END_SERVER_TICK.register(Drawbridge::tick);
+		ServerTickEvents.END_SERVER_TICK.register(SignalFires::tick);
 		People.register();
 		LordChanges.register();
 		Guild.register();
