@@ -59,6 +59,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	private long post;
 	/** Ticks a posted guard has been away from his post with nothing to fight. */
 	private int away;
+	/** A guard called by his lord's war horn: he follows the lord instead of keeping his post (not saved). */
+	private boolean rallied;
 	/** False for NPCs saved before skins were fixed per person: they get theirs on the first tick. */
 	private boolean skinFixed = true;
 	/** The look every guard has. */
@@ -71,6 +73,17 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 	public long post() {
 		return this.post;
+	}
+
+	public boolean rallied() {
+		return this.rallied;
+	}
+
+	/** The war horn calls a guard to his lord ({@code true}) or sends him back to his post or patrol. */
+	public void setRallied(boolean rallied) {
+		this.rallied = rallied;
+		this.away = 0;
+		this.getNavigation().stop();
 	}
 
 	/** Gives a guard a fixed post; set before {@link #setup}. Tower guards carry a bow and never leave. */
@@ -243,9 +256,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		if (role().equals("guard")) {
 			this.goalSelector.addGoal(3, new PostGoal(this));
 			this.goalSelector.addGoal(4, new PatrolGoal(this));
-		} else {
-			this.goalSelector.addGoal(3, new FollowLordGoal(this));
 		}
+		this.goalSelector.addGoal(3, new FollowLordGoal(this)); // guards only while the war horn has called them
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
 		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, net.minecraft.world.entity.Mob.class, 10, true, false,
 				(e, level) -> e instanceof Enemy));
@@ -263,7 +275,23 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 				this.setSkin(skinFor(this.getCustomName().getString()));
 			}
 		}
-		if (!this.level().isClientSide() && this.post != 0 && this.tickCount % 20 == 0) {
+		if (!this.level().isClientSide() && this.rallied && this.tickCount % 20 == 0) {
+			// a called guard runs to his lord; one who can't get there (a tower top) is put beside him after ten
+			// seconds. When the lord leaves the kingdom, his guards go back.
+			Player p = this.lord == null ? null : this.level().getPlayerByUUID(this.lord);
+			net.minecraft.core.BlockPos h = net.minecraft.core.BlockPos.of(this.home);
+			if (p == null || p.distanceToSqr(h.getX() + 0.5, h.getY(), h.getZ() + 0.5) > 100 * 100) {
+				this.setRallied(false);
+			} else {
+				this.away = this.getTarget() == null && p.distanceToSqr(this) > 8 * 8 ? this.away + 1 : 0;
+				if (this.away >= 10) {
+					this.away = 0;
+					this.getNavigation().stop();
+					this.snapTo(p.getX() + this.getRandom().nextInt(5) - 2, p.getY(), p.getZ() + this.getRandom().nextInt(5) - 2, this.getYRot(), 0);
+				}
+			}
+		}
+		if (!this.level().isClientSide() && this.post != 0 && !this.rallied && this.tickCount % 20 == 0) {
 			// a posted guard who is off his post with nobody to fight walks back; if he can't get there (a tower
 			// top, a closed gate) he is simply put back after ten seconds
 			net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.of(this.post);
@@ -409,7 +437,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 		@Override
 		public boolean canUse() {
-			if (this.npc.post == 0 || this.npc.getTarget() != null || !this.npc.getNavigation().isDone()) {
+			if (this.npc.post == 0 || this.npc.rallied || this.npc.getTarget() != null || !this.npc.getNavigation().isDone()) {
 				return false;
 			}
 			return off() > 2.5 * 2.5 || !this.npc.getMainHandItem().is(Items.BOW) && this.npc.getRandom().nextInt(200) == 0;
@@ -440,7 +468,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 
 		@Override
 		public boolean canUse() {
-			return this.npc.post == 0 && this.npc.home != 0 && this.npc.getTarget() == null && this.npc.getNavigation().isDone()
+			return this.npc.post == 0 && !this.npc.rallied && this.npc.home != 0 && this.npc.getTarget() == null && this.npc.getNavigation().isDone()
 					&& this.npc.getRandom().nextInt(60) == 0;
 		}
 
@@ -466,7 +494,8 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		@Override
 		public boolean canUse() {
 			Player p = lord();
-			return p != null && this.npc.getTarget() == null && p.distanceToSqr(this.npc) > 6 * 6;
+			boolean called = !this.npc.role().equals("guard") || this.npc.rallied;
+			return called && p != null && this.npc.getTarget() == null && p.distanceToSqr(this.npc) > 6 * 6;
 		}
 
 		@Override
@@ -475,7 +504,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 			if (p == null) {
 				return;
 			}
-			if (p.distanceToSqr(this.npc) > 24 * 24) {
+			if (p.distanceToSqr(this.npc) > 24 * 24 && !this.npc.role().equals("guard")) { // guards run the whole way
 				this.npc.teleportTo(p.getX() + 1, p.getY(), p.getZ() + 1);
 			} else {
 				this.npc.getNavigation().moveTo(p, 1.1);
