@@ -68,7 +68,7 @@ import java.util.UUID;
  * the village in the "Claim Fealty" menu and signs the charter on parchment. Then the villagers gather at the bell,
  * it rings three times, the kingdom banner is raised beside it, the new title is proclaimed and fireworks go up.
  * Afterwards the village has two kingdom guards at its bell, border stones where its streets run out into the land,
- * a road to the kingdom (built by {@link RoadLink}), and the Warchief warns when it is raided.
+ * a road to the kingdom (built by {@link RoadLink}), and the Warchief warns when it is raided (the signal fires light).
  * <p>
  * Kept on the liege settlement's {@code names}: "village|x,z" (the name, as for every known village), "vassal|x,z" =
  * "bx,by,bz|day|villagers|px,py,pz" (bell, day sworn, villagers at the signing, foot of the banner pole or empty),
@@ -135,7 +135,7 @@ public final class Fealty {
 	}
 
 	static final Map<Long, Ceremony> CEREMONIES = new HashMap<>();
-	/** Vassal villages ("x,z") under a vanilla raid right now, with the raid (signal fires can read this). */
+	/** Vassal villages ("x,z") under a vanilla raid right now, with the raid. */
 	static final Map<String, Raid> RAIDED = new HashMap<>();
 
 	/** A sworn village as stored on its liege. */
@@ -955,7 +955,10 @@ public final class Fealty {
 		level.sendParticles(ParticleTypes.POOF, g.getX(), g.getY() + 1, g.getZ(), 10, 0.4, 0.6, 0.4, 0.02);
 	}
 
-	/** Every 5 seconds: a vanilla raid on a vassal village brings the Warchief's warning, and its end his report. */
+	/**
+	 * Every 5 seconds: a vanilla raid on a vassal village brings the Warchief's warning and lights the realm's signal
+	 * fires; its end brings his report and puts them out.
+	 */
 	private static void raids(MinecraftServer server) {
 		ServerLevel level = server.overworld();
 		Set<String> seen = new HashSet<>();
@@ -966,18 +969,25 @@ public final class Fealty {
 			ServerPlayer lord = server.getPlayerList().getPlayer(v.liege().owner());
 			if (raid != null && !raid.isOver() && known == null) {
 				RAIDED.put(v.key(), raid);
+				SignalFires.alarm(server, v.liege().owner(), VASSAL + v.key(), v.name(), v.bell());
 				if (lord != null) {
 					People.say(lord, "Warchief", "My lord! Raiders are attacking " + v.name() + ", sworn to " + v.liege().name()
 							+ ". Our guards at the bell stand ready. Ride to their aid!");
 				}
 			} else if (known != null && (known.isOver() || raid == null)) {
 				RAIDED.remove(v.key());
+				SignalFires.allClear(VASSAL + v.key());
 				if (lord != null) {
 					People.say(lord, "Warchief", known.isVictory() ? "The raid on " + v.name() + " is beaten off. The village stands."
 							: "The raid on " + v.name() + " is over. They will need time to recover.");
 				}
 			}
 		}
-		RAIDED.keySet().retainAll(seen);
+		for (String gone : new ArrayList<>(RAIDED.keySet())) {
+			if (!seen.contains(gone)) {
+				RAIDED.remove(gone);
+				SignalFires.allClear(VASSAL + gone);
+			}
+		}
 	}
 }
