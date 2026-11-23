@@ -113,6 +113,7 @@ public final class Settlements {
 		PayloadTypeRegistry.serverboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(NamePayload.TYPE, (payload, context) -> rename(context.player(), payload));
 		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
+		Storehouse.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
@@ -369,7 +370,8 @@ public final class Settlements {
 
 	/** Add-ons that stand on their own terrace: at the height of the land where they are built. */
 	static final Set<String> LIFTED = Set.of("farm", "smith", "wood", "library", "brewery", "stables", "barracks", "guild", "apiary", "kennel",
-			"trophy", "tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether", "royal");
+			"trophy", "tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether", "royal",
+			Progression.STOREHOUSE);
 
 	/** The track (key of {@link Settlement#built()}) a job's building belongs to. */
 	static String builtTrack(String job) {
@@ -1367,10 +1369,15 @@ public final class Settlements {
 		return s != null;
 	}
 
+	/** Runs production as if a game day had passed. */
 	public static boolean testProduce(ServerPlayer player) {
 		Settlement s = nearestOwned(player);
 		if (s != null) {
-			Production.run(player.level().getServer().overworld(), s);
+			ServerLevel level = player.level().getServer().overworld();
+			Storehouse.Stock stock = Storehouse.stock(level.getServer(), s);
+			stock.last = (stock.last <= 0 ? level.getGameTime() : stock.last) - Production.DAY;
+			stock.save(level.getServer(), s);
+			Production.produce(level, s, level.getGameTime());
 		}
 		return s != null;
 	}

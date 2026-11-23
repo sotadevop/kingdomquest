@@ -275,9 +275,24 @@ public final class Progression {
 			new Step(NETHER, "nether_2", 2, "kingdomquest.trade.nether_2", 9, adv("nether/ride_strider"), "kingdomquest.req.strider",
 					List.of(item(Items.GOLD_BLOCK, 2), item(Items.RESPAWN_ANCHOR, 1))));
 
+	/** The storehouse: all production is delivered here (see {@link Storehouse}); its level sets how much it holds. */
+	public static final String STOREHOUSE = "storehouse";
+	public static final List<Step> STOREHOUSE_STEPS = List.of(
+			new Step(STOREHOUSE, "storehouse_1", 1, "kingdomquest.storehouse.storehouse_1", 4, adv("story/mine_stone"), "kingdomquest.req.mine_stone",
+					List.of(tag(ItemTags.LOGS, "logs", 48), item(Items.CHEST, 2), item(Items.LECTERN, 1))),
+			new Step(STOREHOUSE, "storehouse_2", 2, "kingdomquest.storehouse.storehouse_2", 5, adv("story/smelt_iron"), "kingdomquest.req.smelt_iron",
+					List.of(tag(ItemTags.PLANKS, "planks", 64), item(Items.CHEST, 2), item(Items.EMERALD, 4))),
+			new Step(STOREHOUSE, "storehouse_3", 3, "kingdomquest.storehouse.storehouse_3", 7, adv("adventure/trade"), "kingdomquest.req.trade",
+					List.of(tag(ItemTags.LOGS, "logs", 64), item(Items.LADDER, 8), item(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace("iron_chain")), 4), item(Items.EMERALD, 12))),
+			new Step(STOREHOUSE, "storehouse_4", 4, "kingdomquest.storehouse.storehouse_4", 8, adv("story/enchant_item"), "kingdomquest.req.enchant",
+					List.of(item(Items.STONE_BRICKS, 256), item(Items.CHEST, 2), item(Items.EMERALD, 24))),
+			new Step(STOREHOUSE, "storehouse_5", 5, "kingdomquest.storehouse.storehouse_5", 9, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+					List.of(item(Items.STONE_BRICKS, 128), item(Items.HAY_BLOCK, 16), item(Items.EMERALD, 48))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
-			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY);
+			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
+			STOREHOUSE);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -294,6 +309,7 @@ public final class Progression {
 			case ROYAL -> ROYAL_STEPS;
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
+			case STOREHOUSE -> STOREHOUSE_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}
