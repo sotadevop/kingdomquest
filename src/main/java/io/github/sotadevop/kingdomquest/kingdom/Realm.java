@@ -23,7 +23,7 @@ import java.util.UUID;
  * The realm: all of a lord's settlements under one empire name, the villages he knows and the roads between
  * them, plus a register of one settlement's buildings, people and animals. Names live in the settlements'
  * {@code names} map: "empire" (on each settlement), "village|x,z" (villages found from that settlement),
- * "link|target" (roads, see {@link RoadLink}).
+ * "link|target" (roads, see {@link RoadLink}), "vassal|x,z" (villages sworn in the Fealty Ceremony, see {@link Fealty}).
  */
 final class Realm {
 	private Realm() {
@@ -75,6 +75,13 @@ final class Realm {
 					v.addProperty("name", n.getValue());
 					v.addProperty("x", Integer.parseInt(p[0]));
 					v.addProperty("z", Integer.parseInt(p[1]));
+					String vassal = o.names().get(Fealty.VASSAL + p[0] + "," + p[1]);
+					if (vassal != null) { // sworn to this settlement in the Fealty Ceremony
+						v.addProperty("liege", o.name());
+						v.addProperty("color", o.color());
+						v.addProperty("day", Fealty.daySworn(vassal));
+						v.addProperty("villagers", Fealty.villagers(vassal));
+					}
 					villages.add(v);
 				} else if (n.getKey().startsWith(RoadLink.PREFIX)) {
 					JsonObject l = new JsonObject();

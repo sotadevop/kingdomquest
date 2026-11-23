@@ -22,6 +22,8 @@ public class KingdomQuestClient implements ClientModInitializer {
 				(payload, context) -> io.github.sotadevop.kingdomquest.client.RealmScreen.open(payload));
 		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.NamePayload.TYPE,
 				(payload, context) -> context.client().setScreenAndShow(new io.github.sotadevop.kingdomquest.client.NameScreen(payload)));
+		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.FealtyPayload.TYPE,
+				(payload, context) -> io.github.sotadevop.kingdomquest.client.FealtyScreen.open(payload));
 		ClientTickEvents.END_CLIENT_TICK.register(PlacementPreview::tick);
 	}
 }

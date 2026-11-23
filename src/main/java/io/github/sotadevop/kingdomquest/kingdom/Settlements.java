@@ -106,6 +106,7 @@ public final class Settlements {
 		LordChanges.register();
 		Guild.register();
 		Companion.register();
+		Fealty.register();
 		PayloadTypeRegistry.clientboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(RealmPayload.TYPE, RealmPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
