@@ -48,7 +48,8 @@ public class KingdomScreen extends Screen {
 			new Tab("kingdomquest.tab.trade", List.of("tavern", "market", "tannery")),
 			new Tab("kingdomquest.tab.culture", List.of("library", "brewery", "music")),
 			new Tab("kingdomquest.tab.discovery", List.of("cartographer", "archaeology", "nether")),
-			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy", "lair")));
+			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy", "lair")),
+			new Tab("kingdomquest.tab.stores", List.of("storehouse")));
 	private static int lastTab;
 
 	private final KingdomInfoPayload info;

@@ -1078,6 +1078,16 @@ def inward(cx, cz):
 
 
 GATE_TOWER = 6  # the towers flanking the gate stand this far from its middle, clear of the gatehouse
+# signal fire on every tower top: an unlit campfire the mod lights in a chain when an attack comes (SignalFires.java
+# takes every unlit campfire of a template for one, so later watchtowers only need to place this too)
+SIGNAL_FIRE = ("campfire", dict(facing="south", lit="false", signal_fire="false", waterlogged="false"))
+
+
+def outer_corner(cx, cz, x0, z0, size=5):
+    """The corner of a tower (size x size from x0, z0) that looks out of the settlement, for its signal fire."""
+    dx, dz = inward(cx, cz)
+    return (x0 if dx > 0 else x0 + size - 1 if dx < 0 else x0 if cx < HEART[0] else x0 + size - 1,
+            z0 if dz > 0 else z0 + size - 1 if dz < 0 else z0 if cz < HEART[2] else z0 + size - 1)
 
 
 def tower_spots(level):
@@ -1159,6 +1169,8 @@ def walls(style, level):
             for y in range(0, 7):
                 b.put(lx, y, lz, "ladder", facing={(1, 0): "east", (-1, 0): "west", (0, 1): "south", (0, -1): "north"}[(fx, fz)], waterlogged="false")
             b.put(ccx, 9, ccz, "lantern", hanging="true", waterlogged="false")
+            fx, fz = outer_corner(cx, cz, tx, tz)
+            b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])   # on the roof, over its outer corner post
             b.anchor = None
     return b.b
 
@@ -1724,10 +1736,16 @@ def stone_walls(style, level):
             b.put(mx, 8, mz, "lantern", hanging="true", waterlogged="false")
             if style in TURRET_ROOF:        # a roof over the archers' platform in the region's way
                 blk, st, rise, up, fin = TURRET_ROOF[style]
+                fin = SIGNAL_FIRE                               # the signal fire crowns the roof in place of its finial
                 if cz == z1 and abs(cx - gx) <= GATE_TOWER:     # beside the gatehouse's roof: no eave
                     pyramid_roof(b, tx0, tz0, 5, 12, blk, st, rise, up, fin)
                 else:
                     pyramid_roof(b, tx0 - 1, tz0 - 1, 7, 12, blk, st, rise, up, fin)
+            else:                           # an open platform: the fire stands on the parapet in place of a merlon
+                fx, fz = outer_corner(cx, cz, tx0, tz0)
+                if (fx + fz) % 2:
+                    fx += 1 if fx == tx0 else -1
+                b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])
     b.anchor = None
     return b.b
 
@@ -4585,6 +4603,135 @@ def shop(style, name, level):
     return b.b
 
 
+# ---- storehouse -------------------------------------------------------------------------------------------------
+# THE STOREHOUSE PLOT: x0, z0, x1, z1 of the hall, door in the middle of the north wall. This is the only place its
+# position is set: the mod finds the ledger, the chests, the storekeeper's post and the growing stock from the
+# template, so moving the hall means changing this line and running the generator.
+STOREHOUSE = (-34, 66, -18, 74)  # south-west of the main street, on the street of the southern quarter (2x layout)
+FILL_OF = {}  # blocks dict id -> [(x, y, z, name, props, stage)]: goods the mod shows as the stock grows (stage 1-8)
+
+
+def storehouse_ledger():
+    """The ledger on its lectern just inside the door (the template's "storage" point: right-click opens the stores)."""
+    x0, z0, x1, z1 = STOREHOUSE
+    return ((x0 + x1) // 2 - 2, 1, z0 + 2)
+
+
+def storehouse(style, level):
+    """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
+    (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
+    where the goods pile up as the stock grows (crates, sacks, hay bales and jars, shown by the mod in 8 stages).
+    1 timber hall with two chests; 2 shelves and four chests; 3 a loft over the west bay and a hoist on the east
+    gable; 4 a stone ground floor, a loft over both bays and more chests; 5 the full hall: banners, a second hoist,
+    a weighing corner with a scale beam and the most room for goods."""
+    b = B()
+    w = STYLES[style]["wood"]
+    shelf = SHELF_WOOD[style] + "_shelf"
+    x0, z0, x1, z1 = STOREHOUSE
+    cx = (x0 + x1) // 2
+    stone = level >= 4
+    h = 7 if stone else 6
+    peak = hall(b, style, x0, z0, x1, z1, h, "n", kind="stone" if stone else "timber", base_h=3 if stone else None,
+                windows_back=False, sign=True)
+    loft_y = 4 if stone else 3
+    wb = (x0 + 1, x0 + 4)                       # west bay x range
+    eb = (x1 - 4, x1 - 1)                       # east bay x range
+    # the clerk's corner: the ledger faces the aisle, a desk with a candle and an inkwell (a bottle) beside it
+    lx, ly, lz = storehouse_ledger()
+    b.put(lx, ly, lz, "lectern", facing="east", has_book="true", powered="false")
+    b.put(lx - 1, 1, lz, w + "_slab", type="top", waterlogged="false")
+    b.put(lx - 1, 2, lz, "candle", candles="1", lit="true", waterlogged="false")
+    b.put(lx - 1, 1, lz + 1, w + "_stairs", facing="west", **ST)          # the clerk's stool
+    # the real chests along the back wall (shelves with goods above them), more by the door from level 4
+    chests = [(cx - 1, z1 - 1, "north"), (cx + 1, z1 - 1, "north")]
+    if level >= 2:
+        chests += [(cx - 2, z1 - 1, "north"), (cx + 2, z1 - 1, "north")]
+    if level >= 4:
+        chests += [(cx + 1, z0 + 1, "south"), (cx + 2, z0 + 1, "south")]
+    for x, z, f in chests:
+        b.put(x, 1, z, "chest", facing=f, type="single", waterlogged="false")
+    if level >= 3:
+        b.put(cx, 1, z1 - 1, "barrel", facing="north", open="false")
+    if level >= 2:
+        for x in range(cx - 2, cx + 3):
+            b.put(x, 2, z1 - 1, shelf, facing="north")
+    # lanterns on the tie beams over the aisle (chains are added by hang_lanterns)
+    for x in (cx - 1, cx + 1):
+        b.put(x, h - 1, (z0 + z1) // 2, "lantern", hanging="true", waterlogged="false")
+    # lofts over the bays, reached by a ladder on the back wall, with a railing along the aisle
+    lofts = ([wb] if level >= 3 else []) + ([eb] if level >= 4 else [])
+    for (xa, xb) in lofts:
+        edge = xb + 1 if xa == wb[0] else xa - 1
+        for x in range(xa, xb + 1):
+            for z in range(z0 + 1, z1):
+                b.put(x, loft_y, z, w + "_planks")
+        for z in range(z0 + 1, z1 - 1):
+            b.put(edge, loft_y + 1, z, w + "_fence")
+        b.put(edge, loft_y, z0 + 1, w + "_planks")         # the railing's foot rests on a beam end
+        for y in range(1, loft_y + 1):
+            b.put(edge, y, z1 - 1, "ladder", facing="north", waterlogged="false")
+        b.put(edge, loft_y, z1 - 1, "ladder", facing="north", waterlogged="false")
+        for z in (z0 + 1, z1 - 1):                         # posts under the loft's open edge
+            for y in range(1, loft_y):
+                if (edge, y, z) not in b.b:
+                    b.put(edge, y, z, MAT[style]["log"], axis="y")
+    # hoists on the gables: a beam out of the gable with a chain and a hay bale on the hook
+    for side, on in ((x1, level >= 3), (x0, level >= 5)):
+        if not on:
+            continue
+        out = 1 if side == x1 else -1
+        zc = (z0 + z1) // 2
+        y = h - 1 if style == "arid" else h + 2      # under the flat roof's edge in the desert, else out of the gable
+        b.put(side + out, y, zc, w + "_fence")
+        b.put(side + 2 * out, y, zc, w + "_fence")
+        for yy in range(3, y):
+            b.put(side + 2 * out, yy, zc, "iron_chain", axis="y", waterlogged="false")
+        b.put(side + 2 * out, 2, zc, "hay_block", axis="y")
+        b.put(side + out, y - 1, zc, w + "_trapdoor", facing="west" if out > 0 else "east", half="top", open="true",
+              powered="false", waterlogged="false")       # the loading hatch under the beam
+    if level >= 5:
+        for x in (cx - 3, cx + 3):                          # the kingdom's banners on the front
+            wall_banner(b, x, 4, z0 - 1, "north")
+        # the weighing place in the aisle: a balance beam on a post, a pan (a weighted plate) on a crate at each end
+        sz = z1 - 3
+        b.put(cx, 1, sz, "polished_andesite")
+        b.put(cx, 2, sz, MAT[style]["log"], axis="y")
+        for dx in (-1, 0, 1):
+            b.put(cx + dx, 3, sz, w + "_fence")
+        for dx in (-1, 1):
+            b.put(cx + dx, 1, sz, "barrel", facing="up", open="false")
+            b.put(cx + dx, 2, sz, "heavy_weighted_pressure_plate", power="0")
+    # the goods: spots in the bays (and on the lofts), filled from the back wall forward, bottom layer first
+    goods = [("barrel", dict(facing="up", open="false")), ("hay_block", dict(axis="y")), ("white_wool", {}),
+             ("barrel", dict(facing="north", open="false")), ("brown_wool", {}), ("decorated_pot", dict(facing="north",
+             cracked="false", waterlogged="false")), ("barrel", dict(facing="east", open="false")), ("hay_block", dict(axis="x"))]
+    spots = []
+    floors = [(wb, 1), (eb, 1)] + [(bay, loft_y + 1) for bay in lofts]
+    for layer in (0, 1):
+        for (xa, xb), y in floors:
+            if layer == 1 and y > 1:
+                continue                                    # one layer on the lofts, under the roof beams
+            for z in range(z1 - 1, z0, -1):
+                for x in range(xa, xb + 1):
+                    edge = xb + 1 if xa == wb[0] else xa - 1
+                    near_edge = abs(x - edge) == 1
+                    if near_edge and (y > 1 or z >= z1 - 2):
+                        continue                            # keep the way to the ladder and along the railing free
+                    if layer == 1 and (near_edge or z <= z0 + 2):
+                        continue                            # the second layer stays back from the aisle and windows
+                    spots.append((x, y + layer, z))
+    keep = {1: 12, 2: 20, 3: 32, 4: 44, 5: 56}[level]
+    bottom = sorted((p for p in spots if p not in b.b and p[1] != 2), key=lambda p: (p[1] != 1, -p[2], p[0]))[:keep]
+    upper = [p for p in spots if p not in b.b and p[1] == 2 and (p[0], 1, p[2]) in bottom]
+    spots = bottom + upper[:keep - len(bottom)]
+    fill = []
+    for i, (x, y, z) in enumerate(spots):
+        name, props = goods[hsh(x, y, z) % len(goods)]
+        fill.append((x, y, z, "minecraft:" + name, {k: str(v) for k, v in props.items()}, 1 + i * 8 // len(spots)))
+    FILL_OF[id(b.b)] = fill
+    return b.b
+
+
 def dock(style, level):
     """Dock at the nearest water (placed by the mod on the shore): a pier into the water on log posts, a little
     roof at the end with a barrel; level 2 is longer, with a side jetty and a fish drying rack.
@@ -4777,6 +4924,17 @@ def to_json(blocks, seconds, storage=None, animals=None, pads=None):
     j = {"size": list(size), "heart": list(heart), "seconds": seconds, "palette": palette, "blocks": out}
     if storage:
         j["storage"] = list(storage)
+    fill = FILL_OF.get(id(orig))
+    if fill:
+        rows = []
+        for x, y, z, name, props in [f[:5] for f in fill]:
+            key = (name, tuple(sorted(props.items())))
+            if key not in names:
+                names[key] = len(palette)
+                palette.append({"Name": name, **({"Properties": props} if props else {})})
+        for x, y, z, name, props, stage in fill:
+            rows.append([x + shift[0], y, z + shift[1], names[(name, tuple(sorted(props.items())))], stage])
+        j["fill"] = rows
     if pads:
         j["pads"] = [[a + shift[0], c + shift[1], e + shift[0], g + shift[1]] for a, c, e, g in pads]
     if follow:
@@ -4865,6 +5023,8 @@ def build_jobs(styles=None):
         for level, secs in ((1, 150), (2, 150), (3, 180)):
             jobs.append((style, f"smith_{level}", smithy(style, level), secs, SMITH_STORE, None))
             jobs.append((style, f"wood_{level}", woodcutter(style, level), secs, WOOD_STORE, None))
+        for level in (1, 2, 3, 4, 5):
+            jobs.append((style, f"storehouse_{level}", storehouse(style, level), 180 + 60 * level, storehouse_ledger(), None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:

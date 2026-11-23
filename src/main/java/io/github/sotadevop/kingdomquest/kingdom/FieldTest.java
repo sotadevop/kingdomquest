@@ -97,7 +97,9 @@ public final class FieldTest {
 			new Scenario("cliff_away", Set.of("badlands", "wooded_badlands", "eroded_badlands", "savanna_plateau", "savanna"), "shape"),
 			new Scenario("cliff_toward", Set.of("windswept_hills", "stony_peaks", "meadow", "windswept_savanna"), "shape"),
 			new Scenario("mesa", Set.of("wooded_badlands", "badlands", "savanna_plateau"), "shape"),
-			new Scenario("rolling", Set.of("dark_forest", "old_growth_birch_forest", "forest", "savanna", "sparse_jungle"), "shape"));
+			new Scenario("rolling", Set.of("dark_forest", "old_growth_birch_forest", "forest", "savanna", "sparse_jungle"), "shape"),
+			// the Fealty Ceremony at a real village's bell (see FealtyTest); CI runs it when named: [fieldtest fealty]
+			new Scenario("fealty", Set.of(), "village"));
 
 	private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-00000000f1e1");
 	/** Half size of the inspected square around the heart: the wall ring, the moat, the beach and a margin. */
@@ -141,7 +143,8 @@ public final class FieldTest {
 			}
 			long t0 = System.nanoTime();
 			try {
-				bad += runSite(server, level, sc, i, used, dir, looks.getOrDefault(sc.name(), Grade.FLAT)) ? 0 : 1;
+				bad += ("village".equals(sc.kind()) ? FealtyTest.run(server, REPORT, SUMMARY, dir)
+						: runSite(server, level, sc, i, used, dir, looks.getOrDefault(sc.name(), Grade.FLAT))) ? 0 : 1;
 			} catch (Throwable e) {
 				KingdomQuest.LOG.error("Field test {} crashed", sc.name(), e);
 				REPORT.append("## ").append(sc.name()).append("\n\nCRASH: ").append(e).append(" at ").append(top(e)).append("\n\n");
@@ -319,6 +322,8 @@ public final class FieldTest {
 		check(level, s, base, "final", 0, problems, dir, sc.name(), destroyedBefore);
 		roadIntact(level, s, problems);
 		gateReport(level, s, base);
+		problems.addAll(Storehouse.fieldTest(level, Settlements.byHeart(server, heart), REPORT));
+		signalReport(level, s, problems);
 		StringBuilder levels = new StringBuilder();
 		for (String track : Progression.ORDER) {
 			List<Progression.Step> steps = Progression.steps(track);
@@ -923,6 +928,27 @@ public final class FieldTest {
 		String way = s.names().getOrDefault("wayout", "");
 		b.append(". Way-out road ").append(way.isEmpty() ? "none" : way.split(";").length + " blocks").append(".\n\n");
 		REPORT.append(b);
+	}
+
+	/** The signal fires: one on every tower top, they light and go out, and the tower guards still find their platforms. */
+	private static void signalReport(ServerLevel level, Settlement s, List<String> problems) {
+		int walls = s.level(Progression.WALLS);
+		int towers = walls >= 4 ? 13 : walls == 2 ? 6 : 0; // tower_spots in tools/buildings.py
+		List<BlockPos> fires = SignalFires.fires(s).stream().filter(p -> level.getBlockState(p).is(Blocks.CAMPFIRE)).toList();
+		int lit = 0;
+		int out = 0;
+		for (BlockPos p : fires) {
+			lit += SignalFires.set(level, p, true) && level.getBlockState(p).getValue(net.minecraft.world.level.block.CampfireBlock.LIT) ? 1 : 0;
+		}
+		for (BlockPos p : fires) {
+			out += SignalFires.set(level, p, false) ? 1 : 0;
+		}
+		long posts = Defense.posts(level, s).stream().filter(Defense.Post::tower).count();
+		REPORT.append("Signal fires: ").append(fires.size()).append(" on ").append(towers).append(" towers, lit ").append(lit).append(", put out ")
+				.append(out).append("; tower guard posts ").append(posts).append(".\n\n");
+		if (fires.size() < towers || lit < fires.size() || out < fires.size()) {
+			problems.add("signal fires: " + fires.size() + " of " + towers + " towers, " + lit + " lit, " + out + " put out");
+		}
 	}
 
 	// ---- measuring ----

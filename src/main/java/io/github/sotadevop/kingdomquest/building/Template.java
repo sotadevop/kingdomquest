@@ -64,6 +64,10 @@ public final class Template {
 	public record Animal(Identifier type, BlockPos pos) {
 	}
 
+	/** Goods the storehouse shows as its stock grows: a block and the stage (1-8) from which it stands there. */
+	public final List<Entry> fill;
+	public final int[] fillStages;
+
 	private Template(String id, JsonObject json) {
 		this.id = id;
 		this.seconds = json.get("seconds").getAsInt();
@@ -128,6 +132,19 @@ public final class Template {
 			}
 		}
 		this.animals = List.copyOf(animals);
+		List<Entry> fill = new ArrayList<>();
+		JsonArray fl = json.getAsJsonArray("fill");
+		this.fillStages = new int[fl == null ? 0 : fl.size()];
+		if (fl != null) {
+			for (JsonElement e : fl) {
+				JsonArray a = e.getAsJsonArray();
+				int i = a.get(3).getAsInt();
+				this.fillStages[fill.size()] = a.get(4).getAsInt();
+				fill.add(new Entry(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt(), names.get(i), props.get(i), -1,
+						a.get(0).getAsInt(), a.get(2).getAsInt()));
+			}
+		}
+		this.fill = List.copyOf(fill);
 	}
 
 	/** Loads "style/name" from the mod jar (kingdomquest/buildings/style/name.json); null if missing. */
@@ -156,6 +173,17 @@ public final class Template {
 			BlockPos rel = rotate(new BlockPos(e.x - this.heart.getX(), e.y - this.heart.getY(), e.z - this.heart.getZ()), rotation);
 			BlockPos anchor = rotate(new BlockPos(e.ax() - this.heart.getX(), 0, e.az() - this.heart.getZ()), rotation);
 			out.add(new Placement(rel, state.rotate(rotation), e.segment(), anchor));
+		}
+		return out;
+	}
+
+	/** The fill blocks (see {@link #fill}) ready to place, in the same order as {@link #fillStages}; unknown blocks are null. */
+	public List<Placement> fillPlacements(Rotation rotation) {
+		List<Placement> out = new ArrayList<>();
+		for (Entry e : this.fill) {
+			BlockState state = state(e, "white", null);
+			BlockPos rel = rotate(new BlockPos(e.x - this.heart.getX(), e.y - this.heart.getY(), e.z - this.heart.getZ()), rotation);
+			out.add(state == null ? null : new Placement(rel, state.rotate(rotation), -1, rel));
 		}
 		return out;
 	}
@@ -230,7 +258,7 @@ public final class Template {
 				errors.add("missing template " + id);
 				continue;
 			}
-			for (Entry e : t.entries) {
+			for (Entry e : java.util.stream.Stream.concat(t.entries.stream(), t.fill.stream()).toList()) {
 				int before = errors.size();
 				state(e, "blue", errors);
 				for (int i = before; i < errors.size(); i++) {
