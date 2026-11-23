@@ -112,11 +112,14 @@ final class FealtyTest {
 		if (villagers == 0) {
 			problems.add("no villagers counted");
 		}
+		List<net.minecraft.world.entity.npc.villager.Villager> people = Fealty.villagers(level, village);
+		StringBuilder before = new StringBuilder();
+		people.forEach(v -> before.append(Math.round(Math.sqrt(v.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(bell))))).append(' '));
 		long t0 = System.nanoTime();
 		Fealty.Ceremony c = Fealty.begin(server, s, null, village, bell, name);
 		boolean ticking = true;
 		int ticks = 0;
-		for (; ticks < Fealty.END + 10 && Fealty.CEREMONIES.containsKey(bell.asLong()); ticks++) {
+		for (; ticks < Fealty.GATHER_MAX + Fealty.END + 10 && Fealty.CEREMONIES.containsKey(bell.asLong()); ticks++) {
 			if (ticking) {
 				try {
 					level.tick(() -> true); // the world moves on, so the villagers walk to the bell
@@ -128,6 +131,10 @@ final class FealtyTest {
 			Fealty.ceremonies(server);
 		}
 		long ms = (System.nanoTime() - t0) / 1_000_000;
+		StringBuilder after = new StringBuilder();
+		people.forEach(v -> after.append(Math.round(Math.sqrt(v.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(bell))))).append(' '));
+		report.append("Villagers' distance to the bell before: ").append(before.toString().trim()).append("; at the end: ").append(after.toString().trim())
+				.append(". Gathering took ").append(c.ringAt).append(" ticks.\n\n");
 		RoadLink.runAll(server);
 		Fealty.upkeep(server);
 		s = Settlements.byHeart(server, heart);

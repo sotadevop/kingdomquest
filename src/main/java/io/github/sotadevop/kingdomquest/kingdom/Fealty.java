@@ -83,11 +83,17 @@ public final class Fealty {
 	static final String GUARD = "vassal_guard";
 	private static final int GUARDS = 2;
 	private static final int NO_DROPS = Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS;
-	/** The ceremony, in ticks: the people gather, three rings, the banner goes up step by step, the proclamation. */
-	static final int GATHER = 140;
+	/**
+	 * The ceremony, in ticks: the people gather (at least 3 seconds; until four in five stand at the bell, nobody has
+	 * come closer for 5 seconds, or 30 seconds are up), then from the first ring: three rings, the banner goes up step by
+	 * step, the proclamation, the end.
+	 */
+	private static final int GATHER_MIN = 60;
+	private static final int GATHER_STALL = 100;
+	static final int GATHER_MAX = 600;
 	private static final int RING = 40;
 	static final int RINGS = 3;
-	private static final int RAISE = GATHER + RINGS * RING + 10;
+	private static final int RAISE = RINGS * RING + 10;
 	private static final int RAISE_STEP = 14;
 	private static final int POLE = 3;
 	private static final int PROCLAIM = RAISE + (POLE + 1) * RAISE_STEP + 6;
@@ -108,6 +114,11 @@ public final class Fealty {
 		/** Villagers within 8 blocks of the bell at each ring. */
 		final int[] gathered = new int[RINGS];
 		int t;
+		/** Tick of the first ring, -1 while the people still gather. */
+		int ringAt = -1;
+		/** Closest the people have come so far (sum of their distances to the bell) and when. */
+		double closest = Double.MAX_VALUE;
+		int closestAt;
 		int rung;
 		int raised;
 
@@ -274,7 +285,7 @@ public final class Fealty {
 		return null;
 	}
 
-	private static List<Villager> villagers(ServerLevel level, StructureStart village) {
+	static List<Villager> villagers(ServerLevel level, StructureStart village) {
 		BoundingBox b = village.getBoundingBox();
 		AABB box = new AABB(b.minX(), b.minY(), b.minZ(), b.maxX() + 1, b.maxY() + 1, b.maxZ() + 1).inflate(8, 16, 8);
 		return level.getEntitiesOfClass(Villager.class, box, Entity::isAlive);
@@ -460,24 +471,44 @@ public final class Fealty {
 			for (int i = 0; i < c.villagers.size(); i++) {
 				double a = i * Math.PI * 2 / n;
 				double r = 3.5 + (n > 8 ? i % 2 * 1.5 : 0);
-				int x = c.bell.getX() + (int) Math.round(Math.cos(a) * r);
-				int z = c.bell.getZ() + (int) Math.round(Math.sin(a) * r);
-				c.spots.add(new BlockPos(x, SiteWork.groundTop(level, x, z, c.bell.getY()) + 1, z));
+				BlockPos want = c.bell.offset((int) Math.round(Math.cos(a) * r), 0, (int) Math.round(Math.sin(a) * r));
+				BlockPos spot = standNear(level, want, c.bell.getY(), c.spots, c.pole);
+				c.spots.add(spot != null ? spot : new BlockPos(want.getX(), SiteWork.groundTop(level, want.getX(), want.getZ(), c.bell.getY()) + 1, want.getZ()));
 			}
 		}
 		gather(level, c);
-		if (c.rung < RINGS && c.t == GATHER + c.rung * RING) {
+		if (c.ringAt < 0) {
+			if (c.t % 20 == 0) {
+				double sum = 0;
+				for (UUID id : c.villagers) {
+					if (level.getEntity(id) instanceof Villager v && v.isAlive()) {
+						sum += Math.sqrt(v.distanceToSqr(Vec3.atCenterOf(c.bell)));
+					}
+				}
+				if (sum < c.closest - 1) {
+					c.closest = sum;
+					c.closestAt = c.t;
+				}
+			}
+			boolean ready = near(level, c, 8) * 5 >= c.villagers.size() * 4 || c.t - c.closestAt > GATHER_STALL;
+			if (c.t >= GATHER_MIN && ready || c.t >= GATHER_MAX) {
+				c.ringAt = c.t;
+			}
+			return;
+		}
+		int t = c.t - c.ringAt;
+		if (c.rung < RINGS && t == c.rung * RING) {
 			c.gathered[c.rung] = near(level, c, 8);
 			ring(level, c.bell);
 			c.rung++;
 		}
-		if (c.pole != null && c.raised <= POLE && c.t == RAISE + c.raised * RAISE_STEP) {
+		if (c.pole != null && c.raised <= POLE && t == RAISE + c.raised * RAISE_STEP) {
 			raise(level, c, c.raised++);
 		}
-		if (c.t == PROCLAIM) {
+		if (t == PROCLAIM) {
 			proclaim(server, level, c);
 		}
-		if (c.t >= END) {
+		if (t >= END) {
 			finish(server, c);
 		}
 	}
@@ -496,7 +527,7 @@ public final class Fealty {
 			brain.eraseMemory(MemoryModuleType.HIDING_PLACE);
 			BlockPos spot = c.spots.get(i);
 			if (v.distanceToSqr(Vec3.atBottomCenterOf(spot)) > 1.5 * 1.5) {
-				brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(spot, 0.6f, 0));
+				brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(spot, 0.75f, 0));
 			} else {
 				brain.eraseMemory(MemoryModuleType.WALK_TARGET);
 				v.getNavigation().stop();
@@ -750,8 +781,9 @@ public final class Fealty {
 		}
 		List<BlockPos> out = new ArrayList<>();
 		for (int i = 0; i < 8; i++) {
-			if (best[i] != null && far[i] >= 16) {
-				out.add(best[i]);
+			BlockPos e = best[i];
+			if (e != null && far[i] >= 16 && out.stream().noneMatch(o -> o.distSqr(e) < 12 * 12)) { // one street, two eighths: one stone
+				out.add(e);
 			}
 		}
 		return out;
@@ -808,7 +840,7 @@ public final class Fealty {
 			BlockPos ground = new BlockPos(col.getX(), top, col.getZ());
 			BlockState g = level.getBlockState(ground);
 			BlockPos face = ground.above(2).relative(out);
-			if (Math.abs(top - end.getY()) > 3 || g.is(Blocks.DIRT_PATH) || !g.getFluidState().isEmpty() || !g.isSolid()
+			if (Math.abs(top - end.getY()) > 3 || g.is(Blocks.DIRT_PATH) || !SiteWork.isGround(g) // natural ground, not a roof or a street
 					|| !free(level, ground.above(), 3) || !free(level, face, 1)) {
 				continue;
 			}
