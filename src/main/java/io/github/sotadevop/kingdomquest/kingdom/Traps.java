@@ -22,8 +22,8 @@ import java.util.Map;
  * volleys while their roof lever is on) and the secret door of the vault (cellar level 3, button; closes by itself).
  */
 final class Traps {
-	private static final int GX = 7;
-	private static final int GZ = 50;
+	private static final int GX = io.github.sotadevop.kingdomquest.building.Layout.gateX();
+	private static final int GZ = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
 	private record Timer(long until, List<BlockPos> blocks, BlockState restore) {
 	}
 
@@ -34,6 +34,11 @@ final class Traps {
 
 	private static BlockPos at(Settlement s, int bx, int by, int bz) {
 		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, by, bz - 10), Rotation.values()[s.rotation()]));
+	}
+
+	/** A spot of the gate (base frame), at the gate's own level (below the heart on a hill castle). */
+	private static BlockPos gateAt(Settlement s, int bx, int by, int bz) {
+		return at(s, bx, by + Settlements.trackLift(s, Progression.GATE), bz);
 	}
 
 	/** A lever or button was used at {@code pos}; returns true if it was one of ours. */
@@ -65,11 +70,11 @@ final class Traps {
 	}
 
 	static BlockPos lavaLever(Settlement s) {
-		return at(s, GX, 8, GZ - 1);
+		return gateAt(s, GX, 8, GZ - 1);
 	}
 
 	static BlockPos arrowLever(Settlement s) {
-		return at(s, GX - 2, 8, GZ);
+		return gateAt(s, GX - 2, 8, GZ);
 	}
 
 	private static boolean on(ServerLevel level, BlockPos lever) {
@@ -87,7 +92,7 @@ final class Traps {
 			if (s.level(Progression.GATE) >= 5) {
 				boolean lava = on(level, lavaLever(s));
 				for (int x = GX - 1; x <= GX + 1; x++) {
-					BlockPos p = at(s, x, 8, GZ + 1);
+					BlockPos p = gateAt(s, x, 8, GZ + 1);
 					BlockState now = level.getBlockState(p);
 					if (lava && now.isAir()) {
 						level.setBlock(p, Blocks.LAVA.defaultBlockState(), Block.UPDATE_ALL);
@@ -104,8 +109,8 @@ final class Traps {
 			}
 			if (on(level, arrowLever(s))) {
 				for (int x : new int[] {GX - 3, GX - 1, GX + 1, GX + 3}) {
-					BlockPos d = at(s, x, 5, GZ + 1);
-					BlockPos out = at(s, x, 5, GZ + 3);
+					BlockPos d = gateAt(s, x, 5, GZ + 1);
+					BlockPos out = gateAt(s, x, 5, GZ + 3);
 					net.minecraft.world.phys.Vec3 dir = net.minecraft.world.phys.Vec3.atCenterOf(out).subtract(net.minecraft.world.phys.Vec3.atCenterOf(d));
 					net.minecraft.world.entity.projectile.arrow.Arrow arrow = new net.minecraft.world.entity.projectile.arrow.Arrow(level,
 							d.getX() + 0.5 + dir.x * 0.35, d.getY() + 0.5, d.getZ() + 0.5 + dir.z * 0.35,
@@ -114,7 +119,7 @@ final class Traps {
 					arrow.pickup = net.minecraft.world.entity.projectile.arrow.AbstractArrow.Pickup.DISALLOWED;
 					level.addFreshEntity(arrow);
 				}
-				level.playSound(null, at(s, GX, 5, GZ + 1), SoundEvents.DISPENSER_LAUNCH, SoundSource.BLOCKS, 1f, 1f);
+				level.playSound(null, gateAt(s, GX, 5, GZ + 1), SoundEvents.DISPENSER_LAUNCH, SoundSource.BLOCKS, 1f, 1f);
 			}
 		}
 	}

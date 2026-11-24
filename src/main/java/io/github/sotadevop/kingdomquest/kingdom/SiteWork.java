@@ -201,9 +201,11 @@ public final class SiteWork {
 			if (t.follow || t.anchored) {
 				return List.of(); // terrain-following blocks are placed on the ground as it is
 			}
+			// the land itself is shaped by the grading plan (Grade) at the founding: a job only clears its plot and a flat
+			// margin of {@code apron} around it (plants, a tree that grew since, holes)
 			int a = t.apron;
-			int flat = Math.min(3, Math.max(1, a / 2));
-			int reach = a == 0 ? 0 : Math.max(a, REACH);
+			int flat = a;
+			int reach = a;
 			// distance from the footprint in tenths of a block, diagonal steps cost 1.4: pads get round corners
 			Map<Long, Integer> dist = new HashMap<>();
 			java.util.PriorityQueue<long[]> queue = new java.util.PriorityQueue<long[]>(java.util.Comparator.<long[]>comparingLong(c -> c[2]));
@@ -1373,8 +1375,13 @@ public final class SiteWork {
 
 	/** {@code skip}: blocks to look through (what the settlement built: a road under a gatehouse lies on the ground, not on its roof). */
 	public static int groundDeep(ServerLevel level, int x, int z, int heartY, Set<Long> skip) {
+		return groundDeep(level, x, z, heartY, skip, 30, 48);
+	}
+
+	/** {@link #groundDeep(ServerLevel, int, int, int, Set)} searching {@code up} blocks above and {@code down} below. */
+	public static int groundDeep(ServerLevel level, int x, int z, int heartY, Set<Long> skip, int up, int down) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-		for (int y = heartY + 30; y >= heartY - 48; y--) {
+		for (int y = heartY + up; y >= heartY - down; y--) {
 			pos.set(x, y, z);
 			if (!skip.isEmpty() && skip.contains(pos.asLong())) {
 				continue;

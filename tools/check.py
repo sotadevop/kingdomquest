@@ -40,9 +40,13 @@ def read_steps():
 
 
 def read_workers():
+    """Worker posts of Workers.java, moved with their track's plot (RELOCATE, as Layout.java does)."""
     src = open(os.path.join(JAVA, "Workers.java")).read()
-    return [(m.group(1), int(m.group(2)), m.group(3), int(m.group(4)), int(m.group(5)))
-            for m in re.finditer(r'new Spec\("(\w+)",\s*(\d+),\s*"([^"]+)",\s*"\w+",\s*(-?\d+),\s*(-?\d+)', src)]
+    out = []
+    for m in re.finditer(r'new Spec\("(\w+)",\s*(\d+),\s*"([^"]+)",\s*"\w+",\s*(-?\d+),\s*(-?\d+)', src):
+        dx, dz = bld.RELOCATE.get(m.group(1), (0, 0))
+        out.append((m.group(1), int(m.group(2)), m.group(3), int(m.group(4)) + dx, int(m.group(5)) + dz))
+    return out
 
 
 STEPS, ORDER, GATE_MIN = read_steps()
@@ -181,7 +185,8 @@ class Grid:
         return False
 
 
-BOX = (-80, 100, -30, 50, -75, 80)  # blocks: x0, x1, y0, y1, z0, z1
+# blocks: x0, x1, y0, y1, z0, z1: the wall ring with the moat and the landing beyond the gate
+BOX = (bld.WALL[0] - 14, bld.WALL[1] + 14, -30, 50, bld.WALL[2] - 14, bld.WALL[3] + 16)
 
 
 def walk(grid, start, w=1, jump=False):

@@ -196,25 +196,31 @@ final class RoadTest {
 		}
 		// SignText's accessors changed between versions: find the one that returns the lines (test code only)
 		Object t = be.getText(net.minecraft.world.level.block.entity.SignTextSlot.values()[0]);
+		StringBuilder seen = new StringBuilder();
 		for (java.lang.reflect.Method m : t.getClass().getMethods()) {
-			if (m.getReturnType() != net.minecraft.network.chat.Component[].class) {
+			seen.append(m.getName()).append(':').append(m.getReturnType().getSimpleName()).append(' ');
+			Object[] args = m.getParameterCount() == 0 ? new Object[0]
+					: m.getParameterCount() == 1 && m.getParameterTypes()[0] == boolean.class ? new Object[] {false} : null;
+			boolean array = m.getReturnType() == net.minecraft.network.chat.Component[].class;
+			if (args == null || !(array || java.util.List.class.isAssignableFrom(m.getReturnType())) || m.getDeclaringClass() == Object.class) {
 				continue;
 			}
 			try {
-				Object[] args = m.getParameterCount() == 0 ? new Object[0] : m.getParameterCount() == 1 && m.getParameterTypes()[0] == boolean.class ? new Object[] {false} : null;
-				if (args == null) {
+				Object r = m.invoke(t, args);
+				List<?> lines = array ? java.util.Arrays.asList((Object[]) r) : (List<?>) r;
+				if (lines.isEmpty() || !(lines.get(0) instanceof net.minecraft.network.chat.Component)) {
 					continue;
 				}
 				StringBuilder b = new StringBuilder();
-				net.minecraft.network.chat.Component[] lines = (net.minecraft.network.chat.Component[]) m.invoke(t, args);
-				for (int i = 0; i < lines.length; i++) {
-					b.append(lines[i].getString()).append(i < lines.length - 1 ? " / " : "");
+				for (Object line : lines) {
+					b.append(((net.minecraft.network.chat.Component) line).getString()).append(" / ");
 				}
 				return b.toString();
-			} catch (ReflectiveOperationException e) {
-				return "";
+			} catch (ReflectiveOperationException | ClassCastException e) {
+				// try the next accessor
 			}
 		}
+		KingdomQuest.LOG.warn("RoadTest: no sign line accessor on {}: {}", t.getClass().getName(), seen);
 		return "";
 	}
 

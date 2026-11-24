@@ -834,10 +834,10 @@ def hamlet(style, level):
     b.put(2, -2, 13, "cobblestone")
     if level >= 2:
         # second house across the street, door facing the square; tax barrel by the fire
-        house(b, style, -8, 22, facing_north=True)
+        house(b, style, -9, 31, facing_north=True)
         b.put(*TAX_STORE, "barrel", facing="up", open="false")
     if level >= 3:
-        house(b, style, 16, 22, facing_north=True)
+        house(b, style, 17, 31, facing_north=True)
         # market stall on the east side of the square
         for x, z in ((11, 12), (13, 12), (11, 14), (13, 14)):
             b.put(x, 0, z, s["pole"])
@@ -849,7 +849,7 @@ def hamlet(style, level):
         b.put(12, 0, 13, "barrel", facing="up", open="true")
     if level >= 4:
         # Village: fourth house, bell on the square, flower beds
-        house(b, style, 28, 22, facing_north=True)
+        house(b, style, -21, 31, facing_north=True)
         b.put(hx + 1, 0, hz - 2, "bell", attachment="floor", facing="south", powered="false")
         for x, z in ((9, 15), (5, 15)):
             b.put(x, -1, z, "grass_block", snowy="false")  # the bed's own soil: a road or regrade next to it can't take it away
@@ -1066,7 +1066,9 @@ def woodcutter(style, level):
     return b.b
 
 
-WALL = (-56, 76, -46, 50)  # x0, x1, z0, z1 of the palisade ring (village plot); room for the lair in the north
+# x0, x1, z0, z1 of the wall ring: about 260 x 200 (user, 2026-11-23: the whole site twice as big, with room for
+# big plots, a big town square, gardens and small squares). The gate is in the middle of the south side (z1).
+WALL = (-123, 137, -100, 100)
 
 
 def inward(cx, cz):
@@ -1095,7 +1097,15 @@ def tower_spots(level):
     gx = HEART[0]
     spots = [(x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - GATE_TOWER, z1), (gx + GATE_TOWER, z1)]
     if level >= 4:
-        spots += [(x0, (z0 + z1) // 2), (x1, (z0 + z1) // 2), ((x0 + x1) // 2, z0), (x0 + 33, z0), (x1 - 33, z0), (x0 + 33, z1), (x1 - 33, z1)]
+        # along the sides about every 50 blocks, none crowding the gate's own towers
+        for k in range(1, 5):
+            x = x0 + round(k * (x1 - x0) / 5)
+            spots.append((x, z0))
+            if abs(x - gx) > 3 * GATE_TOWER:
+                spots.append((x, z1))
+        for k in range(1, 4):
+            z = z0 + round(k * (z1 - z0) / 4)
+            spots += [(x0, z), (x1, z)]
     return spots
 
 
@@ -1172,30 +1182,60 @@ def walls(style, level):
 # or beyond it. tools/check.py verifies the result at every tier.
 #   name, (x from, to), (z from, to), centre line ('x' or 'z', value), the piece it branches off, its own rules
 ROAD_TRUNKS = [
-    ("gate", (6, 8), (8, 50), ("x", 7), None, [("main", 1)]),                 # the high street: heart to the gate
-    ("plaza", (0, 14), (8, 16), ("x", 7), "gate", [("main", 7)]),
-    ("cross_w1", (-8, 5), (18, 19), ("z", 18), "gate", [("main", 5)]),        # the street of houses
-    ("cross_w2", (-21, -9), (18, 19), ("z", 18), "cross_w1", []),
-    ("cross_w3", (-44, -22), (18, 19), ("z", 18), "cross_w2", []),
-    ("cross_e1", (9, 22), (18, 19), ("z", 18), "gate", [("main", 6)]),
-    ("cross_e2", (23, 34), (18, 19), ("z", 18), "cross_e1", [("main", 7)]),
-    ("cross_e3", (35, 45), (18, 19), ("z", 18), "cross_e2", []),
-    ("farm_1", (9, 27), (11, 12), ("z", 11), "gate", []),                     # the farm road, east of the square
-    ("farm_2", (28, 40), (11, 12), ("z", 11), "farm_1", []),
-    ("farm_3", (41, 53), (11, 12), ("z", 11), "farm_2", []),
-    ("farm_4", (54, 66), (11, 12), ("z", 11), "farm_3", []),
-    ("castle_w", (-6, -5), (-8, 17), ("x", -5), "cross_w1", []),              # lanes past the castle to the north side
-    ("north_w", (-37, -5), (-10, -9), ("z", -9), "castle_w", []),
-    ("castle_e", (19, 19), (-8, 10), ("x", 19), "farm_1", []),
-    ("north_e1", (19, 43), (-10, -9), ("z", -9), "castle_e", []),
-    ("north_link", (44, 45), (-10, 10), ("x", 44), "farm_3", []),
-    ("north_e2", (46, 63), (-10, -9), ("z", -9), "north_link", []),
+    # the street hierarchy (user, 2026-11-23): the main street 7 wide (gate - square - castle), side streets 5 wide,
+    # lanes to the doors 3 wide (routed below), alleys of 1-2 between houses that stand in pairs. A street is laid
+    # once something on it or beyond it is built; from the town tier (main 8) the whole grid is there
+    ("gate", (4, 10), (8, 100), ("x", 7), None, [("main", 1)]),                 # the main street: square to the gate
+    ("plaza", (-14, 28), (8, 26), ("x", 7), "gate", [("main", 7)]),             # the big town square
+    ("sq_w1", (-36, 7), (15, 19), ("z", 17), "gate", [("main", 8)]),                       # side streets west and east of the square
+    ("sq_w2", (-60, -37), (15, 19), ("z", 17), "sq_w1", [("main", 8)]),
+    ("sq_w3", (-110, -61), (15, 19), ("z", 17), "sq_w2", [("main", 8)]),
+    ("sq_e1", (7, 40), (15, 19), ("z", 17), "gate", [("main", 8)]),
+    ("sq_e2", (41, 72), (15, 19), ("z", 17), "sq_e1", [("main", 8)]),
+    ("sq_e3", (73, 124), (15, 19), ("z", 17), "sq_e2", [("main", 8)]),
+    ("west_n", (-60, -56), (-62, 17), ("x", -58), "sq_w2", [("main", 8)]),                # the two long north-south streets
+    ("west_s", (-60, -56), (17, 92), ("x", -58), "sq_w2", [("main", 8)]),
+    ("east_n", (70, 74), (-62, 17), ("x", 72), "sq_e2", [("main", 8)]),
+    ("east_s", (70, 74), (17, 92), ("x", 72), "sq_e2", [("main", 8)]),
+    ("castle_w", (-25, -23), (-60, 17), ("x", -24), "sq_w1", []),               # lanes past the castle to the north
+    ("castle_e", (37, 39), (-60, 17), ("x", 38), "sq_e1", []),
+    ("north_w", (-110, -59), (-62, -58), ("z", -60), "west_n", [("main", 8)]),             # the street behind the castle
+    ("north_c1", (-58, 7), (-62, -58), ("z", -60), "west_n", [("main", 8)]),
+    ("north_c2", (7, 72), (-62, -58), ("z", -60), "east_n", [("main", 8)]),
+    ("north_e", (73, 124), (-62, -58), ("z", -60), "east_n", [("main", 8)]),
+    ("south_w1", (-36, 7), (56, 60), ("z", 58), "gate", [("main", 8)]),                    # the street of the southern quarter
+    ("south_w2", (-58, -37), (56, 60), ("z", 58), "south_w1", [("main", 8)]),
+    ("south_w3", (-110, -59), (56, 60), ("z", 58), "west_s", [("main", 8)]),
+    ("south_e1", (7, 40), (56, 60), ("z", 58), "gate", [("main", 8)]),
+    ("south_e2", (41, 72), (56, 60), ("z", 58), "south_e1", [("main", 8)]),
+    ("south_e3", (73, 124), (56, 60), ("z", 58), "east_s", [("main", 8)]),
+    # small squares where the side streets cross
+    ("place_nw", (-63, -53), (12, 22), ("z", 17), "sq_w2", [("main", 8)]),
+    ("place_ne", (67, 77), (12, 22), ("z", 17), "sq_e2", [("main", 8)]),
+    ("place_sw", (-63, -53), (53, 63), ("z", 58), "west_s", [("main", 8)]),
+    ("place_se", (67, 77), (53, 63), ("z", 58), "east_s", [("main", 8)]),
+    ("place_s", (2, 12), (53, 63), ("x", 7), "gate", [("main", 8)]),
 ]
-# places without a door that still need a way to them: track -> [(level, (x, z))], after the spacing moves
+# a plot kept free for a building of a later wave (the church on the highest hill of a hill town): no lane crosses it
+RESERVED = {"church": (-96, -56, -70, -32)}
+# the streets a building keeps 3 blocks of clear ground from (main and side streets; not lanes, alleys or the square)
+WIDE_STREETS = {t[0] for t in ROAD_TRUNKS if not t[0].startswith(("castle_", "plaza", "place_"))}
+# places without a door that still need a way to them: track -> [(level, (x, z))], in the frame of the templates
+# before RELOCATE (they move with their building)
 ROAD_GOALS = {
     "smith": [(1, (-12, 10))], "wood": [(1, (-31, 20))], "farm": [(1, (26, 11)), (1, (20, 5)), (2, (39, 10))],
     "stables": [(1, (47, 25))], "apiary": [(1, (52, 11))], "kennel": [(1, (52, 22))], "lair": [(1, (9, -23))],
     "cellar": [(1, (3, 11))],
+}
+# Where each track's plot lies in the big site: a move of the whole track (all levels) from where its templates draw
+# it (after the spacing moves of build_jobs). The one source of truth for the layout: written to
+# kingdomquest/layout.json, from which the mod places workers, trophies, pets and the rest (see Layout.java).
+RELOCATE = {
+    "lair": (-2, -46), "royal": (23, -41), "music": (-47, -51), "cartographer": (39, -57), "guild": (-25, -29),
+    "library": (-18, -18), "smith": (-21, 0), "nether": (-52, -13), "trophy": (-45, -13), "wood": (-56, 8),
+    "workshop": (-58, 37), "brewery": (-19, 4), "armorer": (-25, 29), "tavern": (23, -25), "market": (6, 0),
+    "farm": (60, -20), "apiary": (63, -22), "mine": (50, -3), "kennel": (37, -11), "stables": (43, 5),
+    "archaeology": (51, 7), "barracks": (10, 32), "tannery": (19, 29),
 }
 ROAD_PLAN = {}   # style -> the plan of that style's roads
 SEGS_OF = {}     # blocks dict id -> {pos: [segment index, ...]}
@@ -1218,6 +1258,7 @@ def plan_roads(style, jobs):
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     hard = set()      # cells a road may never use
+    plots_of = {}     # cells of the add-ons' buildings -> track (for the clear strip along the wide streets)
     eaves = set()     # cells under a roof's edge: fine for a road, not for a lamp post
     doors = []        # (track, level, door cell, (dx, dz))
     for j in jobs:
@@ -1232,11 +1273,15 @@ def plan_roads(style, jobs):
                 continue  # (air at ground level is a stairwell or a moat: no road there either)
             if -1 <= y <= 2:
                 hard.add((x, z))
+                if track not in ("main", "walls", "gate", "cellar"):
+                    plots_of.setdefault((x, z), track)
             elif 3 <= y <= 5:
                 eaves.add((x, z))
             if bn.endswith("_door") and props.get("half") == "lower" and y <= 3:
                 d = {"north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0)}[props["facing"]]
                 doors.append((track, level, (x, z), d))
+    for x0_, z0_, x1_, z1_ in RESERVED.values():
+        hard |= {(x, z) for x in range(x0_, x1_ + 1) for z in range(z0_, z1_ + 1)}
     for x in range(gx - 1, gx + 2):
         for z in range(z1 - 3, z1 + 1):
             hard.discard((x, z))  # the gate's passage
@@ -1262,6 +1307,11 @@ def plan_roads(style, jobs):
                     cells[(x, z)][1].append(name)  # shared by two streets: there as soon as either is
                     continue
                 cells[(x, z)] = ["core" if core else "side", [name]]
+    # the 3-block clear strip (user, 2026-11-23): no add-on stands within 3 blocks of a main or side street
+    wide = {c for c, v in cells.items() if any(n in WIDE_STREETS for n in v[1])}
+    for (x, z), track in plots_of.items():
+        if any((x + dx, z + dz) in wide for dx in range(-3, 4) for dz in range(-3, 4)):
+            raise SystemExit(f"{style}: {track} at {(x, z)} stands within 3 blocks of a main or side street")
     # a lane ends at a street; the square is only paved at the village tier, so lanes cross it to the street beyond
     trunk = {c for c, v in cells.items() if v[1] != ["plaza"]}
 
@@ -1278,8 +1328,9 @@ def plan_roads(style, jobs):
                     goals.append((track, level, c))
                 break
     for track, extra in ROAD_GOALS.items():
+        dx, dz = RELOCATE.get(track, (0, 0))
         for level, c in extra:
-            goals.append((track, level, c))
+            goals.append((track, level, (c[0] + dx, c[1] + dz)))
 
     def add_rule(piece, rule):
         while piece is not None:
@@ -1325,6 +1376,7 @@ def plan_roads(style, jobs):
         if goal in cells:
             cells[goal][0] = "core"  # the first road level only treads centre lines: a doorstep is always one
         cur = end
+        path = []
         while cur in prev:
             cur = prev[cur]
             c = (cur[0], cur[1])
@@ -1336,6 +1388,17 @@ def plan_roads(style, jobs):
             else:
                 cells[c] = ["core", [seg]]
             lanes.add(c)
+            path.append(c)
+        # a lane is 3 wide: its centre line and a cell on each side, wherever no building stands
+        for c in path:
+            for n in ((c[0] + 1, c[1]), (c[0] - 1, c[1]), (c[0], c[1] + 1), (c[0], c[1] - 1)):
+                if n in hard or n in trunk or not (lo_x <= n[0] <= hi_x and lo_z <= n[1] <= hi_z):
+                    continue
+                if n in cells:
+                    if seg not in cells[n][1]:
+                        cells[n][1].append(seg)
+                else:
+                    cells[n] = ["side", [seg]]
         rules[seg] = [rule]
         parent[seg] = None
 
@@ -1420,7 +1483,7 @@ def plan_roads(style, jobs):
                     taken.add(c)
                     side = -sgn
                     break
-    for c, d in (((-1, 8), (1, 0)), ((15, 8), (-1, 0)), ((-1, 16), (1, 0)), ((15, 16), (-1, 0))):
+    for c, d in (((-15, 8), (1, 0)), ((29, 8), (-1, 0)), ((-15, 26), (1, 0)), ((29, 26), (-1, 0))):
         if c not in hard and c not in cells and not any((c[0] + ex, c[1] + ez) in hard for ex, ez in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             lamps.append((c[0], c[1], d[0], d[1], "plaza"))
     names = [t[0] for t in ROAD_TRUNKS] + sorted(k for k in rules if k not in {t[0] for t in ROAD_TRUNKS})
@@ -4544,7 +4607,7 @@ def shop(style, name, level):
 # THE STOREHOUSE PLOT: x0, z0, x1, z1 of the hall, door in the middle of the north wall. This is the only place its
 # position is set: the mod finds the ledger, the chests, the storekeeper's post and the growing stock from the
 # template, so moving the hall means changing this line and running the generator.
-STOREHOUSE = (49, 37, 65, 45)
+STOREHOUSE = (-34, 66, -18, 74)  # south-west of the main street, on the street of the southern quarter (2x layout)
 FILL_OF = {}  # blocks dict id -> [(x, y, z, name, props, stage)]: goods the mod shows as the stock grows (stage 1-8)
 
 
@@ -4790,6 +4853,35 @@ def lair(style, level):
     return b.b
 
 
+def write_layout(jobs, plots):
+    """kingdomquest/layout.json: the site plan the mod reads (Layout.java), in the frame of tools/buildings.py (the heart
+    at HEART): the wall ring, the gate, the towers, every track's plot and move, the square, the keep's plot and
+    reserved plots."""
+    union = {}
+    for (style, track), rects in plots.items():
+        for r in rects:
+            u = union.get(track, r)
+            union[track] = [min(u[0], r[0]), min(u[1], r[1]), max(u[2], r[2]), max(u[3], r[3])]
+    keep = None
+    for style, name, blocks, *_ in jobs:
+        if track_of(name) == "main" and not name.startswith("tent_"):
+            for (x, y, z), v in blocks.items():
+                if z < HEART[2] - 2 and y >= -1 and v[0] != "minecraft:air":
+                    keep = [x, z, x, z] if keep is None else [min(keep[0], x), min(keep[1], z), max(keep[2], x), max(keep[3], z)]
+    plaza = next(t for t in ROAD_TRUNKS if t[0] == "plaza")
+    j = {"heart": list(HEART), "wall": list(WALL), "gate": [HEART[0], WALL[3]], "moat": max(MOAT_PROFILE),
+         "towers": {str(lv): [list(t) for t in tower_spots(lv)] for lv in (2, 4)},
+         "relocate": {k: list(v) for k, v in sorted(RELOCATE.items())},
+         "plots": {k: v for k, v in sorted(union.items())}, "keep": keep,
+         "square": [plaza[1][0], plaza[2][0], plaza[1][1], plaza[2][1]],
+         "reserved": {k: list(v) for k, v in RESERVED.items()},
+         # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
+         "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS
+                     if name != "plaza" and not name.startswith("place_")]}
+    with open(os.path.join(OUT, "..", "layout.json"), "w") as f:
+        json.dump(j, f, indent=1)
+
+
 def normalize(blocks, extra=()):
     """Shifts a plot so no coordinate is negative (buildings may reach west/north of the base frame).
     Returns blocks, heart, size and the shifted extra points."""
@@ -4865,8 +4957,10 @@ def build_jobs(styles=None):
 
     def moved(j):
         style, name, blocks, seconds, storage, animals = j[:6]
-        d = MOVE.get(name.rsplit("_", 1)[0])
-        if not d:
+        d0 = MOVE.get(name.rsplit("_", 1)[0], (0, 0))
+        d1 = RELOCATE.get(track_of(name), (0, 0))
+        d = (d0[0] + d1[0], d0[1] + d1[1])
+        if d == (0, 0):
             return j
         nb = {(x + d[0], y, z + d[1]): v for (x, y, z), v in blocks.items()}
         for reg in (SEGS_OF, ANCHORS_OF):
@@ -4896,7 +4990,7 @@ def build_jobs(styles=None):
         for level, secs in ((1, 300), (2, 300), (3, 420), (4, 480)):
             jobs.append((style, f"wall_{level}", walls(style, level), secs, None, None))
         for level in (1, 2, 3, 4):
-            jobs.append((style, f"gate_{level}", gate(style, level), 120 + 60 * level, None, None, 6))
+            jobs.append((style, f"gate_{level}", gate(style, level), 120 + 60 * level, None, None, 3))
         for level in (1, 2, 3):
             jobs.append((style, f"guild_{level}", guild_hall(style, level), 200, GUILD_STORE, None))
         jobs.append((style, "gate_5", lava_trap(style, 5), 240, None, None))
@@ -4944,8 +5038,9 @@ def build_jobs(styles=None):
         jobs[first:] = mine
 
     def apron(name):
-            # 14: the 1:1 slope reaches 11 blocks up, so cliffs next to a building are cut back into a natural slope
-        return 0 if name.startswith(("road_", "lamp_", "wall_1", "wall_2")) else 4 if name.startswith("wall_") else 14
+        # the land is shaped by the site's grading plan at the founding (Grade.java): a building only clears a flat margin
+        # of 3 around its plot (plants, a tree grown since); walls, roads and lamps follow the graded land
+        return 0 if name.startswith(("road_", "lamp_", "wall_")) else 3
     return [j if len(j) == 7 else j + (apron(j[1]),) for j in jobs]
 
 
@@ -4982,6 +5077,7 @@ if __name__ == "__main__":
                     g[p] = v
             os.makedirs("build/previews", exist_ok=True)
             render(g, size, 0, 3, bg=(170, 200, 230, 255)).save(f"build/previews/{style}_{name}.png")
+    write_layout(jobs, plots)
     for style, level in DOCK_JOBS:
         blocks = dock(style, level)
         nb, heart, size, _ = normalize(blocks)

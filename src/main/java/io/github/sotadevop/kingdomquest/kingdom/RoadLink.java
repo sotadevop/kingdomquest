@@ -47,7 +47,7 @@ final class RoadLink {
 
 	/** The point just outside a settlement's gate (beyond the moat and the landing), in world coordinates. */
 	static BlockPos gateExit(Settlement s) {
-		return s.heart().offset(Template.rotate(new BlockPos(0, 0, 51), Rotation.values()[s.rotation()]));
+		return s.heart().offset(Template.rotate(new BlockPos(0, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 11), Rotation.values()[s.rotation()]));
 	}
 
 	static int tier(Settlement s) {
@@ -124,8 +124,8 @@ final class RoadLink {
 		Rotation turn = Rotation.values()[s.rotation()];
 		BlockPos out = Template.rotate(new BlockPos(0, 0, 1), turn);
 		BlockPos first = start.offset(out.getX() * 12, 0, out.getZ() * 12);
-		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(-63 - 22, 0, -56 - 22), turn));
-		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(69 + 22, 0, 40 + 22), turn));
+		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[0] - 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[1] - 22), turn));
+		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[2] + 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 22), turn));
 		int x0 = Math.min(a.getX(), b.getX()), x1 = Math.max(a.getX(), b.getX());
 		int z0 = Math.min(a.getZ(), b.getZ()), z1 = Math.max(a.getZ(), b.getZ());
 		int[] box = {x0 + 12, z0 + 12, x1 - 12, z1 - 12}; // what the road must not cross: the ring and moat, 10 to spare
@@ -710,7 +710,7 @@ final class RoadLink {
 
 	// ---- the way out of the gate ----
 
-	private static final int OUT_RADIUS = 150;
+	private static final int OUT_RADIUS = 210;
 	/** Where the last way-out road of a settlement bends most (its middle), for the field test's views. */
 	static final Map<UUID, BlockPos> WAY_OUT = new HashMap<>();
 	static final String WAY_OUT_KEY = "wayout";
@@ -804,8 +804,8 @@ final class RoadLink {
 			return;
 		}
 		Rotation turn = Rotation.values()[s.rotation()];
-		BlockPos cornerA = heart.offset(Template.rotate(new BlockPos(-63 - 9, 0, -56 - 9), turn));
-		BlockPos cornerB = heart.offset(Template.rotate(new BlockPos(69 + 9, 0, 40 + 9), turn));
+		BlockPos cornerA = heart.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[0] - 9, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[1] - 9), turn));
+		BlockPos cornerB = heart.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[2] + 9, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 9), turn));
 		int bx0 = Math.min(cornerA.getX(), cornerB.getX()), bx1 = Math.max(cornerA.getX(), cornerB.getX());
 		int bz0 = Math.min(cornerA.getZ(), cornerB.getZ()), bz1 = Math.max(cornerA.getZ(), cornerB.getZ());
 		Set<Long> builtCols = new java.util.HashSet<>();
@@ -906,7 +906,7 @@ final class RoadLink {
 			}
 		}
 		boolean[] open = new boolean[n * n];
-		for (long cell : FieldTest.reverse(level, heart, edge, 300_000)) {
+		for (long cell : FieldTest.reverse(level, heart, edge, 1_200_000)) {
 			int ci = BlockPos.getX(cell) - x0, ck = BlockPos.getZ(cell) - z0;
 			if (ci >= 0 && ck >= 0 && ci < n && ck < n) {
 				int c = ci * n + ck;
@@ -1102,7 +1102,7 @@ final class RoadLink {
 				}
 			}
 		}
-		return FieldTest.spread(level, heart, reach, queue, Set.of(), 400_000);
+		return FieldTest.spread(level, heart, reach, queue, Set.of(), 1_600_000);
 	}
 
 	/** The centre line of the settlement's way-out road as stored, empty if it has none. */

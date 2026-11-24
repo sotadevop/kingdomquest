@@ -57,6 +57,7 @@ public final class RoyalCharter {
 			return;
 		}
 		int color = Math.clamp(d.color(), 0, DyeColor.values().length - 1);
-		stack.set(DATA, new CharterData(name, color, d.logo(), Math.clamp(d.gate(), CharterData.AUTO, 3)));
+		stack.set(DATA, new CharterData(name, color, d.logo(), Math.clamp(d.gate(), CharterData.AUTO, 3), Math.clamp(d.look(), 0, CharterData.LOOKS - 1),
+				0)); // the round castle comes in a later wave: every castle is square for now
 	}
 }

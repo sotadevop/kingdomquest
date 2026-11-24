@@ -247,6 +247,7 @@ final class Roadside {
 
 	/** The natural ground top of a column (through plants, trees and snow layers) and whether water lies on it. */
 	private static int[] ground(ServerLevel level, int x, int z) {
+		level.getChunk(x >> 4, z >> 4); // the heightmap of an unloaded chunk reads as the bottom of the world
 		int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
 		BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, y, z);
 		while (p.getY() > level.getMinY()) {
