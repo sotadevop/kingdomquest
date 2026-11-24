@@ -1176,7 +1176,13 @@ public final class Settlements {
 		for (Template.Segment seg : t.segments) {
 			// a rule (track, level) holds once the track has the level; (track, -level) while it hasn't yet (a wall's plug
 			// stays until the postern that opens it is built)
-			boolean on = seg.any().stream().anyMatch(r -> r.getValue() >= 0 ? s.level(r.getKey()) >= r.getValue() : s.level(r.getKey()) < -r.getValue());
+			boolean on = seg.any().stream().anyMatch(r -> {
+				int v = r.getValue();
+				if (r.getKey().equals(Progression.POSTERN)) {
+					return posternOn(s, Math.abs(v)) == v > 0;
+				}
+				return v >= 0 ? s.level(r.getKey()) >= v : s.level(r.getKey()) < -v;
+			});
 			mask.append(on ? '1' : '0');
 		}
 		int dy = lift(s, job);
@@ -1214,6 +1220,51 @@ public final class Settlements {
 			}
 			return List.copyOf(out);
 		});
+	}
+
+	private static final Map<String, Boolean> POSTERN_FITS = new HashMap<>();
+
+	/**
+	 * Whether side gate n stands: bought, and its spot fits. The ground just inside, at the door and on the far bank
+	 * of the ditch must lie within 2 blocks of each other: on a hill site the inside can stand far above the land
+	 * outside the wall, and a door there would open into the fill. Such a side stays closed (its wall keeps the plug).
+	 */
+	static boolean posternOn(Settlement s, int n) {
+		if (s.level(Progression.POSTERN) < n) {
+			return false;
+		}
+		if (server == null) {
+			return true;
+		}
+		String key = s.id() + "|" + s.rotation() + "|" + n;
+		Boolean known = POSTERN_FITS.get(key);
+		if (known != null) {
+			return known;
+		}
+		Grade plan = Grade.of(server, s);
+		Template t = Template.get(s.style() + "/postern_3");
+		if (plan == null || t == null) {
+			return false; // worked out once the site's plan is known
+		}
+		boolean fits = false;
+		for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
+			if (p.segment() != n - 1 || !(p.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
+					|| p.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF) != net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+				continue;
+			}
+			BlockPos door = s.heart().offset(p.offset());
+			net.minecraft.core.Direction in = p.state().getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+			BlockPos inside = door.relative(in, 3);
+			BlockPos bank = door.relative(in.getOpposite(), 12);
+			int a = plan.topAt(door.getX(), door.getZ());
+			int b = plan.topAt(inside.getX(), inside.getZ());
+			int c = plan.topAt(bank.getX(), bank.getZ());
+			fits = a != Integer.MIN_VALUE && b != Integer.MIN_VALUE && c != Integer.MIN_VALUE
+					&& Math.max(a, Math.max(b, c)) - Math.min(a, Math.min(b, c)) <= 2;
+			break;
+		}
+		POSTERN_FITS.put(key, fits);
+		return fits;
 	}
 
 	private static final Map<UUID, Boolean> RED = new HashMap<>();

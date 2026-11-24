@@ -1131,12 +1131,25 @@ def plug_segments(b):
     return {cell: n - 1 for n, cell in postern_cells().items()}
 
 
+def postern_columns(n):
+    """Columns outside the wall that postern n builds on: its bridge and the posts at its foot."""
+    cx, cz = postern_cells()[n]
+    out, across = POSTERN_DIRS[n]
+    cols = set(postern_deck(n))
+    cols |= {(cx + out[0] + across[0] * k * 2, cz + out[1] + across[1] * k * 2) for k in (-1, 1)}
+    return cols
+
+
 def mark_plugs(b, plugs, top):
-    """Puts the blocks of the plug cells up to y top into their postern's segment."""
+    """Puts the blocks of the plug cells up to y top, and whatever the wall has where the postern's bridge goes,
+    into their postern's segment."""
     segs = SEGS_OF[id(b.b)]
+    cols = {c: n - 1 for n, _ in POSTERNS for c in postern_columns(n)}
     for (x, y, z) in list(b.b):
         if (x, z) in plugs and 0 <= y <= top:
             segs[(x, y, z)] = [plugs[(x, z)]]
+        elif (x, z) in cols:
+            segs[(x, y, z)] = [cols[(x, z)]]
 
 
 def walls(style, level):
@@ -5680,10 +5693,13 @@ def postern(style, level):
     b = B()
     FOLLOW.add(id(b.b))
     ANCHORS_OF[id(b.b)] = b.anchors
+    SEGDEF_OF[id(b.b)] = [(f"postern_{n}", [("postern", n)]) for n, _ in POSTERNS]
+    SEGS_OF[id(b.b)] = segs = {}
     for n, side in POSTERNS[:level]:
         cx, cz = postern_cells()[n]
         out, across = POSTERN_DIRS[n]
         b.anchor = (cx, cz)
+        before = set(b.b)
         inward = {"w": "east", "e": "west", "n": "south"}[side]
         b.put(cx, 0, cz, f"{wood}_door", facing=inward, half="lower", hinge="left", open="false", powered="false")
         b.put(cx, 1, cz, f"{wood}_door", facing=inward, half="upper", hinge="left", open="false", powered="false")
@@ -5702,6 +5718,7 @@ def postern(style, level):
             for y in range(-1, 3):
                 b.put(px, y, pz, MAT[style]["log"], axis="y")
             b.put(px, 3, pz, "lantern", hanging="false", waterlogged="false")
+        segs.update({q: [n - 1] for q in set(b.b) - before})
     b.anchor = None
     return b.b
 
