@@ -67,7 +67,7 @@ final class StreetPlan {
 			return plan;
 		}
 		Grade grade = Grade.of(server, s);
-		Template roads = Template.get(s.style() + "/road_4");
+		Template roads = Template.get(Settlements.template(s, "road_4"));
 		if (grade == null || roads == null) {
 			return null;
 		}

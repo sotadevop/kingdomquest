@@ -130,9 +130,11 @@ public class FoundingScreen extends Screen {
 		}).bounds(bx, rowY, half, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.look.tip." + this.look)))
 				.build());
 		Button shapeButton = Button.builder(Component.translatable("kingdomquest.founding.shape", Component.translatable("kingdomquest.founding.shape." + this.shape)),
-				b -> { }).bounds(bx + half + 4, rowY, half, 18)
+				b -> {
+					this.shape = 1 - this.shape;
+					b.setMessage(Component.translatable("kingdomquest.founding.shape", Component.translatable("kingdomquest.founding.shape." + this.shape)));
+				}).bounds(bx + half + 4, rowY, half, 18)
 				.tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.shape.tip"))).build();
-		shapeButton.active = false; // only the square castle is built so far
 		this.addRenderableWidget(shapeButton);
 		this.save = Button.builder(Component.translatable("kingdomquest.founding.confirm"), b -> save())
 				.bounds(bx + bw + 4, buttonsY, bw, 18).build();

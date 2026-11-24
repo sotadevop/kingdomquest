@@ -47,7 +47,7 @@ final class RoadLink {
 
 	/** The point just outside a settlement's gate (beyond the moat and the landing), in world coordinates. */
 	static BlockPos gateExit(Settlement s) {
-		return s.heart().offset(Template.rotate(new BlockPos(0, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 11), Rotation.values()[s.rotation()]));
+		return s.heart().offset(Template.rotate(new BlockPos(0, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[3] + 11), Rotation.values()[s.rotation()]));
 	}
 
 	static int tier(Settlement s) {
@@ -124,8 +124,8 @@ final class RoadLink {
 		Rotation turn = Rotation.values()[s.rotation()];
 		BlockPos out = Template.rotate(new BlockPos(0, 0, 1), turn);
 		BlockPos first = start.offset(out.getX() * 12, 0, out.getZ() * 12);
-		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[0] - 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[1] - 22), turn));
-		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[2] + 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 22), turn));
+		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[0] - 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[1] - 22), turn));
+		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[2] + 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[3] + 22), turn));
 		int x0 = Math.min(a.getX(), b.getX()), x1 = Math.max(a.getX(), b.getX());
 		int z0 = Math.min(a.getZ(), b.getZ()), z1 = Math.max(a.getZ(), b.getZ());
 		int[] box = {x0 + 12, z0 + 12, x1 - 12, z1 - 12}; // what the road must not cross: the ring and moat, 10 to spare
@@ -804,8 +804,8 @@ final class RoadLink {
 			return;
 		}
 		Rotation turn = Rotation.values()[s.rotation()];
-		BlockPos cornerA = heart.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[0] - 9, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[1] - 9), turn));
-		BlockPos cornerB = heart.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[2] + 9, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 9), turn));
+		BlockPos cornerA = heart.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[0] - 9, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[1] - 9), turn));
+		BlockPos cornerB = heart.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[2] + 9, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[3] + 9), turn));
 		int bx0 = Math.min(cornerA.getX(), cornerB.getX()), bx1 = Math.max(cornerA.getX(), cornerB.getX());
 		int bz0 = Math.min(cornerA.getZ(), cornerB.getZ()), bz1 = Math.max(cornerA.getZ(), cornerB.getZ());
 		Set<Long> builtCols = new java.util.HashSet<>();

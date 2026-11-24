@@ -72,7 +72,7 @@ final class Landmarks {
 		Direction along = face.getClockWise();
 		for (int k : new int[] {2, -2, 3, -3, 4, -4, 0, 1, -1}) {
 			BlockPos col = new BlockPos(ex, 0, ez).relative(along, k);
-			int y = SiteWork.groundTop(level, col.getX(), col.getZ(), s.heart().getY() + Settlements.lift(s, s.style() + "/" + track + "_1")) + 1;
+			int y = SiteWork.groundTop(level, col.getX(), col.getZ(), s.heart().getY() + Settlements.lift(s, Settlements.template(s, track + "_1"))) + 1;
 			BlockPos base = new BlockPos(col.getX(), y, col.getZ());
 			BlockPos arm = base.above(2).relative(along);
 			if (!free(level, base, taken) || !free(level, base.above(), taken) || !free(level, base.above(2), taken) || !free(level, arm, taken)

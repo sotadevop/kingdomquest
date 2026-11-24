@@ -156,7 +156,7 @@ public final class Settlements {
 				continue;
 			}
 			if (main >= 7) {
-				int[] box = Grade.ringBox(s.heart(), Rotation.values()[s.rotation()]);
+				int[] box = Grade.ringBox(s.heart(), Rotation.values()[s.rotation()], round(s));
 				if (pos.getX() >= box[0] - 14 && pos.getX() <= box[2] + 14 && pos.getZ() >= box[1] - 14 && pos.getZ() <= box[3] + 14) {
 					return true;
 				}
@@ -319,7 +319,7 @@ public final class Settlements {
 	 */
 	static Settlement found(ServerLevel level, Settlement s0, int look, int shape, boolean whole) {
 		Rotation rotation = Rotation.values()[s0.rotation()];
-		Grade.Planned plan = Grade.plan(level, s0.heart(), rotation, look);
+		Grade.Planned plan = Grade.plan(level, s0.heart(), rotation, look, shape == 1);
 		Settlement s = new Settlement(s0.id(), s0.owner(), s0.name(), s0.color(), s0.logo(), s0.style(), plan.heart(), s0.rotation(), s0.levels(),
 				s0.job(), s0.jobTrack(), s0.jobIndex(), s0.built(), s0.names()).withLevel(Grade.LOOK, look).withLevel(Grade.SHAPE, shape);
 		for (Map.Entry<String, Integer> e : plan.lifts().entrySet()) {
@@ -399,7 +399,7 @@ public final class Settlements {
 		if (step == null || !Progression.requirementMet(player, step) || !Progression.canPay(player, step)) {
 			return;
 		}
-		if (Template.get(s.style() + "/" + step.building()) == null) {
+		if (Template.get(template(s, step.building())) == null) {
 			return;
 		}
 		if (Progression.DOCK.equals(track) && s.level("dock_set") == 0) {
@@ -463,7 +463,7 @@ public final class Settlements {
 		if (gate == null) {
 			return Set.of();
 		}
-		placements(s, s.style() + "/" + gate.building()); // works the moat out if it hasn't been yet
+		placements(s, template(s, gate.building())); // works the moat out if it hasn't been yet
 		return MOAT.getOrDefault(s.id(), Set.of());
 	}
 
@@ -567,7 +567,7 @@ public final class Settlements {
 	/** Starts building {@code step} on {@code track}: takes down the track's blocks the new level doesn't use, clears the ground. */
 	static void start(MinecraftServer server, Settlement first, String track, Progression.Step step) {
 		Settlement s0 = first;
-		String job = s0.style() + "/" + step.building();
+		String job = template(s0, step.building());
 		String track0 = track;
 		ServerLevel level = server.overworld();
 		if (Progression.DOCK.equals(track) && s0.level("dock_set") == 0) {
@@ -611,7 +611,7 @@ public final class Settlements {
 			Map<Long, BlockState> was = new HashMap<>();
 			Progression.Step cur = Progression.current(s, track0);
 			if (cur != null && !LordChanges.of(server, s).isEmpty()) {
-				for (Template.Placement p : placements(s, s.style() + "/" + cur.building())) {
+				for (Template.Placement p : placements(s, template(s, cur.building()))) {
 					was.put(s.heart().offset(p.offset()).asLong(), p.state());
 				}
 			}
@@ -678,7 +678,7 @@ public final class Settlements {
 		String track = cut < 0 ? queue : queue.substring(0, cut);
 		Settlement rest = s.withName("rebuild", cut < 0 ? "" : queue.substring(cut + 1));
 		Progression.Step step = Progression.current(rest, track);
-		if (step == null || Template.get(rest.style() + "/" + step.building()) == null) {
+		if (step == null || Template.get(template(rest, step.building())) == null) {
 			put(server, rest);
 			return;
 		}
@@ -721,7 +721,7 @@ public final class Settlements {
 			}
 			List<Long> built = new ArrayList<>(now.built().getOrDefault(track, List.of()));
 			Set<Long> builtSet = new HashSet<>(built);
-			for (Template.Placement p : placements(s, s.style() + "/" + step.building())) {
+			for (Template.Placement p : placements(s, template(s, step.building()))) {
 				BlockPos pos = s.heart().offset(p.offset());
 				if (!changes.containsKey(pos.asLong()) || p.state().isAir() || p.state().getBlock() instanceof CropBlock) {
 					continue;
@@ -756,13 +756,13 @@ public final class Settlements {
 			if (step == null) {
 				continue;
 			}
-			Template t = Template.get(s.style() + "/" + step.building());
+			Template t = Template.get(template(s, step.building()));
 			if (t == null || track.equals(s.jobTrack())) {
 				continue;
 			}
 			// every block the builders placed for this track (walls, roads, foundations, moat bridge...) is checked
 			Set<Long> mine = new HashSet<>(s.built().getOrDefault(track, List.of()));
-			for (Template.Placement p : placements(s, s.style() + "/" + step.building())) {
+			for (Template.Placement p : placements(s, template(s, step.building()))) {
 				if (p.state().isAir() || p.state().getBlock() instanceof CropBlock || !p.state().getFluidState().isEmpty()) {
 					continue;
 				}
@@ -884,7 +884,7 @@ public final class Settlements {
 			if (step == null) {
 				continue;
 			}
-			String job = s.style() + "/" + step.building();
+			String job = template(s, step.building());
 			List<Template.Placement> before = placements(s, job);
 			List<Template.Placement> now = placements(after, job);
 			for (int i = 0; i < Math.min(before.size(), now.size()); i++) {
@@ -1074,8 +1074,9 @@ public final class Settlements {
 	private static boolean dockFits(ServerLevel level, Settlement s, BlockPos water) {
 		BlockPos h = s.heart();
 		Rotation turn = Rotation.values()[s.rotation()];
-		BlockPos a = h.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[0] - 18, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[1] - 18), turn));
-		BlockPos b = h.offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring()[2] + 18, 0, io.github.sotadevop.kingdomquest.building.Layout.ring()[3] + 18), turn));
+		int[] ring = io.github.sotadevop.kingdomquest.building.Layout.ring(round(s));
+		BlockPos a = h.offset(Template.rotate(new BlockPos(ring[0] - 18, 0, ring[1] - 18), turn));
+		BlockPos b = h.offset(Template.rotate(new BlockPos(ring[2] + 18, 0, ring[3] + 18), turn));
 		int minX = Math.min(a.getX(), b.getX()), maxX = Math.max(a.getX(), b.getX());
 		int minZ = Math.min(a.getZ(), b.getZ()), maxZ = Math.max(a.getZ(), b.getZ());
 		if (water.getX() >= minX && water.getX() <= maxX && water.getZ() >= minZ && water.getZ() <= maxZ) {
@@ -1223,6 +1224,25 @@ public final class Settlements {
 		});
 	}
 
+	/** Whether the settlement's castle is round (founding menu; 19.11). */
+	public static boolean round(Settlement s) {
+		return s.level(Grade.SHAPE) == 1;
+	}
+
+	/**
+	 * The template id of one of a settlement's buildings: a round castle's own version (walls, gate, posterns, roads,
+	 * lamps: tools/buildings.py writes them to <style>_round/) where there is one, else the style's.
+	 */
+	public static String template(Settlement s, String building) {
+		if (round(s)) {
+			String id = s.style() + "_round/" + building;
+			if (Template.get(id) != null) {
+				return id;
+			}
+		}
+		return s.style() + "/" + building;
+	}
+
 	private static final Map<String, Boolean> POSTERN_FITS = new HashMap<>();
 
 	/**
@@ -1243,7 +1263,7 @@ public final class Settlements {
 			return known;
 		}
 		Grade plan = Grade.of(server, s);
-		Template t = Template.get(s.style() + "/postern_3");
+		Template t = Template.get(template(s, "postern_3"));
 		if (plan == null || t == null) {
 			return false; // worked out once the site's plan is known
 		}
@@ -1869,7 +1889,7 @@ public final class Settlements {
 			if (current == null) {
 				continue;
 			}
-			String job = s.style() + "/" + current.building();
+			String job = template(s, current.building());
 			// the land may have been cut or filled under them since they were laid: work out again where they lie,
 			// take up what is left hanging or buried, and lay what is missing (new lanes included)
 			String prefix = s.id() + "|" + job + "|";
@@ -2244,7 +2264,7 @@ public final class Settlements {
 				SiteWork.dropFloating(level, box[0] - 4, box[1] - 4, box[2] + 4, box[3] + 4, nowBuilt);
 				SiteWork.stumps(level, box[0] - 8, box[1] - 8, box[2] + 8, box[3] + 8, nowBuilt, SiteWork.surface(level, s.heart()));
 				// snow back on the whole worked area: the ring, the moat bank and the roads out of the gate (country roads too)
-				int[] ring = Grade.ringBox(s.heart(), Rotation.values()[s.rotation()]);
+				int[] ring = Grade.ringBox(s.heart(), Rotation.values()[s.rotation()], round(s));
 				SiteWork.snowCover(level, ring[0] - 40, ring[1] - 40, ring[2] + 40, ring[3] + 40, nowBuilt);
 				JOB_BOX.remove(s.id() + "|" + s.job());
 			}

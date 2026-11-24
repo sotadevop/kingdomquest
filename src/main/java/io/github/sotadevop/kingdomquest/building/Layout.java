@@ -38,6 +38,11 @@ public final class Layout {
 	private static final List<int[]> STREETS = new ArrayList<>();
 	private static final Map<String, List<int[]>> HOUSES = new HashMap<>();
 	private static final int[] SQUARE;
+	/** The round castle's ring box (x0, x1, z0, z1), ellipse (centre x, z, half axes), towers and streets. */
+	private static final int[] ROUND_WALL;
+	private static final int[] ELLIPSE;
+	private static final Map<Integer, List<int[]>> ROUND_TOWERS = new HashMap<>();
+	private static final List<int[]> ROUND_STREETS = new ArrayList<>();
 
 	static {
 		JsonObject j = new JsonObject();
@@ -55,6 +60,19 @@ public final class Layout {
 		MOAT = j.has("moat") ? j.get("moat").getAsInt() : 10;
 		KEEP = ints(j.getAsJsonArray("keep"), new int[] {-4, -18, 18, 7});
 		SQUARE = ints(j.getAsJsonArray("square"), new int[] {0, 8, 14, 16});
+		JsonObject round = j.has("round") ? j.getAsJsonObject("round") : new JsonObject();
+		ROUND_WALL = ints(round.getAsJsonArray("wall"), WALL.clone());
+		ELLIPSE = ints(round.getAsJsonArray("ellipse"), new int[] {7, 0, 154, 128});
+		if (round.has("towers")) {
+			for (Map.Entry<String, com.google.gson.JsonElement> e : round.getAsJsonObject("towers").entrySet()) {
+				List<int[]> l = new ArrayList<>();
+				e.getValue().getAsJsonArray().forEach(t -> l.add(ints(t.getAsJsonArray(), new int[2])));
+				ROUND_TOWERS.put(Integer.parseInt(e.getKey()), l);
+			}
+		}
+		if (round.has("streets")) {
+			round.getAsJsonArray("streets").forEach(t -> ROUND_STREETS.add(ints(t.getAsJsonArray(), new int[5])));
+		}
 		readMap(j, "relocate", MOVES);
 		readMap(j, "plots", PLOTS);
 		readMap(j, "reserved", RESERVED);
@@ -126,9 +144,42 @@ public final class Layout {
 		return new int[] {WALL[0] - HX, WALL[2] - HZ, WALL[1] - HX, WALL[3] - HZ};
 	}
 
+	/** The wall ring of a square or round castle relative to the heart, unrotated: {x0, z0, x1, z1} (its box). */
+	public static int[] ring(boolean round) {
+		int[] w = round ? ROUND_WALL : WALL;
+		return new int[] {w[0] - HX, w[2] - HZ, w[1] - HX, w[3] - HZ};
+	}
+
 	/** The wall ring in the base frame: x0, x1, z0, z1. */
 	public static int[] wall() {
 		return WALL.clone();
+	}
+
+	/** The wall ring (its box for a round castle) in the base frame: x0, x1, z0, z1. */
+	public static int[] wall(boolean round) {
+		return (round ? ROUND_WALL : WALL).clone();
+	}
+
+	/** The round castle's ellipse in the base frame: centre x, z, half axes along x and z. */
+	public static int[] ellipse() {
+		return ELLIPSE.clone();
+	}
+
+	/**
+	 * How far inside the wall line a base-frame column lies (negative: outside): for the square castle the distance
+	 * to the nearest side, for the round one along the ray from the centre.
+	 */
+	public static double inside(boolean round, double bx, double bz) {
+		if (!round) {
+			return Math.min(Math.min(bx - WALL[0], WALL[1] - bx), Math.min(bz - WALL[2], WALL[3] - bz));
+		}
+		double dx = bx - ELLIPSE[0], dz = bz - ELLIPSE[1];
+		double r = Math.sqrt(dx * dx + dz * dz);
+		if (r < 1e-6) {
+			return Math.min(ELLIPSE[2], ELLIPSE[3]);
+		}
+		double f = Math.sqrt(dx * dx / ((double) ELLIPSE[2] * ELLIPSE[2]) + dz * dz / ((double) ELLIPSE[3] * ELLIPSE[3]));
+		return r / f - r;
 	}
 
 	/** The gate's middle in the base frame: x, z (on the south side of the ring). */
@@ -140,6 +191,10 @@ public final class Layout {
 		return WALL[3];
 	}
 
+	public static int gateZ(boolean round) {
+		return (round ? ROUND_WALL : WALL)[3];
+	}
+
 	/** How far the moat reaches out from the wall. */
 	public static int moat() {
 		return MOAT;
@@ -148,6 +203,10 @@ public final class Layout {
 	/** The wall towers (base frame x, z) of a wall level: the level-2 set below 4, the full set from 4. */
 	public static List<int[]> towers(int wallLevel) {
 		return TOWERS.getOrDefault(wallLevel >= 4 ? 4 : 2, List.of());
+	}
+
+	public static List<int[]> towers(int wallLevel, boolean round) {
+		return (round ? ROUND_TOWERS : TOWERS).getOrDefault(wallLevel >= 4 ? 4 : 2, List.of());
 	}
 
 	/** A track's plot in the base frame, all its levels together: x0, z0, x1, z1; null if it has none. */
@@ -178,6 +237,10 @@ public final class Layout {
 	/** The streets (not the lanes): x0, z0, x1, z1 and 0 for one running along z (north-south), 1 along x. */
 	public static List<int[]> streets() {
 		return List.copyOf(STREETS);
+	}
+
+	public static List<int[]> streets(boolean round) {
+		return List.copyOf(round ? ROUND_STREETS : STREETS);
 	}
 
 	/** The town square: x0, z0, x1, z1. */

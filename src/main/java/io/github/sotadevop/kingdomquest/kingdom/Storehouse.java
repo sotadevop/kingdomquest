@@ -280,7 +280,7 @@ public final class Storehouse {
 
 	private static String job(Settlement s) {
 		Progression.Step step = Progression.current(s, TRACK);
-		return step == null ? null : s.style() + "/" + step.building();
+		return step == null ? null : Settlements.template(s, step.building());
 	}
 
 	/** The ledger's lectern in the world, or null without a storehouse. */

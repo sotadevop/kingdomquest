@@ -280,9 +280,20 @@ final class Grade {
 
 	// ---- planning ----
 
+	/** How far inside the wall line a world column lies (negative outside), for a heart and rotation. */
+	static double inside(BlockPos heart, Rotation r, boolean round, int x, int z) {
+		BlockPos b = Template.rotate(new BlockPos(x - heart.getX(), 0, z - heart.getZ()), back(r));
+		return Layout.inside(round, b.getX() + Layout.HX, b.getZ() + Layout.HZ);
+	}
+
 	/** The world rectangle of the wall ring for a heart and rotation: x0, z0, x1, z1. */
 	static int[] ringBox(BlockPos heart, Rotation r) {
-		int[] ring = Layout.ring();
+		return ringBox(heart, r, false);
+	}
+
+	/** The world rectangle of a square or round castle's wall ring (the round one's box): x0, z0, x1, z1. */
+	static int[] ringBox(BlockPos heart, Rotation r, boolean round) {
+		int[] ring = Layout.ring(round);
 		BlockPos a = heart.offset(Template.rotate(new BlockPos(ring[0], 0, ring[1]), r));
 		BlockPos b = heart.offset(Template.rotate(new BlockPos(ring[2], 0, ring[3]), r));
 		return new int[] {Math.min(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getX(), b.getX()), Math.max(a.getZ(), b.getZ())};
@@ -291,7 +302,7 @@ final class Grade {
 	/** A plan that leaves the land as it is (settlements founded before grading). */
 	private static Grade asFound(ServerLevel level, Settlement s) {
 		Rotation r = Rotation.values()[s.rotation()];
-		int[] box = ringBox(s.heart(), r);
+		int[] box = ringBox(s.heart(), r, Settlements.round(s));
 		int x0 = box[0] - PAD - 8, z0 = box[1] - PAD - 8;
 		int w = box[2] - box[0] + 1 + 2 * (PAD + 8), d = box[3] - box[1] + 1 + 2 * (PAD + 8);
 		for (int i = 0; i < w + 16; i += 16) {
@@ -325,8 +336,8 @@ final class Grade {
 	 * with its gate side {@code r} and the look chosen in the founding menu. Reads the world where it is loaded and the
 	 * world generator's own heights elsewhere.
 	 */
-	static Planned plan(ServerLevel level, BlockPos clicked, Rotation r, int look) {
-		int[] ring = ringBox(clicked, r);
+	static Planned plan(ServerLevel level, BlockPos clicked, Rotation r, int look, boolean round) {
+		int[] ring = ringBox(clicked, r, round);
 		int x0 = ring[0] - PAD - MARGIN, z0 = ring[1] - PAD - MARGIN;
 		int w = ring[2] - ring[0] + 1 + 2 * (PAD + MARGIN), d = ring[3] - ring[1] + 1 + 2 * (PAD + MARGIN);
 		int n = w * d;
@@ -368,7 +379,7 @@ final class Grade {
 		for (int x = ring[0] - PAD; x <= ring[2] + PAD; x += 2) {
 			for (int z = ring[1] - PAD; z <= ring[3] + PAD; z += 2) {
 				int c = (x - x0) * d + (z - z0);
-				if (x >= ring[0] && x <= ring[2] && z >= ring[1] && z <= ring[3]) {
+				if (x >= ring[0] && x <= ring[2] && z >= ring[1] && z <= ring[3] && (!round || inside(clicked, r, round, x, z) >= 0)) {
 					heights.add(surf[c]);
 				}
 				if (surf[c] > bed[c]) {
@@ -389,7 +400,7 @@ final class Grade {
 		Map<String, int[]> plots = new HashMap<>(Layout.plots());
 		Layout.reserved().forEach(plots::put);
 		List<double[]> hills = hills(look);
-		int[] wall = Layout.wall();
+
 		for (int i = 0; i < w; i++) {
 			for (int k = 0; k < d; k++) {
 				BlockPos b = Template.rotate(new BlockPos(x0 + i - clicked.getX(), 0, z0 + k - clicked.getZ()), back);
@@ -402,7 +413,7 @@ final class Grade {
 					hgt = Math.max(hgt, h[4] - Math.max(0, dist) * h[5]);
 				}
 				// the walls and the moat lie on the plateau itself: no hill climbs them (a hill's back may fall steeply to them)
-				int inWall = Math.min(Math.min(bx - wall[0], wall[1] - bx), Math.min(bz - wall[2], wall[3] - bz));
+				int inWall = (int) Math.floor(Layout.inside(round, bx, bz));
 				hgt = Math.min(hgt, Math.max(0, inWall - 6));
 				relief[i * d + k] = Math.max(0, hgt);
 				if (inWall < 6) {
@@ -430,7 +441,7 @@ final class Grade {
 				lifts.put(e.getKey(), lvl);
 			}
 			// a street is level across its width wherever it crosses a hill: it climbs along, never sideways
-			for (int[] st : Layout.streets()) {
+			for (int[] st : Layout.streets(round)) {
 				boolean alongZ = st[4] == 0;
 				for (int a = alongZ ? st[1] : st[0]; a <= (alongZ ? st[3] : st[2]); a++) {
 					List<Integer> across = alongZ ? cells(clicked, r, x0, z0, w, d, st[0], a, st[2], a) : cells(clicked, r, x0, z0, w, d, a, st[1], a, st[3]);
@@ -463,7 +474,8 @@ final class Grade {
 				// the flat band's edge wanders (never closer than the moat and the landing need) and its corners are round
 				double pad = PAD + 3 + noise(x, z, 16) * 6 + noise(x - 71, z + 29, 5) * 1.5;
 				double ox = Math.max(0, Math.max(ring[0] - x, x - ring[2])), oz = Math.max(0, Math.max(ring[1] - z, z - ring[3]));
-				boolean flat = Math.sqrt(ox * ox + oz * oz) <= Math.max(PAD - 3, pad);
+				double out = round ? Math.max(0, -inside(clicked, r, true, x, z)) : Math.sqrt(ox * ox + oz * oz);
+				boolean flat = out <= Math.max(PAD - 3, pad);
 				double vary = 0.65 + 0.7 * (noise(x + 913, z - 377, 9) * 0.5 + 0.5);
 				// never steeper than two blocks a block: a rock face, not a cliff
 				cut[c] = (float) Math.min(1.9, vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 1.7; default -> 1.0; });

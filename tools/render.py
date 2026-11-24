@@ -354,7 +354,7 @@ def render(blocks, size, rot=0, scale=2, bg=(0, 0, 0, 0)):
         u = ((q[1][0] - q[0][0]) * scale, (q[1][1] - q[0][1]) * scale)
         v = ((q[2][0] - q[0][0]) * scale, (q[2][1] - q[0][1]) * scale)
         det = u[0] * v[1] - u[1] * v[0]
-        if abs(det) < 1e-6:
+        if abs(det) < 1e-6 or img is None:
             continue
         bx0 = math.floor(min(o[0], o[0] + u[0], o[0] + v[0], o[0] + u[0] + v[0]))
         by0 = math.floor(min(o[1], o[1] + u[1], o[1] + v[1], o[1] + u[1] + v[1]))
