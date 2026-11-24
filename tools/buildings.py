@@ -5364,9 +5364,13 @@ def markethall(style, level):
                 b.put(x0 + x, 8, z0 + z, P["frame"])
     else:
         t = B()
-        zroof(t, -1, W, -1, L, 7, (1, 1, 2, 2, 2, 2, 2), lambda x, y, z: roof, lambda x, y, z: rstair, rslab)
+        _, low = zroof(t, -1, W, -1, L, 7, (1, 1, 2, 2, 2, 2, 2), lambda x, y, z: roof, lambda x, y, z: rstair, rslab)
         for (x, y, z), v in t.b.items():
             b.b[(x0 + x, y, z0 + z)] = v
+        for x in (1, W - 2):                     # knee walls on the wall plates, up to the roof
+            for z in range(1, L - 1):
+                for y in range(7, low.get(x, 7)):
+                    b.put(x0 + x, y, z0 + z, P["fill"])
         for z in (1, L - 2):                      # the gables over the ends: boarded, a round window
             for x in range(2, W - 2):
                 for y in range(7, 7 + min(x - 1, W - 2 - x) * 2):
@@ -5411,7 +5415,7 @@ def belfry(style, level):
                 continue
             for y in range(0, H + 1):
                 opening = not corner and H - 5 <= y <= H - 2
-                slit = not corner and y in (7, 8, 13, 14) and (x - ox == 3 or z - oz == 3)
+                slit = not corner and y in (7, 8, 13, 14) and (x - ox == 3 or z - oz == 3) and (x, z) != (ox + 3, oz)
                 if opening:
                     b.put(x, y, z, "iron_bars" if style not in ("frozen", "wild") else f"{P['door']}_fence",
                           north="false", south="false", east="false", west="false", waterlogged="false")
