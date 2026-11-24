@@ -2014,7 +2014,7 @@ public final class Settlements {
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
 		BlockState surface = SiteWork.surface(level, s.heart());
 		// the town houses of the main track stand on the plateau: their ground is worked at their own level
-		Map<Long, Integer> houseGround = Settlement.MAIN.equals(s.jobTrack()) ? houseLifts(s, 2) : Map.of();
+		Map<Long, Integer> houseGround = Settlement.MAIN.equals(s.jobTrack()) ? houseLifts(s, 4) : Map.of();
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
 			SiteWork.Column c = columns.get(index);
 			if (moat.contains(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()))) {
