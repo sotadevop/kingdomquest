@@ -178,6 +178,10 @@ public class KingdomScreen extends Screen {
 		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.open"), b ->
 				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "realm")))
 				.bounds(this.left + W - 8 - 70 - 4 - 70, this.top + H - 24, 70, 18).build()));
+		// the chronicle: the kingdom's history as the chronicler wrote it
+		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.chronicle.open"), b ->
+				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "chronicle")))
+				.bounds(this.left + W - 8 - 70 - 4 - 70 - 4 - 70, this.top + H - 24, 70, 18).build()));
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 70, this.top + H - 24, 70, 18).build());
 	}

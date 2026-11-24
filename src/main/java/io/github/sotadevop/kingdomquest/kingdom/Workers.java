@@ -58,7 +58,8 @@ final class Workers {
 			new Spec("carpenter", 1, "Carpenter", "crafting_table", -16, -75, "Measure twice, cut once."),
 			new Spec("sawmill", 1, "Sawyer", "iron_axe", 26, -75, "Logs in, planks out. The saw sings all day."),
 			new Spec("smelter", 1, "Smelter", "coal", 92, 74, "The furnaces are roaring. Ingots for the storehouse."),
-			new Spec("saddler", 1, "Saddler", "leather", 36, 33, "A good saddle makes a good rider, my lord."));
+			new Spec("saddler", 1, "Saddler", "leather", 36, 33, "A good saddle makes a good rider, my lord."),
+			new Spec(Progression.TOWNHALL, 1, "Chronicler", "writable_book", 55, 8, "Every deed of the realm goes into my book. Shall I read to you?"));
 
 	/** Inside the houses (base frame): main house, then the three houses on the square. */
 	private static final int[][] HOMES = {{7, 1}, {-6, 35}, {20, 35}, {-18, 35}};
@@ -163,6 +164,10 @@ final class Workers {
 		for (Spec spec : SPECS) {
 			if (spec.name().equals(name)) {
 				People.say(player, name, spec.line());
+				Settlement here = name.equals("Chronicler") ? Settlements.nearestOwned(player) : null;
+				if (here != null) {
+					Chronicle.send(player, here);
+				}
 				return true;
 			}
 		}

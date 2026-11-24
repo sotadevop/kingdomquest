@@ -400,6 +400,7 @@ public final class Production {
 				var holder = server.getAdvancements().get(Identifier.withDefaultNamespace(m.advancement));
 				if (holder != null && owner.getAdvancements().getOrStartProgress(holder).isDone()) {
 					next = next.withLevel(m.key(), 1);
+					Chronicle.milestone(server, s, m.name().toLowerCase());
 				}
 			}
 		}

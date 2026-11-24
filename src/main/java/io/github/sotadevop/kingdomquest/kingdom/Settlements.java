@@ -119,6 +119,7 @@ public final class Settlements {
 		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
 		Storehouse.register();
 		Tram.register();
+		Chronicle.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
@@ -328,6 +329,7 @@ public final class Settlements {
 			}
 		}
 		plan.grade().adopt(level.getServer(), s.id());
+		Chronicle.founded(level.getServer(), s);
 		if (whole) {
 			plan.grade().shapeAll(level, s);
 		} else {
@@ -641,7 +643,9 @@ public final class Settlements {
 			case "undo_changes" -> undoChanges(player, s);
 			case "rebuild" -> startRebuild(player, s);
 			default -> {
-				if (action.equals("realm")) {
+				if (action.equals("chronicle")) {
+					Chronicle.send(player, s);
+				} else if (action.equals("realm")) {
 					Realm.send(player, s);
 				} else if (action.startsWith("realm")) {
 					Realm.handle(player, s, action);
@@ -2323,6 +2327,7 @@ public final class Settlements {
 			if (owner != null) {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
 			}
+			Chronicle.built(server, byHeart(server, s.heart()), s.jobTrack());
 			Settlement latest = byHeart(server, s.heart());
 			if (latest != null) {
 				Progression.Step cur = Progression.current(latest, s.jobTrack());
