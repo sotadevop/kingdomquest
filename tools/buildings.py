@@ -1245,6 +1245,107 @@ FOLLOW = set()  # ids of block dicts whose blocks follow the terrain (roads, lam
 ANCHORS_OF = {}  # blocks dict id -> {pos: (x, z) anchor column}
 
 
+# Rows of town houses along the east-west streets (user, 2026-11-24: rows of houses with small alleys between them,
+# a lived-in town instead of an empty grid). They belong to the main track: the town fills up as it grows, the houses
+# nearest the square first. Each house keeps an alley of 2-3 blocks to the next; doors open onto the street.
+HOUSE_RECTS = {}   # style -> [(x0, z0, x1, z1)] footprints of the town houses (their own levelled plots)
+HOUSE_TIERS = (("village_1", 4), ("town_1", 10), ("castle_1", 10), ("castle_2", 10), ("citadel_1", 999))
+
+
+CW = {"north": "east", "east": "south", "south": "west", "west": "north"}
+
+
+def turned(blocks, cw):
+    """The blocks turned a quarter round about the origin (clockwise seen from above if cw), properties with them."""
+    out = {}
+    m = CW if cw else {v: k for k, v in CW.items()}
+    for (x, y, z), (name, props) in blocks.items():
+        p = dict(props)
+        if "facing" in p and p["facing"] in m:
+            p["facing"] = m[p["facing"]]
+        if p.get("axis") in ("x", "z"):
+            p["axis"] = "z" if p["axis"] == "x" else "x"
+        if all(d in props for d in CW):
+            for d in CW:
+                p[m[d]] = props[d]
+        if "rotation" in p:
+            p["rotation"] = str((int(p["rotation"]) + (4 if cw else 12)) % 16)
+        out[(-z, y, x) if cw else (z, y, -x)] = (name, p)
+    return out
+
+
+def town_house(style, variant, side, along, edge):
+    """One town house, door to the street: blocks and footprint. side: 'n'/'s' of an east-west street (edge = the
+    street's z edge on that side), 'e'/'w' of a north-south street (edge = its x edge); along = where it stands along it."""
+    t = B()
+    house(t, style, 12 * variant, 0)       # door south at z 8, porch at z 9; footprint x -1..7, z -1..9 (after the shift)
+    base = {(x - 12 * variant, y, z): v for (x, y, z), v in t.b.items()}
+    if side == "n":                         # as drawn: porch on the street's north edge
+        dx, dz, blocks = along, edge - 10, base
+    elif side == "s":                       # mirrored: door north
+        m = B()
+        mirror_into(m, base, 0, 8)
+        dx, dz, blocks = along, edge + 2, m.b
+    elif side == "e":                       # turned clockwise: door west, porch at x = -9
+        dx, dz, blocks = edge + 10, along, turned(base, True)
+    else:                                   # turned back: door east, porch at x = 9
+        dx, dz, blocks = edge - 10, along, turned(base, False)
+    out = {(x + dx, y, z + dz): v for (x, y, z), v in blocks.items()}
+    xs = [x for x, _, _ in out]
+    zs = [z for _, _, z in out]
+    return out, (min(xs), min(zs), max(xs), max(zs))
+
+
+def add_town_houses(style, jobs):
+    taken = set()
+    for j in jobs:
+        for (x, y, z), (bn, _) in j[2].items():
+            if y >= -1 and bn not in ("minecraft:snow", "minecraft:air"):
+                taken.add((x, z))
+    taken = {(x + dx, z + dz) for (x, z) in taken for dx in (-2, -1, 0, 1, 2) for dz in (-2, -1, 0, 1, 2)}
+    streets = set()
+    for name, (xa, xb), (za, zb), _axis, _par, _own in ROAD_TRUNKS:
+        streets |= {(x, z) for x in range(xa, xb + 1) for z in range(za, zb + 1)}
+    for x0_, z0_, x1_, z1_ in RESERVED.values():
+        taken |= {(x, z) for x in range(x0_ - 2, x1_ + 3) for z in range(z0_ - 2, z1_ + 3)}
+    wx0, wx1, wz0, wz1 = WALL
+    spots = []   # (distance to the heart, order, blocks, rect)
+    n = 0
+    for name, (xa, xb), (za, zb), (axis, line), _par, _own in ROAD_TRUNKS:
+        if name.startswith(("plaza", "place_", "castle_")):
+            continue
+        if axis == "z":
+            sides, lo, hi = (("n", za - 1), ("s", zb + 1)), xa + 1, xb - 7
+        else:
+            sides, lo, hi = (("e", xb + 1), ("w", xa - 1)), za + 1, zb - 7
+        for side, edge in sides:
+            a, k = lo, 0
+            while a <= hi:
+                blocks, r = town_house(style, (a // 9 + k) % 4, side, a, edge)
+                cells = {(x, z) for x in range(r[0], r[2] + 1) for z in range(r[1], r[3] + 1)}
+                inside = wx0 + 12 <= r[0] and r[2] <= wx1 - 12 and wz0 + 12 <= r[1] and r[3] <= wz1 - 12
+                if inside and not cells & taken and not cells & streets:
+                    cx, cz = (r[0] + r[2]) // 2, (r[1] + r[3]) // 2
+                    spots.append((abs(cx - HEART[0]) + abs(cz - HEART[2]), n, blocks, r))
+                    n += 1
+                    taken |= {(x + dx, z + dz) for (x, z) in cells for dx in (-1, 0, 1) for dz in (-1, 0, 1)}
+                    a += 9 + (k % 3 == 2)   # an alley of 2, every third one 3
+                    k += 1
+                else:
+                    a += 1
+    spots.sort(key=lambda sp: sp[:2])
+    by_name = {j[1]: j for j in jobs}
+    rects = HOUSE_RECTS.setdefault(style, [])
+    start = 0
+    for tier_i, (tier, count) in enumerate(HOUSE_TIERS):
+        for _d, _n, blocks, r in spots[start:start + count]:
+            for later, _ in HOUSE_TIERS[tier_i:]:
+                if later in by_name:
+                    by_name[later][2].update(blocks)
+            rects.append(r)
+        start += count
+
+
 def track_of(name):
     t = name.rsplit("_", 1)[0]
     return {"tent": "main", "hamlet": "main", "village": "main", "town": "main", "castle": "main", "citadel": "main",
@@ -5030,6 +5131,7 @@ def build_jobs(styles=None):
         for j in mine:
             hang_lanterns(j[2])
         mine = [moved(j) for j in mine]
+        add_town_houses(style, mine)
         plan_roads(style, mine)
         for level in (1, 2, 3, 4):
             mine.append((style, f"road_{level}", roads(style, level), 90 + 30 * level, None, None))
@@ -5054,6 +5156,13 @@ if __name__ == "__main__":
         if name.startswith("tent_") or track_of(name) in NO_PLOT:
             continue
         cells = [(x, z) for (x, y, z), v in blocks.items() if y >= 0 and v[0] != "minecraft:air"]
+        if track_of(name) == "main":
+            houses = HOUSE_RECTS.get(style, [])
+            cells = [c for c in cells if not any(r[0] <= c[0] <= r[2] and r[1] <= c[1] <= r[3] for r in houses)]
+            rects = plots.setdefault((style, "main"), [])
+            for r in houses:
+                if any(r[0] <= x <= r[2] and r[1] <= z <= r[3] for (x, y, z) in blocks if y >= 0) and r not in rects:
+                    rects.append(r)
         if cells:
             rect = (min(c[0] for c in cells), min(c[1] for c in cells), max(c[0] for c in cells), max(c[1] for c in cells))
             rects = plots.setdefault((style, track_of(name)), [])
