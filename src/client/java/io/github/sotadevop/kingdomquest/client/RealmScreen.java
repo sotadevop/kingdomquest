@@ -266,6 +266,18 @@ public class RealmScreen extends Screen {
 			}).bounds(this.left + 312, fy, 50, 18).build();
 			save.active = sel != null;
 			this.themed.add(this.addRenderableWidget(save));
+			// fast travel with the Dimension Globe of Sota Tweaks (the server checks the globe is carried)
+			if (this.data.has("globe") && this.data.get("globe").getAsBoolean()) {
+				Button travel = Button.builder(Component.translatable("kingdomquest.realm.travel"), b -> {
+					Node n = this.selB != null ? node(this.selB) : node(this.selA);
+					if (n != null) {
+						send("realm_travel|" + n.key());
+						this.onClose();
+					}
+				}).bounds(this.left + 366, fy, 60, 18).build();
+				travel.active = sel != null;
+				this.themed.add(this.addRenderableWidget(travel));
+			}
 		} else if (this.tab == 2 && this.picking != null) {
 			this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("gui.back"), b -> {
 				this.picking = null;

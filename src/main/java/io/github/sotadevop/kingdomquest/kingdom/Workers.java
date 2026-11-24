@@ -49,7 +49,20 @@ final class Workers {
 			new Spec("nether", 1, "Nether Trader", "gold_ingot", -43, 14, "The piglins drive a hard bargain, but gold speaks every language."),
 			new Spec(Progression.STOREHOUSE, 1, "Storekeeper", "writable_book", Storehouse.FROM_TEMPLATE, Storehouse.FROM_TEMPLATE,
 					"Everything that comes in is written in the ledger, my lord. It lies on the lectern by the door."),
-			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch goes to the storehouse."));
+			new Spec("dock", 1, "Fisher", "fishing_rod", 0, 0, "The fish are biting! The catch goes to the storehouse."),
+			new Spec("mill", 1, "Miller", "wheat", -103, 35, "The sails are turning. Flour and sugar for the storehouse."),
+			new Spec("bakery", 1, "Baker", "bread", -67, -75, "Fresh from the oven, my lord. Mind, it's hot."),
+			new Spec("herbs", 1, "Herbalist", "sweet_berries", -84, 79, "Every herb has its use, if you know where to look."),
+			new Spec("weaver", 1, "Weaver", "string", -50, -75, "The looms never rest. Cloth for the whole kingdom."),
+			new Spec("dyehouse", 1, "Dyer", "red_dye", -33, -75, "Red from poppies, blue from cornflowers. Every colour has its flower."),
+			new Spec("carpenter", 1, "Carpenter", "crafting_table", -16, -75, "Measure twice, cut once."),
+			new Spec("sawmill", 1, "Sawyer", "iron_axe", 26, -75, "Logs in, planks out. The saw sings all day."),
+			new Spec("smelter", 1, "Smelter", "coal", 92, 74, "The furnaces are roaring. Ingots for the storehouse."),
+			new Spec("saddler", 1, "Saddler", "leather", 36, 33, "A good saddle makes a good rider, my lord."),
+			new Spec("quarry", 1, "Quarryman", "stone_pickaxe", -203, 2, "Good stone, my lord. The walls will stand a thousand years."),
+			new Spec("lumbercamp", 1, "Forester", "iron_axe", 203, -16, "For every tree we fell, we plant two."),
+			new Spec("minecamp", 1, "Prospector", "iron_pickaxe", 203, 43, "The seams run deep here. Mind the shaft."),
+			new Spec(Progression.TOWNHALL, 1, "Chronicler", "writable_book", 55, 8, "Every deed of the realm goes into my book. Shall I read to you?"));
 
 	/** Inside the houses (base frame): main house, then the three houses on the square. */
 	private static final int[][] HOMES = {{7, 1}, {-6, 35}, {20, 35}, {-18, 35}};
@@ -154,6 +167,10 @@ final class Workers {
 		for (Spec spec : SPECS) {
 			if (spec.name().equals(name)) {
 				People.say(player, name, spec.line());
+				Settlement here = name.equals("Chronicler") ? Settlements.nearestOwned(player) : null;
+				if (here != null) {
+					Chronicle.send(player, here);
+				}
 				return true;
 			}
 		}

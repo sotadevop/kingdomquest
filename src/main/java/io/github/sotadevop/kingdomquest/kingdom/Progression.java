@@ -252,6 +252,49 @@ public final class Progression {
 				Map.entry("tannery", List.of(
 					new Step("tannery", "tannery_1", 1, "kingdomquest.trade.tannery_1", 5, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed", List.of(item(Items.CAULDRON, 2), item(Items.LEATHER, 8), tag(ItemTags.LOGS, "logs", 32))),
 					new Step("tannery", "tannery_2", 2, "kingdomquest.trade.tannery_2", 7, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame", List.of(item(Items.SMOKER, 1), item(Items.LEATHER, 16))))),
+				Map.entry("mill", List.of(
+					new Step("mill", "mill_1", 1, "kingdomquest.trade.mill_1", 5, null, null, List.of(tag(ItemTags.PLANKS, "planks", 64), item(Items.GRINDSTONE, 1), tag(ItemTags.WOOL, "wool", 8))),
+					new Step("mill", "mill_2", 2, "kingdomquest.trade.mill_2", 7, null, null, List.of(tag(ItemTags.WOOL, "wool", 16), item(Items.EMERALD, 12))))),
+				Map.entry("bakery", List.of(
+					new Step("bakery", "bakery_1", 1, "kingdomquest.trade.bakery_1", 6, null, null, List.of(item(Items.SMOKER, 2), item(Items.BRICKS, 32), item(Items.WHEAT, 32))),
+					new Step("bakery", "bakery_2", 2, "kingdomquest.trade.bakery_2", 8, null, null, List.of(item(Items.SMOKER, 1), item(Items.CAKE, 1), item(Items.EMERALD, 12))))),
+				Map.entry("weaver", List.of(
+					new Step("weaver", "weaver_1", 1, "kingdomquest.trade.weaver_1", 7, null, null, List.of(item(Items.LOOM, 3), tag(ItemTags.WOOL, "wool", 16), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("weaver", "weaver_2", 2, "kingdomquest.trade.weaver_2", 9, null, null, List.of(item(Items.LOOM, 2), item(Items.EMERALD, 16))))),
+				Map.entry("dyehouse", List.of(
+					new Step("dyehouse", "dyehouse_1", 1, "kingdomquest.trade.dyehouse_1", 8, null, null, List.of(item(Items.CAULDRON, 3), tag(ItemTags.WOOL, "wool", 16), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("dyehouse", "dyehouse_2", 2, "kingdomquest.trade.dyehouse_2", 10, null, null, List.of(item(Items.CAULDRON, 1), item(Items.EMERALD, 16))))),
+				Map.entry("carpenter", List.of(
+					new Step("carpenter", "carpenter_1", 1, "kingdomquest.trade.carpenter_1", 7, null, null, List.of(item(Items.CRAFTING_TABLE, 2), item(Items.FLETCHING_TABLE, 1), tag(ItemTags.LOGS, "logs", 48))),
+					new Step("carpenter", "carpenter_2", 2, "kingdomquest.trade.carpenter_2", 9, null, null, List.of(item(Items.GRINDSTONE, 1), item(Items.EMERALD, 16))))),
+				Map.entry("sawmill", List.of(
+					new Step("sawmill", "sawmill_1", 1, "kingdomquest.trade.sawmill_1", 6, null, null, List.of(item(Items.STONECUTTER, 2), tag(ItemTags.LOGS, "logs", 64))),
+					new Step("sawmill", "sawmill_2", 2, "kingdomquest.trade.sawmill_2", 8, null, null, List.of(item(Items.STONECUTTER, 1), item(Items.EMERALD, 12))))),
+				Map.entry("smelter", List.of(
+					new Step("smelter", "smelter_1", 1, "kingdomquest.trade.smelter_1", 8, null, null, List.of(item(Items.BLAST_FURNACE, 2), item(Items.STONE_BRICKS, 64), item(Items.COAL, 32))),
+					new Step("smelter", "smelter_2", 2, "kingdomquest.trade.smelter_2", 10, null, null, List.of(item(Items.BLAST_FURNACE, 1), item(Items.IRON_BLOCK, 1), item(Items.EMERALD, 16))))),
+				Map.entry("saddler", List.of(
+					new Step("saddler", "saddler_1", 1, "kingdomquest.trade.saddler_1", 8, null, null, List.of(item(Items.LEATHER, 24), item(Items.GRINDSTONE, 1), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("saddler", "saddler_2", 2, "kingdomquest.trade.saddler_2", 10, null, null, List.of(item(Items.LEATHER, 16), item(Items.EMERALD, 16))))),
+				Map.entry("herbs", List.of(
+					new Step("herbs", "herbs_1", 1, "kingdomquest.trade.herbs_1", 4, null, null, List.of(item(Items.BREWING_STAND, 1), item(Items.COMPOSTER, 1), tag(ItemTags.PLANKS, "planks", 32))),
+					new Step("herbs", "herbs_2", 2, "kingdomquest.trade.herbs_2", 6, null, null, List.of(item(Items.FLOWER_POT, 4), item(Items.EMERALD, 8))))),
+				Map.entry("quarry", List.of(
+					new Step("quarry", "quarry_1", 1, "kingdomquest.trade.quarry_1", 6, adv("story/mine_stone"), "kingdomquest.req.mine_stone",
+							List.of(item(Items.STONE_PICKAXE, 2), tag(ItemTags.LOGS, "logs", 24), item(Items.STONECUTTER, 1))),
+					new Step("quarry", "quarry_2", 2, "kingdomquest.trade.quarry_2", 8, null, null, List.of(item(Items.IRON_PICKAXE, 1), item(Items.EMERALD, 12))))),
+				Map.entry("lumbercamp", List.of(
+					new Step("lumbercamp", "lumbercamp_1", 1, "kingdomquest.trade.lumbercamp_1", 5, null, null,
+							List.of(item(Items.STONE_AXE, 2), tag(ItemTags.LOGS, "logs", 16), item(Items.CAMPFIRE, 1))),
+					new Step("lumbercamp", "lumbercamp_2", 2, "kingdomquest.trade.lumbercamp_2", 7, null, null, List.of(item(Items.IRON_AXE, 1), item(Items.EMERALD, 12))))),
+				Map.entry("minecamp", List.of(
+					new Step("minecamp", "minecamp_1", 1, "kingdomquest.trade.minecamp_1", 7, adv("story/iron_tools"), "kingdomquest.req.iron_tools",
+							List.of(item(Items.IRON_PICKAXE, 1), item(Items.RAIL, 16), item(Items.LANTERN, 2))),
+					new Step("minecamp", "minecamp_2", 2, "kingdomquest.trade.minecamp_2", 9, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+							List.of(item(Items.DIAMOND_PICKAXE, 1), item(Items.EMERALD, 24))))),
+				Map.entry("tourney", List.of(
+					new Step("tourney", "tourney_1", 1, "kingdomquest.trade.tourney_1", 9, null, null,
+							List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.WOOL, "wool", 32), item(Items.TARGET, 3), item(Items.EMERALD, 24))))),
 				Map.entry("archaeology", List.of(
 					new Step("archaeology", "archaeology_1", 1, "kingdomquest.trade.archaeology_1", 7, adv("adventure/salvage_sherd"), "kingdomquest.req.sherd", List.of(item(Items.BRUSH, 1), item(Items.DECORATED_POT, 2), item(Items.SANDSTONE, 32))),
 					new Step("archaeology", "archaeology_2", 2, "kingdomquest.trade.archaeology_2", 8, adv("adventure/craft_decorated_pot_using_only_sherds"), "kingdomquest.req.pot", List.of(item(Items.CHISELED_BOOKSHELF, 2), item(Items.BRUSH, 1))))),
@@ -350,7 +393,8 @@ public final class Progression {
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM);
+			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM,
+			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney", "quarry", "lumbercamp", "minecamp");
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

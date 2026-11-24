@@ -33,6 +33,7 @@ public final class Layout {
 	private static final Map<String, int[]> MOVES = new HashMap<>();
 	private static final Map<String, int[]> PLOTS = new HashMap<>();
 	private static final Map<String, int[]> RESERVED = new HashMap<>();
+	private static final Map<String, int[]> OUTSIDE = new HashMap<>();
 	private static final Map<Integer, List<int[]>> TOWERS = new HashMap<>();
 	private static final int[] KEEP;
 	private static final List<int[]> STREETS = new ArrayList<>();
@@ -76,6 +77,7 @@ public final class Layout {
 		readMap(j, "relocate", MOVES);
 		readMap(j, "plots", PLOTS);
 		readMap(j, "reserved", RESERVED);
+		readMap(j, "outside", OUTSIDE);
 		if (j.has("houses")) {
 			for (Map.Entry<String, JsonElement> e : j.getAsJsonObject("houses").entrySet()) {
 				List<int[]> rs = new ArrayList<>();
@@ -227,6 +229,11 @@ public final class Layout {
 	/** Plots kept free for buildings of a later wave (the church): x0, z0, x1, z1 in the base frame. */
 	public static Map<String, int[]> reserved() {
 		return Map.copyOf(RESERVED);
+	}
+
+	/** Places outside the walls levelled with the plateau (the tournament field): x0, z0, x1, z1 in the base frame. */
+	public static Map<String, int[]> outside() {
+		return Map.copyOf(OUTSIDE);
 	}
 
 	/** The main building's own plot (castle, keep, motte), north of the square: x0, z0, x1, z1. */

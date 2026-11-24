@@ -589,6 +589,7 @@ public final class Fealty {
 	private static void proclaim(MinecraftServer server, ServerLevel level, Ceremony c) {
 		Settlement liege = byId(server, c.liege);
 		String kingdom = liege == null ? "the realm" : liege.name();
+		Chronicle.vassal(server, liege, c.name);
 		for (ServerPlayer p : level.players()) {
 			if (p.distanceToSqr(Vec3.atCenterOf(c.bell)) < 160 * 160) {
 				p.connection.send(new ClientboundSetTitlesAnimationPacket(15, 80, 25));

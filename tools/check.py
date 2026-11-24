@@ -185,6 +185,9 @@ class Grid:
         return False
 
 
+# outside the walls (the tournament field, the outposts): the walk from the town doesn't go there (no road yet)
+OUTSIDE_TRACKS = ("tourney", "quarry", "lumbercamp", "minecamp")
+
 # blocks: x0, x1, y0, y1, z0, z1: the wall ring with the moat and the landing beyond the gate
 BOX = (bld.WALL[0] - 14, bld.WALL[1] + 14, -30, 50, bld.WALL[2] - 14, bld.WALL[3] + 16)
 
@@ -393,13 +396,13 @@ def check_walk(world, out, quiet=False, start=None):
         if n.endswith("_bed") and p.get("part") == "foot" or n in ("chest", "barrel", "enchanting_table", "anvil", "smithing_table",
                                                                    "brewing_stand", "cartography_table", "lectern", "blast_furnace", "grindstone"):
             s = near(pos)
-            if s in ("jump", "no"):
+            if s in ("jump", "no") and world.owner[pos] not in OUTSIDE_TRACKS:
                 out.append(("walk", f"{world.owner[pos]}: {n} at {pos} {words[s]}"))
     for track, st in world.storage.items():
         if near(st) in ("jump", "no"):
             out.append(("walk", f"{track}: its store at {st} {words[near(st)]}"))
     for track, lvl, name, x, z in read_workers():
-        if world.levels.get(track, 0) >= lvl and track != "dock":
+        if world.levels.get(track, 0) >= lvl and track != "dock" and track not in OUTSIDE_TRACKS:
             col = [(x, y, z) for y in range(-2, 9)]
             if not any(state(p) in ("ok", "tight") for p in col):
                 out.append(("walk", f"{name} ({track}) stands at {x},{z}: a place nobody can walk to"))
@@ -444,6 +447,8 @@ def check_walk(world, out, quiet=False, start=None):
             for c in comp:
                 tr[world.owner.get((c[0] >> 1, (c[1] - 1) >> 1, c[2] >> 1))] += 1
             who = max(tr, key=tr.get)
+            if who in OUTSIDE_TRACKS:
+                continue  # the tournament field lies outside the walls: the walk from the town doesn't go there
             out.append(("walk", f"{who}: closed-off space of {len(comp) // 4} blocks at x {min(xs)}..{max(xs)}, y {min(ys)}..{max(ys)}, "
                                 f"z {min(zs)}..{max(zs)}"))
     return grid, easy

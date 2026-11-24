@@ -51,6 +51,7 @@ final class Realm {
 		j.addProperty("here", here.id().toString());
 		j.addProperty("lord", player.getUUID().equals(here.owner())); // only the lord changes how his people look
 		j.addProperty("solo", server.isSingleplayer()); // own skins from the skins folder: single player only
+		j.addProperty("globe", carriesGlobe(player));
 		j.addProperty("hx", here.heart().getX());
 		j.addProperty("hz", here.heart().getZ());
 		j.addProperty("px", (int) player.getX());
@@ -207,10 +208,102 @@ final class Realm {
 	}
 
 	/** Realm actions from the screen ("realm_..."); the screen is refreshed afterwards. */
+	/**
+	 * The realm map table (Castle and up): the cartography table on the lord's floor of the keep opens the realm map
+	 * for its lord; sneaking uses it as a vanilla cartography table.
+	 */
+	static void registerMapTable() {
+		net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+			if (!(player instanceof ServerPlayer sp) || player.isShiftKeyDown() || level.dimension() != net.minecraft.world.level.Level.OVERWORLD
+					|| !level.getBlockState(hit.getBlockPos()).is(net.minecraft.world.level.block.Blocks.CARTOGRAPHY_TABLE)) {
+				return net.minecraft.world.InteractionResult.PASS;
+			}
+			BlockPos pos = hit.getBlockPos();
+			for (Settlement s : owned(sp.level().getServer(), sp.getUUID())) {
+				if (s.level(Settlement.MAIN) >= 9 && Math.abs(pos.getX() - s.heart().getX()) <= 30 && Math.abs(pos.getZ() - s.heart().getZ()) <= 30
+						&& Math.abs(pos.getY() - s.heart().getY()) <= 30) {
+					if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) {
+						send(sp, s);
+					}
+					return net.minecraft.world.InteractionResult.SUCCESS;
+				}
+			}
+			return net.minecraft.world.InteractionResult.PASS;
+		});
+		// the steward's lectern in the town hall: the kingdom's book (the same menu as at the heart)
+		net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+			if (!(player instanceof ServerPlayer sp) || level.dimension() != net.minecraft.world.level.Level.OVERWORLD
+					|| !(level.getBlockState(hit.getBlockPos()).getBlock() instanceof net.minecraft.world.level.block.LecternBlock)) {
+				return net.minecraft.world.InteractionResult.PASS;
+			}
+			long at = hit.getBlockPos().asLong();
+			for (Settlement s : owned(sp.level().getServer(), sp.getUUID())) {
+				if (s.built().getOrDefault(Progression.TOWNHALL, List.of()).contains(at)) {
+					if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) {
+						Settlements.sendInfo(sp, s);
+					}
+					return net.minecraft.world.InteractionResult.SUCCESS;
+				}
+			}
+			return net.minecraft.world.InteractionResult.PASS;
+		});
+	}
+
+	/** The Dimension Globe of Sota Tweaks (soft dependency): fast travel from the realm map works while it is carried. */
+	static boolean carriesGlobe(ServerPlayer player) {
+		if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sotatweaks")) {
+			return false;
+		}
+		net.minecraft.world.item.Item globe = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.fromNamespaceAndPath("sotatweaks", "dimension_globe"));
+		if (globe == null || globe == net.minecraft.world.item.Items.AIR) {
+			return false;
+		}
+		for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+			if (player.getInventory().getItem(i).is(globe)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Travels to a place on the realm map: one of the lord's kingdoms (its heart) or a known village (its bell). */
+	private static void travel(ServerPlayer player, String key) {
+		if (!carriesGlobe(player) || player.level().dimension() != net.minecraft.world.level.Level.OVERWORLD) {
+			return;
+		}
+		MinecraftServer server = player.level().getServer();
+		net.minecraft.server.level.ServerLevel level = server.overworld();
+		int x;
+		int z;
+		Settlement target = owned(server, player.getUUID()).stream().filter(o -> o.id().toString().equals(key)).findFirst().orElse(null);
+		if (target != null) {
+			x = target.heart().getX() + 2;
+			z = target.heart().getZ() + 2;
+		} else if (key.startsWith("v:")) {
+			String[] p = key.substring(2).split(",");
+			try {
+				x = Integer.parseInt(p[0]);
+				z = Integer.parseInt(p[1]);
+			} catch (NumberFormatException e) {
+				return;
+			}
+		} else {
+			return;
+		}
+		level.getChunk(x >> 4, z >> 4);
+		int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+		level.playSound(null, player.blockPosition(), net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT, net.minecraft.sounds.SoundSource.PLAYERS, 0.8f, 1.2f);
+		player.teleport(new net.minecraft.world.level.portal.TeleportTransition(level, net.minecraft.world.phys.Vec3.atBottomCenterOf(new BlockPos(x, y, z)),
+				net.minecraft.world.phys.Vec3.ZERO, player.getYRot(), player.getXRot(), net.minecraft.world.level.portal.TeleportTransition.DO_NOTHING));
+		player.resetFallDistance();
+		level.playSound(null, new BlockPos(x, y, z), net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT, net.minecraft.sounds.SoundSource.PLAYERS, 0.8f, 1.2f);
+	}
+
 	static void handle(ServerPlayer player, Settlement here, String action) {
 		MinecraftServer server = player.level().getServer();
 		String[] a = action.split("\\|", 4);
 		switch (a[0]) {
+			case "realm_travel" -> travel(player, a.length > 1 ? a[1] : "");
 			case "realm_empire" -> {
 				String name = clean(a.length > 1 ? a[1] : "");
 				if (!name.isEmpty()) {

@@ -119,6 +119,11 @@ public final class Settlements {
 		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
 		Storehouse.register();
 		Tram.register();
+		Chronicle.register();
+		MarketDay.register();
+		Realm.registerMapTable();
+		Animals.register();
+		Tournament.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
@@ -328,6 +333,7 @@ public final class Settlements {
 			}
 		}
 		plan.grade().adopt(level.getServer(), s.id());
+		Chronicle.founded(level.getServer(), s);
 		if (whole) {
 			plan.grade().shapeAll(level, s);
 		} else {
@@ -417,7 +423,8 @@ public final class Settlements {
 	/** Add-ons that stand on their own terrace: at the height of the land where they are built. */
 	static final Set<String> LIFTED = Set.of("farm", "smith", "wood", "library", "brewery", "stables", "barracks", "guild", "apiary", "kennel",
 			"trophy", "tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether", "royal",
-			Progression.STOREHOUSE, Progression.CHURCH, Progression.TOWNHALL, Progression.GARDEN, Progression.MARKETHALL, Progression.BELFRY, Progression.MONASTERY);
+			Progression.STOREHOUSE, Progression.CHURCH, Progression.TOWNHALL, Progression.GARDEN, Progression.MARKETHALL, Progression.BELFRY, Progression.MONASTERY,
+			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler");
 
 	/** The track (key of {@link Settlement#built()}) a job's building belongs to. */
 	static String builtTrack(String job) {
@@ -637,10 +644,13 @@ public final class Settlements {
 			case "link_kingdom" -> RoadLink.connect(player, s, false);
 			case "link_village" -> RoadLink.connect(player, s, true);
 			case "repair" -> startRepair(player, s);
+			case "buy_horse" -> Animals.buyHorse(player, s);
 			case "undo_changes" -> undoChanges(player, s);
 			case "rebuild" -> startRebuild(player, s);
 			default -> {
-				if (action.equals("realm")) {
+				if (action.equals("chronicle")) {
+					Chronicle.send(player, s);
+				} else if (action.equals("realm")) {
 					Realm.send(player, s);
 				} else if (action.startsWith("realm")) {
 					Realm.handle(player, s, action);
@@ -1222,6 +1232,26 @@ public final class Settlements {
 			}
 			return List.copyOf(out);
 		});
+	}
+
+	/** Where the road from the gate ends for the places outside the walls (base frame): the outposts' edge, the lists. */
+	private static final Map<String, int[]> ROAD_OUT = Map.of("quarry", new int[] {-195, 0}, "lumbercamp", new int[] {195, -18},
+			"minecamp", new int[] {195, 40}, "tourney", new int[] {5, -143});
+
+	/** A place outside the walls is finished: a road leads to it from the gate (once; later tiers rebuild it). */
+	static void roadOut(MinecraftServer server, Settlement s, String track) {
+		int[] end = ROAD_OUT.get(track);
+		if (s == null || end == null || s.names().containsKey(RoadLink.PREFIX + "outpost:" + track)) {
+			return;
+		}
+		BlockPos p = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], end[0], 0, end[1]));
+		String name = switch (track) {
+			case "quarry" -> "the quarry";
+			case "lumbercamp" -> "the lumber camp";
+			case "minecamp" -> "the mine camp";
+			default -> "the tournament field";
+		};
+		RoadLink.link(server, null, s, "outpost:" + track, p, name);
 	}
 
 	/** Whether the settlement's castle is round (founding menu; 19.11). */
@@ -2322,6 +2352,8 @@ public final class Settlements {
 			if (owner != null) {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
 			}
+			Chronicle.built(server, byHeart(server, s.heart()), s.jobTrack());
+			roadOut(server, byHeart(server, s.heart()), s.jobTrack());
 			Settlement latest = byHeart(server, s.heart());
 			if (latest != null) {
 				Progression.Step cur = Progression.current(latest, s.jobTrack());

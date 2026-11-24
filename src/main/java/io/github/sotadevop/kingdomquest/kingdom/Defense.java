@@ -265,6 +265,7 @@ final class Defense {
 			if (owner != null) {
 				People.say(owner, "Warchief", "Victory! The army is beaten. Have the Architect repair what they broke.");
 			}
+			Chronicle.battle(server, s, 0);
 			return;
 		}
 		BlockPos gate = at(s, io.github.sotadevop.kingdomquest.building.Layout.gateX(), io.github.sotadevop.kingdomquest.building.Layout.gateZ(Settlements.round(s)) + 6);

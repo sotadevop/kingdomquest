@@ -1565,7 +1565,7 @@ def plan_roads(style, jobs):
     for j in jobs:
         name, blocks = j[1], j[2]
         track, level = track_of(name), int(name.rsplit("_", 1)[1])
-        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_")):
+        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_", "tourney_", "quarry_", "lumbercamp_", "minecamp_")):
             continue
         if track == "main":
             level += {"hamlet": 3, "village": 6, "town": 7, "castle": 8, "citadel": 10}[name.rsplit("_", 1)[0]]
@@ -2685,6 +2685,14 @@ TRADE_DECOR = {
     "workshop": ("copper_golem_statue", "copper_chest", "copper_bulb", "copper_grate"),
     "armorer": ("grindstone", "barrel", "anvil", "barrel"),
     "tannery": ("hay_block", "composter", "barrel", "barrel"),
+    "bakery": ("barrel", "hay_block", "barrel", "barrel"),
+    "weaver": ("white_wool", "barrel", "light_gray_wool", "barrel"),
+    "dyehouse": ("barrel", "cauldron", "barrel", "decorated_pot"),
+    "carpenter": ("barrel", "barrel", "stripped_spruce_log", "barrel"),
+    "sawmill": ("barrel", "stripped_oak_log", "barrel", "barrel"),
+    "smelter": ("coal_block", "barrel", "barrel", "coal_block"),
+    "saddler": ("hay_block", "barrel", "barrel", "hay_block"),
+    "herbs": ("composter", "barrel", "decorated_pot", "barrel"),
     "archaeology": ("decorated_pot", "suspicious_gravel", "decorated_pot", "barrel"),
     "mine": ("barrel", "barrel", "iron_ore", "coal_ore"),
     "nether": ("gilded_blackstone", "barrel", "crying_obsidian", "barrel"),
@@ -3786,7 +3794,19 @@ SHOPS = {
     "archaeology": ((58, 24, 68, 32), "n"),
     "mine": ((61, 2, 69, 10), "s"),
     "nether": ((-47, 4, -39, 12), "s"),
+    # the production chains (wave 3): a craft row along the north of the town, the smelter and the saddler near the
+    # square's east, the herb garden's shed in the south-west (garden around it), the windmill on the west side
+    "bakery": ((-72, -84, -62, -76), "s"),
+    "weaver": ((-55, -84, -45, -76), "s"),
+    "dyehouse": ((-38, -84, -28, -76), "s"),
+    "carpenter": ((-21, -84, -11, -76), "s"),
+    "sawmill": ((21, -84, 31, -76), "s"),
+    "smelter": ((87, 75, 97, 83), "n"),
+    "saddler": ((31, 34, 41, 42), "n"),
+    "herbs": ((-87, 80, -81, 84), "n"),
+    "mill": ((-106, 36, -100, 42), "n"),
 }
+CHAINS = ("bakery", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "herbs", "mill")
 
 
 def shop_store(name):
@@ -4886,6 +4906,87 @@ def shop_interior(b, style, name, level, x0, z0, x1, z1, door, h, base_h):
             for u in (W - 3, W - 2):
                 put(u, 3, 1, f"{w}_fence"); put(u, 3, 2, "white_carpet")
             put(0, 3, 1, "barrel")
+    elif name == "bakery":
+        # the bakehouse: ovens along the back wall, the kneading trough, flour sacks, loaves cooling on the counter
+        put(1, 0, 1, "smoker", facing="f", lit="true"); put(2, 0, 1, "furnace", facing="f", lit="true"); put(3, 0, 1, "smoker", facing="f", lit="false")
+        for u in (1, 2, 3):
+            for y in range(2, h):
+                put(u, 0, y, "bricks")
+        put(W - 1, 0, 1, "barrel"); put(W - 2, 0, 1, "barrel"); put(W - 1, 0, 2, "white_wool")
+        counter(1, 3, 3, ("cake", None, "cake"))
+        table(W - 2, 3, "candle")
+        if level >= 2:
+            put(4, 0, 1, "smoker", facing="f", lit="true")
+            for y in range(2, h):
+                put(4, 0, y, "bricks")
+            put(W - 1, 2, 1, "hay_block")
+    elif name == "weaver":
+        # the weaving room: looms in a row under the window light, bales of wool, cloth hung to air
+        for u in range(1, min(W - 1, 5)):
+            put(u, 0, 1, "loom", facing="f")
+        put(W - 1, 0, 1, "white_wool"); put(W - 1, 0, 2, "white_wool"); put(W - 1, 1, 1, "light_gray_wool")
+        for u in (1, 2):
+            put(u, 2, 1, f"{w}_fence"); put(u, 2, 2, "white_carpet")
+        table(W - 3, 3, "candle")
+        if level >= 2:
+            put(W - 3, 0, 1, "loom", facing="f")
+            put(W - 2, 0, 1, "brown_wool")
+    elif name == "dyehouse":
+        # the dyer's vats: cauldrons of dye water, coloured bales, dyed cloth drying on rails
+        put(1, 0, 1, "water_cauldron", level="3"); put(2, 0, 1, "water_cauldron", level="2"); put(3, 0, 1, "water_cauldron", level="3")
+        put(W - 1, 0, 1, "red_wool"); put(W - 2, 0, 1, "blue_wool"); put(W - 1, 0, 2, "yellow_wool")
+        for u, c in ((1, "red"), (2, "blue"), (3, "yellow")):
+            if style == "arid":
+                put(u, 2, 1, f"{c}_wool")                   # Fes: the dyed hides and cloth stacked by the pits
+            else:
+                put(u, 2, 1, f"{w}_fence"); put(u, 2, 2, f"{c}_carpet")
+        put(W - 2, 2, 1, "barrel")
+        if level >= 2:
+            put(4, 0, 1, "water_cauldron", level="1"); put(W - 3, 0, 1, "green_wool")
+            for u, c in ((W - 2, "green"), (W - 3, "purple")):
+                put(u, 2, 1, f"{w}_fence"); put(u, 2, 2, f"{c}_carpet")
+    elif name == "carpenter":
+        # the joiner's shop: benches, timber stacked by the wall, a chest and a door half made
+        put(1, 0, 1, "crafting_table"); put(2, 0, 1, "fletching_table"); put(3, 0, 1, "crafting_table")
+        for u in (W - 1, W - 2):
+            put(u, 0, 1, f"stripped_{w}_log", axis="x"); put(u, 1, 1, f"stripped_{w}_log", axis="x")
+        put(W - 1, 0, 2, f"{w}_planks")
+        table(2, 3, f"{w}_pressure_plate")
+        put(1, 3, 1, "chest", facing="f")
+        if level >= 2:
+            put(4, 0, 1, "grindstone", face="floor", facing="f"); put(W - 3, 0, 1, "barrel")
+    elif name == "sawmill":
+        # the saw shed: the saws, logs waiting on the left, planks stacked on the right
+        put(2, 0, 2, "stonecutter", facing="f"); put(3, 0, 2, "stonecutter", facing="f")
+        for v in (0, 1):
+            put(0, v, 1, f"{w}_log", axis="z"); put(0, v, 2, f"{w}_log", axis="z")
+        put(W - 1, 0, 1, f"{w}_planks"); put(W - 1, 0, 2, f"{w}_planks"); put(W - 1, 1, 1, f"{w}_planks")
+        put(W - 2, 0, 1, f"{w}_slab", type="bottom")
+        if level >= 2:
+            put(4, 0, 2, "stonecutter", facing="f"); put(1, 0, 1, f"{w}_log", axis="z")
+    elif name == "smelter":
+        # the smelting house: blast furnaces under the chimney, the lava pot, coal heaps, the anvil
+        put(1, 0, 1, "blast_furnace", facing="f", lit="true"); put(2, 0, 1, "blast_furnace", facing="f", lit="false")
+        put(3, 0, 1, "lava_cauldron"); put(W - 1, 0, 1, "coal_block"); put(W - 1, 0, 2, "coal_block")
+        put(W - 2, 0, 1, "barrel"); put(2, 3, 1, "anvil", facing="l")
+        if level >= 2:
+            put(4, 0, 1, "blast_furnace", facing="f", lit="true"); put(W - 1, 1, 1, "raw_iron_block"); put(W - 3, 0, 1, "raw_copper_block")
+    elif name == "saddler":
+        # the saddlery: hides on the rail, the stitching bench, harness pegs, hay for the trial horse
+        for u in (1, 2):
+            put(u, 2, 1, f"{w}_fence"); put(u, 2, 2, "brown_carpet")
+        put(W - 1, 0, 1, "grindstone", face="floor", facing="f"); put(W - 2, 0, 1, "barrel")
+        table(W - 3, 3, "candle")
+        put(1, 0, 1, "chest", facing="f")
+        if level >= 2:
+            put(W - 1, 0, 2, "hay_block"); put(W - 3, 0, 1, "barrel")
+    elif name == "herbs":
+        # the herbalist's shed: drying bunches, the brewing bench, jars
+        put(1, 0, 1, "brewing_stand", has_bottle_0="false", has_bottle_1="false", has_bottle_2="false")
+        put(2, 0, 1, "cauldron"); put(W - 1, 0, 1, "decorated_pot")
+        put(1, 3, 1, f"{w}_fence"); put(1, 3, 2, "green_carpet")
+        if level >= 2:
+            put(W - 2, 0, 1, "barrel")
     elif name == "archaeology":
         # the finds room: trays of sand being brushed, shelves of pots, a desk with notes, bones of the old world
         put(1, 0, 1, "chiseled_bookshelf", facing="f"); put(2, 0, 1, "lectern", facing="f", has_book="false", powered="false")
@@ -4937,6 +5038,114 @@ def shop_interior(b, style, name, level, x0, z0, x1, z1, door, h, base_h):
         put(door_u, 2, base_h + 4, "lantern") if base_h + 4 < h else None
 
 
+def windmill(style, level):
+    """The windmill (grain chain): a stone base, a timbered body and a pointed cap, four sails turned to the street.
+    Inside: the millstones (grindstones), sacks and a ladder to the loft. Level 2 sets canvas on all four sails."""
+    m = MAT[style]
+    b = B()
+    (x0, z0, x1, z1), door = SHOPS["mill"]
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
+    H = 12
+    log, stone = m["log"], m["stone"]
+    wood = STYLES[style]["wood"]
+    wall = MAT[style]["wall"]
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            edge = x in (x0, x1) or z in (z0, z1)
+            corner = x in (x0, x1) and z in (z0, z1)
+            b.put(x, -1, z, stone)
+            for y in range(0, H):
+                if corner:
+                    b.put(x, y, z, log if y >= 4 else stone, **({"axis": "y"} if y >= 4 else {}))
+                elif edge:
+                    b.put(x, y, z, stone if y < 4 else wall)
+                else:
+                    b.put(x, y, z, "air")
+            b.put(x, 4, z, f"{wood}_planks") if not edge else None
+    # door, windows
+    b.put(cx, 0, z0, f"{wood}_door", facing="north", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 1, z0, f"{wood}_door", facing="north", half="upper", hinge="left", open="false", powered="false")
+    for x, z in ((x0, cz), (x1, cz), (cx, z1)):
+        b.put(x, 2, z, "glass_pane", **(PANE_Z if x in (x0, x1) else PANE_X))
+        b.put(x, 7, z, "glass_pane", **(PANE_Z if x in (x0, x1) else PANE_X))
+    # the cap: a pyramid of the roof stairs
+    roof_st = MAT[style]["roof"]
+    for k in range(0, 5):
+        lo_x, hi_x, lo_z, hi_z = x0 - 1 + k, x1 + 1 - k, z0 - 1 + k, z1 + 1 - k
+        if lo_x > hi_x:
+            break
+        for x in range(lo_x, hi_x + 1):
+            for z in range(lo_z, hi_z + 1):
+                if x in (lo_x, hi_x) or z in (lo_z, hi_z):
+                    f = "south" if z == lo_z else "north" if z == hi_z else "east" if x == lo_x else "west"
+                    if lo_x == hi_x or lo_z == hi_z:
+                        b.put(x, H + k, z, MAT[style]["roof_slab"], type="bottom", waterlogged="false")
+                    else:
+                        b.put(x, H + k, z, roof_st, facing=f, half="bottom", shape="straight", waterlogged="false")
+                else:
+                    b.put(x, H + k, z, f"{wood}_planks")     # the cap is solid: no hollow under the roof
+    # the sails: a hub on the street side, four arms of fence with canvas
+    hy, hz = 9, z0 - 1
+    b.put(cx, hy, hz, f"{wood}_planks")
+    b.put(cx, hy, z0 - 2, log, axis="z")
+    for i in range(1, 6):
+        for dx, dy in ((i, 0), (-i, 0), (0, i), (0, -i)):
+            x, y = cx + dx, hy + dy
+            b.put(x, y, z0 - 2, f"{wood}_fence")
+            canvas = level >= 2 or (dx > 0 or dy > 0)
+            if i >= 2 and canvas:
+                sx, sy = (x, y + (1 if dx > 0 else -1)) if dx else (x + (-1 if dy > 0 else 1), y)
+                b.put(sx, sy, z0 - 2, "white_wool")
+    # inside: the millstones, sacks, a ladder to the loft
+    b.put(cx, 0, cz, "grindstone", face="floor", facing="north")
+    b.put(cx + 1, 0, cz + 2, "barrel", facing="up", open="false")
+    b.put(cx - 1, 0, cz + 2, "white_wool")
+    b.put(x0 + 1, 0, z1 - 1, "hay_block", axis="y")
+    for y in range(0, 5):                                    # beside the window: the ladder needs the wall behind it
+        b.put(x1 - 1, y, cz + 1, "ladder", facing="west", waterlogged="false")
+    b.put(cx, H - 1, cz, "lantern", hanging="true", waterlogged="false")
+    b.put(cx, 3, cz, "lantern", hanging="true", waterlogged="false")
+    b.put(*shop_store("mill"), "barrel", facing="up", open="false")
+    return b.b
+
+
+def herb_beds(b, style, level):
+    """The herb garden around the herbalist's shed: raised beds of herbs and vegetables with a water channel, berry
+    bushes, flowers, a low fence with a gate to the street; level 2 adds a cold frame and more beds."""
+    (x0, z0, x1, z1), door = SHOPS["herbs"]
+    wood = STYLES[style]["wood"]
+    gx0, gz0, gx1, gz1 = x0 - 3, z0 - 7, x1 + 3, z1 + 1      # the garden: x -90..-78, z 73..85
+    for x in range(gx0, gx1 + 1):
+        for z in range(gz0, gz1 + 1):
+            if x in (gx0, gx1) or z in (gz0, gz1):
+                if not (z == gz0 and abs(x - (gx0 + gx1) // 2) <= 1):
+                    b.put(x, 0, z, f"{wood}_fence")
+    crops = ("carrots", "potatoes", "beetroots", "wheat")
+    for i, z in enumerate((gz0 + 2, gz0 + 4)):
+        for x in range(gx0 + 2, gx1 - 1):
+            if abs(x - (gx0 + gx1) // 2) <= 1:
+                continue                                    # the path to the shed
+            b.put(x, -1, z, "farmland", moisture="7")
+            crop = crops[(x + i) % 4]
+            b.put(x, 0, z, crop, age="3" if crop == "beetroots" else "5")
+    for x in range(gx0 + 2, gx1 - 1):                     # the water channel between the beds
+        if abs(x - (gx0 + gx1) // 2) > 1:
+            b.put(x, -1, gz0 + 3, "water", level="0")
+    for x in (gx0 + 1, gx1 - 1):
+        for z in range(gz0 + 1, gz1):
+            if z in (gz0 + 1, gz0 + 5, gz0 + 6):
+                b.put(x, -1, z, "grass_block", snowy="false")     # bushes and flowers need soil, also in the desert
+            if z in (gz0 + 1, gz0 + 5):
+                b.put(x, 0, z, "sweet_berry_bush", age="3")
+            elif z == gz0 + 6:
+                b.put(x, 0, z, "rose_bush" if x == gx0 + 1 else "peony", half="lower")
+                b.put(x, 1, z, "rose_bush" if x == gx0 + 1 else "peony", half="upper")
+    for x in range(gx0 + 2, gx1 - 1, 2):
+        if abs(x - (gx0 + gx1) // 2) > 1:
+            b.put(x, 0, gz0 + 6, "flower_pot" if level < 2 else "potted_fern")
+    b.put(gx0 + 1, 0, gz0 + 3, "composter", level="4")
+
+
 def shop(style, name, level):
     """A small building in the village style with the furniture of its trade; level 2 adds more of it."""
     if name == "tavern":  # the detailed inns, one per region (see gasthaus and the regional inns)
@@ -4948,9 +5157,13 @@ def shop(style, name, level):
     base_h = h
     if level >= 3:
         h += 4  # upper floor
-    kind = "nether" if name == "nether" else "stone" if name in ("mine", "armorer", "workshop") else "timber"
+    if name == "mill":
+        return windmill(style, level)
+    kind = "nether" if name == "nether" else "stone" if name in ("mine", "armorer", "workshop", "smelter") else "timber"
     hall(b, style, x0, z0, x1, z1, h, door, kind=kind, base_h=base_h if level >= 3 else None, sign=True,
-         chimney=(x1 - 1, z0 if door == "s" else z1) if name in ("tavern", "armorer", "tannery") else None)
+         chimney=(x1 - 1, z0 if door == "s" else z1) if name in ("tavern", "armorer", "tannery", "bakery", "smelter", "dyehouse") else None)
+    if name == "herbs":
+        herb_beds(b, style, level)
     back = z0 + 1 if door == "s" else z1 - 1
     front = z1 - 1 if door == "s" else z0 + 1
     cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
@@ -6024,6 +6237,189 @@ def tram(style, level):
     return b.b
 
 
+# Tournaments (19.11, visual only): the tournament field north of the castle, beyond the moat (the north side gate
+# leads out to it). The grading plan levels it with the plateau (layout.json "outside"); Tournament.java brings the
+# jousting knights, the archers and the crowd. Kept in step with Tournament.java (FIELD, TILT_Z, LANES, RANGE).
+TOURNEY = (-22, -170, 32, -145)
+
+
+def tourney(style, level):
+    """The lists: a tilt barrier down the middle with a lane on each side, a stand for the spectators along the south,
+    the judges' box in the middle of it, two tents at the west end, an archery range with three targets at the east
+    end, banners on poles at the corners."""
+    wood = STYLES[style]["wood"]
+    log = MAT[style]["log"]
+    b = B()
+    x0, z0, x1, z1 = TOURNEY
+    tz = -157
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            b.put(x, -1, z, "grass_block", snowy="false")
+    for x in range(-12, 21):                                     # the lanes and the tilt
+        for z in (tz - 2, tz - 1, tz + 1, tz + 2):
+            b.put(x, -1, z, "coarse_dirt")
+        b.put(x, -1, tz, "coarse_dirt")
+        b.put(x, 0, tz, f"{wood}_fence")
+        b.put(x, 1, tz, f"{wood}_fence") if x % 4 == 0 else None
+    for x in range(-12, 21):                                     # the lists' outer fence, gaps at the ends
+        for z in (tz - 4, tz + 4):
+            if x not in (-12, 20):
+                b.put(x, 0, z, f"{wood}_fence")
+    # the stand: three steps of seats facing north, the judges' box raised in the middle under a canopy
+    for i, z in enumerate((tz + 7, tz + 8, tz + 9)):
+        for x in range(-10, 19):
+            for y in range(0, i):
+                b.put(x, y, z, f"{wood}_planks")
+            b.put(x, i, z, f"{wood}_stairs", facing="south", half="bottom", shape="straight", waterlogged="false")
+    for x in range(2, 7):                                         # the judges' canopy over the middle of the stand
+        for z in range(tz + 7, tz + 10):
+            b.put(x, 5, z, "{color}_wool" if x % 2 else "white_wool")
+    for x in (2, 6):
+        for y in range(3, 5):
+            b.put(x, y, tz + 9, log, axis="y")
+    # tents at the west end: a pole and a wool roof falling to all sides, the door toward the lists
+    for cx, cz, col in ((-18, tz - 6, "{color}"), (-18, tz + 6, "white")):
+        for y in range(0, 5):
+            b.put(cx, y, cz, log, axis="y")
+        for k in range(3):
+            for x in range(cx - 2 + k, cx + 3 - k):
+                for z in range(cz - 2 + k, cz + 3 - k):
+                    if x in (cx - 2 + k, cx + 2 - k) or z in (cz - 2 + k, cz + 2 - k):
+                        b.put(x, 2 + k, z, f"{col}_wool")
+        for x in range(cx - 2, cx + 3):
+            for z in range(cz - 2, cz + 3):
+                if (x in (cx - 2, cx + 2) or z in (cz - 2, cz + 2)) and not (x == cx + 2 and z == cz):
+                    stripe = f"{col}_wool" if (x + z) % 2 else ("white_wool" if col != "white" else "{color}_wool")
+                    b.put(x, 0, z, stripe)
+                    b.put(x, 1, z, stripe)
+        b.put(cx, 5, cz, "{color}_banner", rotation="12")
+    # the archery range: a shooting line at the south, three targets on straw at the north
+    for x in (24, 27, 30):
+        b.put(x, 0, tz - 9, "hay_block", axis="y")
+        b.put(x, 1, tz - 9, "target", power="0")
+        b.put(x, -1, tz + 5, "dirt_path")
+    for x in range(23, 32):
+        b.put(x, 0, tz + 6, f"{wood}_fence")
+    # banners on poles at the corners of the lists
+    for x, z in ((-12, tz - 4), (20, tz - 4), (-12, tz + 4), (20, tz + 4)):
+        for y in range(0, 4):
+            b.put(x, y, z, log, axis="y")
+        b.put(x, 4, z, "{color}_banner", rotation="0")
+    return b.b
+
+
+# Outposts (19.1, 19.11): the quarry, the lumber camp and the mine camp outside the walls, beyond the moat's band
+# (west, east, south-east). They look like real workings (stone heaps, a crane, log stacks, a shaft head with ore
+# carts) but take nothing from the land: their output is worked out like any producer's. Each heap or rig stands on
+# the ground at its own middle (follows the land). Kept in step with the workers' spots in Workers.java.
+OUTPOSTS = {"quarry": (-205, 0), "lumbercamp": (205, -18), "minecamp": (205, 40)}
+
+
+def outpost(style, name, level):
+    wood = STYLES[style]["wood"]
+    log = MAT[style]["log"]
+    b = B()
+    FOLLOW.add(id(b.b))
+    ANCHORS_OF[id(b.b)] = b.anchors
+    ox, oz = OUTPOSTS[name]
+
+    def heap(cx, cz, blocks, r=2):
+        """A heap: a cluster standing on the ground at its middle, higher in the middle."""
+        b.anchor = (cx, cz)
+        for x in range(cx - r, cx + r + 1):
+            for z in range(cz - r, cz + r + 1):
+                h = r + 1 - max(abs(x - cx), abs(z - cz))
+                for y in range(0, h):
+                    b.put(x, y, z, blocks[(x * 7 + z * 13 + y) % len(blocks)])
+                b.put(x, -1, z, "coarse_dirt")
+
+    def tent(cx, cz, col):
+        b.anchor = (cx, cz)
+        for x in range(cx - 1, cx + 2):
+            for z in range(cz - 1, cz + 2):
+                b.put(x, -1, z, "coarse_dirt")
+        for z in (cz - 1, cz, cz + 1):
+            b.put(cx - 1, 0, z, f"{col}_wool"); b.put(cx + 1, 0, z, f"{col}_wool")
+            b.put(cx, 1, z, f"{col}_wool")
+        b.put(cx, 0, cz + 1, f"{col}_wool")
+
+    def camp(cx, cz):
+        b.anchor = (cx, cz)
+        b.put(cx, 0, cz, "campfire", facing="north", lit="true", signal_fire="false", waterlogged="false")
+        for dx, dz, f in ((2, 0, "west"), (-2, 0, "east")):
+            b.put(cx + dx, 0, cz + dz, f"{wood}_stairs", facing=f, half="bottom", shape="straight", waterlogged="false")
+
+    if name == "quarry":
+        heap(ox - 5, oz - 4, ("cobblestone", "stone", "andesite", "cobblestone"))
+        heap(ox + 4, oz - 5, ("stone", "diorite", "granite", "stone"), r=1)
+        heap(ox - 4, oz + 5, ("stone_bricks", "stone", "cobblestone"), r=1)
+        # the crane: a log mast with a jib, a chain and a hanging block of stone
+        b.anchor = (ox + 3, oz + 3)
+        for y in range(0, 7):
+            b.put(ox + 3, y, oz + 3, log, axis="y")
+        for x in range(ox + 1, ox + 4):
+            b.put(x, 7, oz + 3, log, axis="x")
+        b.put(ox + 1, 6, oz + 3, "iron_chain", axis="y", waterlogged="false")
+        b.put(ox + 1, 5, oz + 3, "iron_chain", axis="y", waterlogged="false")
+        b.put(ox + 1, 4, oz + 3, "stone")
+        b.put(ox + 4, 0, oz + 3, "stonecutter", facing="west")
+        b.put(ox + 4, 0, oz + 2, "barrel", facing="up", open="false")
+        tent(ox + 6, oz - 1, "white")
+        camp(ox, oz)
+        if level >= 2:
+            heap(ox - 6, oz + 1, ("tuff", "calcite", "stone"), r=1)
+    elif name == "lumbercamp":
+        for i, (cx, cz) in enumerate(((ox - 4, oz - 3), (ox - 4, oz + 2), (ox + 4, oz - 4))):
+            b.anchor = (cx, cz)
+            for x in range(cx - 2, cx + 3):
+                for y in range(0, 2 if i else 3):
+                    b.put(x, y, cz, log, axis="x")
+                    b.put(x, -1, cz, "coarse_dirt")
+        # the sawhorse and the chopping block
+        b.anchor = (ox + 3, oz + 2)
+        b.put(ox + 2, 0, oz + 2, f"{wood}_fence"); b.put(ox + 4, 0, oz + 2, f"{wood}_fence")
+        for x in range(ox + 2, ox + 5):
+            b.put(x, 1, oz + 2, f"stripped_{wood}_log" if wood not in ("bamboo",) else "bamboo_block", axis="x")
+        b.put(ox + 5, 0, oz + 4, log, axis="y")
+        for dx, dz in ((-7, -6), (7, 5), (-6, 6)):                 # stumps of felled trees
+            b.anchor = (ox + dx, oz + dz)
+            b.put(ox + dx, 0, oz + dz, log, axis="y")
+        tent(ox, oz + 6, "brown")
+        camp(ox + 1, oz - 1)
+        if level >= 2:
+            b.anchor = (ox + 6, oz)
+            for z in range(oz - 1, oz + 2):
+                b.put(ox + 6, 0, z, f"{wood}_planks"); b.put(ox + 6, 1, z, f"{wood}_planks")
+    else:
+        # the shaft head: a log headframe over a closed shaft, the winch beam with a chain, ore carts by it
+        b.anchor = (ox, oz)
+        for x in range(ox - 1, ox + 2):
+            for z in range(oz - 1, oz + 2):
+                b.put(x, -1, z, f"{wood}_planks")
+                if (x, z) == (ox, oz):
+                    b.put(x, 0, z, f"{wood}_trapdoor", facing="north", half="bottom", open="false", powered="false", waterlogged="false")
+        for x, z in ((ox - 1, oz - 1), (ox + 1, oz - 1), (ox - 1, oz + 1), (ox + 1, oz + 1)):
+            for y in range(0, 5):
+                b.put(x, y, z, log, axis="y")
+        for x in range(ox - 1, ox + 2):
+            b.put(x, 5, oz, log, axis="x")
+        b.put(ox, 4, oz, "iron_chain", axis="y", waterlogged="false")
+        b.put(ox, 3, oz, "lantern", hanging="true", waterlogged="false")
+        b.anchor = (ox + 4, oz)
+        for z in range(oz - 2, oz + 3):
+            b.put(ox + 4, 0, z, "rail", shape="north_south", waterlogged="false")
+            b.put(ox + 4, -1, z, "gravel")
+        b.put(ox + 5, 0, oz - 1, "chest", facing="west", type="single", waterlogged="false")
+        heap(ox - 4, oz + 4, ("cobblestone", "coal_ore", "cobblestone", "iron_ore"), r=1)
+        heap(ox - 4, oz - 4, ("cobblestone", "stone", "copper_ore"), r=1)
+        tent(ox + 1, oz + 6, "gray")
+        camp(ox - 1, oz - 6)
+        if level >= 2:
+            heap(ox + 5, oz + 5, ("deepslate", "cobbled_deepslate", "redstone_ore"), r=1)
+    b.anchor = None
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -6282,6 +6678,8 @@ def write_layout(jobs, plots):
          "plots": {k: v for k, v in sorted(union.items())}, "keep": keep,
          "square": [plaza[1][0], plaza[2][0], plaza[1][1], plaza[2][1]],
          "reserved": {k: list(v) for k, v in RESERVED.items()},
+         # levelled with the plateau outside the walls: the tournament field
+         "outside": {"tourney": list(TOURNEY)},
          # the town houses of the main track per style: x0, z0, x1, z1 (each set on the graded land, only where it is flat)
          "houses": {st: [list(r) for r in rs] for st, rs in sorted(HOUSE_RECTS.items())},
          # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
@@ -6475,6 +6873,10 @@ def build_jobs(styles=None):
             jobs.append((style, f"postern_{level}", postern(style, level), 120, None, None))
         for level in (1, 2, 3):
             jobs.append((style, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
+        jobs.append((style, "tourney_1", tourney(style, 1), 600, None, None))
+        for name in OUTPOSTS:
+            for level in (1, 2):
+                jobs.append((style, f"{name}_{level}", outpost(style, name, level), 300 + 120 * level, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
@@ -6520,7 +6922,7 @@ if __name__ == "__main__":
     jobs = [j for j in jobs if not j[0].endswith("_round")]
     # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
     # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
-    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern", "tram")
+    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern", "tram", "quarry", "lumbercamp", "minecamp")
     plots = {}
     for style, name, blocks, *_ in jobs:
         if name.startswith("tent_") or track_of(name) in NO_PLOT:

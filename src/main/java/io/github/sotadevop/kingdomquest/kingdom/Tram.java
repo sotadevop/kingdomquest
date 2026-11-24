@@ -351,8 +351,45 @@ public final class Tram {
 		}
 	}
 
+	/** A minecart waits at every stop on the line (one is brought if it went missing). */
+	private static void waitingCarts(MinecraftServer server) {
+		ServerLevel level = server.overworld();
+		EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getValue(net.minecraft.resources.Identifier.withDefaultNamespace("minecart"));
+		if (type == null) {
+			return;
+		}
+		for (Settlement s : Settlements.all(server)) {
+			ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+			if (s.level(Progression.TRAM) <= 0 || owner == null || owner.level() != level || owner.distanceToSqr(Vec3.atCenterOf(s.heart())) > 160 * 160) {
+				continue;
+			}
+			Line l = Line.of(server, s);
+			if (l == null) {
+				continue;
+			}
+			for (int i = 0; i < STOPS.length; i++) {
+				BlockPos stop = l.stop(i);
+				if (stop == null || !level.isLoaded(stop) || !(level.getBlockState(stop).getBlock() instanceof BaseRailBlock)) {
+					continue;
+				}
+				boolean there = !level.getEntities((Entity) null, new net.minecraft.world.phys.AABB(stop).inflate(10, 4, 10),
+						e -> e.getType() == type && !TRIPS.containsKey(e.getUUID())).isEmpty();
+				if (!there) {
+					Entity cart = type.create(level, EntitySpawnReason.EVENT);
+					if (cart != null) {
+						cart.setPos(stop.getX() + 0.5, stop.getY() + 0.0625, stop.getZ() + 0.5);
+						level.addFreshEntity(cart);
+					}
+				}
+			}
+		}
+	}
+
 	/** Drives every running ride a little further along its rails; at the end the lord steps out and the cart goes. */
 	private static void tick(MinecraftServer server) {
+		if (server.getTickCount() % 400 == 123) {
+			waitingCarts(server);
+		}
 		Iterator<Trip> it = TRIPS.values().iterator();
 		while (it.hasNext()) {
 			Trip t = it.next();

@@ -31,7 +31,7 @@ public class KingdomScreen extends Screen {
 	private static final int CARD_H = 50;
 	private static final int CARD_GAP = 4;
 	private static final int MAX_CARDS = 4;
-	private static final int TABS_PER_ROW = 6;
+	private static final int TABS_PER_ROW = 7;
 	private static final int H = HEADER + 2 * TAB_H + 10 + MAX_CARDS * (CARD_H + CARD_GAP) + 26;
 
 	private record Tab(String key, List<String> tracks) {
@@ -40,16 +40,18 @@ public class KingdomScreen extends Screen {
 	private static final List<Tab> TABS = List.of(
 			new Tab("kingdomquest.tab.settlement", List.of("main", "cellar", "royal", "townhall")),
 			new Tab("kingdomquest.tab.defense", List.of("walls", "gate", "barracks", "belfry")),
-			new Tab("kingdomquest.tab.guild", List.of("guild")),
+			new Tab("kingdomquest.tab.guild", List.of("guild", "tourney")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps", "postern", "tram")),
 			new Tab("kingdomquest.tab.farming", List.of("farm", "stables", "apiary", "garden")),
-			new Tab("kingdomquest.tab.resources", List.of("wood", "mine", "dock")),
-			new Tab("kingdomquest.tab.crafts", List.of("smith", "workshop", "armorer")),
+			new Tab("kingdomquest.tab.resources", List.of("wood", "mine", "dock", "smelter")),
+			new Tab("kingdomquest.tab.crafts", List.of("smith", "workshop", "armorer", "saddler")),
 			new Tab("kingdomquest.tab.trade", List.of("tavern", "market", "markethall", "tannery")),
 			new Tab("kingdomquest.tab.culture", List.of("library", "brewery", "music", "church")),
 			new Tab("kingdomquest.tab.discovery", List.of("cartographer", "archaeology", "nether", "monastery")),
 			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy", "lair")),
-			new Tab("kingdomquest.tab.stores", List.of("storehouse")));
+			new Tab("kingdomquest.tab.stores", List.of("storehouse", "quarry", "lumbercamp", "minecamp")),
+			new Tab("kingdomquest.tab.food", List.of("mill", "bakery", "herbs")),
+			new Tab("kingdomquest.tab.workshops", List.of("weaver", "dyehouse", "carpenter", "sawmill")));
 	private static int lastTab;
 
 	private final KingdomInfoPayload info;
@@ -150,6 +152,10 @@ public class KingdomScreen extends Screen {
 			this.tabButtons.add(this.addRenderableWidget(action(this.info.bridge() == 1 ? "kingdomquest.bridge.lower" : "kingdomquest.bridge.raise",
 					"bridge", fx, 100)));
 		}
+		if (tabKey.equals("kingdomquest.tab.farming")) {
+			// stable breeding: a horse from the kingdom's stables (the server checks the stables and the price)
+			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.animal.buy_horse", "buy_horse", fx, 100)));
+		}
 		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.damaged() > 0) {
 			Button repair = Button.builder(Component.translatable("kingdomquest.menu.repair", this.info.damaged()), b -> {
 				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "repair"));
@@ -176,6 +182,10 @@ public class KingdomScreen extends Screen {
 		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.open"), b ->
 				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "realm")))
 				.bounds(this.left + W - 8 - 70 - 4 - 70, this.top + H - 24, 70, 18).build()));
+		// the chronicle: the kingdom's history as the chronicler wrote it
+		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.chronicle.open"), b ->
+				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "chronicle")))
+				.bounds(this.left + W - 8 - 70 - 4 - 70 - 4 - 70, this.top + H - 24, 70, 18).build()));
 		this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> this.onClose())
 				.bounds(this.left + W - 8 - 70, this.top + H - 24, 70, 18).build());
 	}
