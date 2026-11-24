@@ -106,6 +106,7 @@ public final class Settlements {
 		Guild.register();
 		Companion.register();
 		Fealty.register();
+		Roadside.register();
 		PayloadTypeRegistry.clientboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(RealmPayload.TYPE, RealmPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(NamePayload.TYPE, NamePayload.CODEC);
@@ -2112,6 +2113,9 @@ public final class Settlements {
 			}
 			if (Progression.ROADS.equals(s.jobTrack()) && done.level(Progression.ROADS) == 3) {
 				RoadLink.upgradeAll(server, done); // country roads get gravel, cobble and lanterns too
+			}
+			if (Progression.ROADS.equals(s.jobTrack())) {
+				Roadside.update(server, byHeart(server, s.heart())); // waystations and road extras grow with the roads
 			}
 			if (Progression.DOCK.equals(s.jobTrack()) && done.level(Progression.DOCK) == 1) {
 				RoadLink.link(server, null, done, "dock", dockPoint(done, 0, 0, -1), "the dock");

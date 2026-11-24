@@ -65,6 +65,7 @@ final class RoadLink {
 				return;
 			}
 			link(server, player, from, "v:" + v.getX() + "," + v.getZ(), v, "the village");
+			Roadside.planned(server, from, "v:" + v.getX() + "," + v.getZ(), start, v);
 			return;
 		}
 		Settlement best = null;
@@ -79,6 +80,7 @@ final class RoadLink {
 			return;
 		}
 		link(server, player, from, best.id().toString(), gateExit(best), best.name());
+		Roadside.planned(server, from, best.id().toString(), start, gateExit(best));
 	}
 
 	/** Builds (or rebuilds at the current tier) a road from {@code from}'s gate to {@code end} and records it. */
@@ -310,7 +312,8 @@ final class RoadLink {
 	 * boats pass under the arches, never below either bank; ramps of half a block per block (slabs) on both banks.
 	 */
 	private static void profile(ServerLevel level, Job job) {
-		List<BlockPos> line = straighten(level, job.line());
+		// through its waystations (chosen now on a new road, kept on one laid again), then straight over the water
+		List<BlockPos> line = straighten(level, Roadside.route(level, job.settlement(), job.key(), job.line()));
 		int n = line.size();
 		int[] g = new int[n];
 		boolean[] w = new boolean[n];
@@ -509,6 +512,7 @@ final class RoadLink {
 			if (i[0] >= n) {
 				JOBS.remove(id);
 				storeLine(server, job);
+				Roadside.roadBuilt(server, job.settlement(), job.key(), job.line(), job.height(), job.water());
 				ServerPlayer pl = server.getPlayerList().getPlayer(job.player());
 				if (pl != null) {
 					People.say(pl, "Architect", "The road is finished.");
@@ -568,6 +572,49 @@ final class RoadLink {
 				set(level, cell.below(), Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, toSupport).setValue(StairBlock.HALF,
 						Half.TOP));
 			}
+		}
+		String style = Style.forBiome(level.getBiome(p).getRegisteredName());
+		if (job.tier() >= 2 && len <= 40 && (Style.FROZEN.equals(style) || Style.HIGHLAND.equals(style)) && Roadside.regular(job.key())) {
+			cover(level, p, forward, side, deck, pos, len, style);
+		}
+	}
+
+	/**
+	 * A covered wooden bridge (road level 3, in the north and the highlands, crossings up to 40 long): timber posts on
+	 * the parapets every third cell with a railing between, a tie beam along each side, and a steep shingle or slate
+	 * roof over the road, high enough for a rider; a lantern hangs from the ridge every sixth cell.
+	 */
+	private static void cover(ServerLevel level, BlockPos p, Direction forward, Direction side, int deck, int pos, int len, String style) {
+		boolean north = Style.FROZEN.equals(style);
+		BlockState post = (north ? Blocks.SPRUCE_LOG : Blocks.DARK_OAK_LOG).defaultBlockState();
+		BlockState beam = (north ? Blocks.STRIPPED_SPRUCE_LOG : Blocks.STRIPPED_DARK_OAK_LOG).defaultBlockState()
+				.setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, forward.getAxis());
+		BlockState rail = (north ? Blocks.SPRUCE_FENCE : Blocks.DARK_OAK_FENCE).defaultBlockState();
+		BlockState stair = (north ? Blocks.SPRUCE_STAIRS : Blocks.DEEPSLATE_TILE_STAIRS).defaultBlockState();
+		BlockState ridge = (north ? Blocks.DARK_OAK_PLANKS : Blocks.DEEPSLATE_TILES).defaultBlockState();
+		BlockState cap = (north ? Blocks.DARK_OAK_SLAB : Blocks.DEEPSLATE_TILE_SLAB).defaultBlockState();
+		boolean isPost = pos % 3 == 0 || pos == len - 1;
+		for (int sgn : new int[] {-1, 1}) {
+			BlockPos edge = new BlockPos(p.getX(), deck, p.getZ()).relative(side, 2 * sgn);
+			for (int y = 1; y <= 3; y++) {
+				level.setBlock(edge.above(y), isPost ? post : y == 1 ? rail : Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+			}
+			level.setBlock(edge.above(4), beam, Block.UPDATE_CLIENTS);
+			Direction up = sgn > 0 ? side.getOpposite() : side; // a roof stair faces the ridge
+			for (int w = 3; w >= 1; w--) {
+				BlockPos r = new BlockPos(p.getX(), deck + 4 + (3 - w), p.getZ()).relative(side, w * sgn);
+				level.setBlock(r, stair.setValue(StairBlock.FACING, up), Block.UPDATE_CLIENTS);
+			}
+		}
+		BlockPos top = new BlockPos(p.getX(), deck + 6, p.getZ());
+		level.setBlock(top, ridge, Block.UPDATE_CLIENTS);
+		level.setBlock(top.above(), cap, Block.UPDATE_CLIENTS);
+		if (pos % 6 == 3) {
+			level.setBlock(top.below(), Blocks.LANTERN.defaultBlockState().setValue(net.minecraft.world.level.block.LanternBlock.HANGING, true), Block.UPDATE_CLIENTS);
+		}
+		for (int sgn : new int[] {-1, 1}) { // the railing joins its posts
+			BlockPos r = new BlockPos(p.getX(), deck + 1, p.getZ()).relative(side, 2 * sgn);
+			level.setBlock(r, Block.updateFromNeighbourShapes(level.getBlockState(r), level, r), Block.UPDATE_CLIENTS);
 		}
 	}
 

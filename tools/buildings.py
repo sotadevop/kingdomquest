@@ -5099,4 +5099,22 @@ if __name__ == "__main__":
              "storage": [-1 + heart[0], 1, (10 if level == 1 else 15) - 2 + heart[2]]}
         with open(os.path.join(OUT, style, f"dock_{level}.json"), "w") as f:
             json.dump(j, f, separators=(",", ":"))
-    print(len(jobs) + len(DOCK_JOBS), "templates")
+    # the buildings along the country roads (tools/roadside.py): placed by the mod on the road, origin = heart
+    import roadside
+    side = roadside.jobs()
+    for style, name, blocks, animals in side:
+        nb, _, size, _ = normalize(blocks)
+        heart = (-min(p[0] for p in blocks), 0, -min(p[2] for p in blocks))
+        names, palette, out = {}, [], []
+        for (x, y, z), (bname, props) in sorted(nb.items(), key=lambda kv: (kv[0][1], kv[0][2], kv[0][0])):
+            key = (bname, tuple(sorted(props.items())))
+            if key not in names:
+                names[key] = len(palette)
+                palette.append({"Name": bname, **({"Properties": props} if props else {})})
+            out.append([x, y, z, names[key]])
+        j = {"size": list(size), "heart": list(heart), "seconds": 0, "palette": palette, "blocks": out, "anchored": True}
+        if animals:
+            j["animals"] = [[a[0], a[1] + heart[0], a[2], a[3] + heart[2]] for a in animals]
+        with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
+            json.dump(j, f, separators=(",", ":"))
+    print(len(jobs) + len(DOCK_JOBS) + len(side), "templates")

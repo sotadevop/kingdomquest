@@ -656,7 +656,7 @@ public final class Fealty {
 	 * from {@code start} (just outside the gate) to {@code end} (where it meets the village's streets).
 	 */
 	static void roadPlanned(MinecraftServer server, Settlement from, String key, BlockPos start, BlockPos end) {
-		// wave 2: a waystation about halfway along the regular road, one every ~500 blocks on long ones
+		Roadside.planned(server, from, key, start, end); // the station itself is placed when the road is laid
 	}
 
 	private static void herald(ServerLevel level, BlockPos at, String line) {
@@ -831,7 +831,7 @@ public final class Fealty {
 	 * A border stone beside a street where it leaves the village: a carved stone on a foot with a cap, the kingdom's
 	 * banner on its outer face. Stands three blocks to the side of the street, a little outside its end.
 	 */
-	private static List<BlockPos> borderStone(ServerLevel level, BlockPos end, BlockPos bell, String style, int color) {
+	static List<BlockPos> borderStone(ServerLevel level, BlockPos end, BlockPos bell, String style, int color) {
 		Direction out = horizontal(end.getX() - bell.getX(), end.getZ() - bell.getZ());
 		Direction side = out.getClockWise();
 		for (int[] o : new int[][] {{1, 3}, {1, -3}, {1, 4}, {1, -4}, {2, 3}, {2, -3}, {0, 3}, {0, -3}}) {

@@ -103,6 +103,7 @@ final class SignalFires {
 			}
 			out.addAll(top.values());
 		}
+		out.addAll(Roadside.fires(s)); // waystations and watchtowers along the roads
 		List<BlockPos> list = List.copyOf(out);
 		FIRES.put(s.id(), new Object[] {s, list});
 		return list;
