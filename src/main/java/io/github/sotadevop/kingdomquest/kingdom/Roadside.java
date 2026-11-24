@@ -1096,6 +1096,7 @@ final class Roadside {
 		}
 		Map<BlockPos, List<Dest>> found = new HashMap<>();
 		Map<BlockPos, Road> along = new HashMap<>();
+		Map<BlockPos, Direction> from = new HashMap<>();
 		// roads parting in front of a gate: they share their first cells, then go their own ways
 		for (Settlement g : Settlements.all(server)) {
 			if (!g.owner().equals(owner)) {
@@ -1115,8 +1116,10 @@ final class Roadside {
 				}
 			}
 			if (dests.size() >= 2 && any != null) {
-				found.put(at.atY(any.path().get(Math.min(any.path().size() - 1, 2)).getY()), dests);
-				along.put(at.atY(any.path().get(Math.min(any.path().size() - 1, 2)).getY()), any);
+				BlockPos j = at.atY(any.path().get(Math.min(any.path().size() - 1, 2)).getY());
+				found.put(j, dests);
+				along.put(j, any);
+				from.put(j, horizontalDir(-out.getX(), -out.getZ())); // a sign for those coming out of the gate
 			}
 		}
 		// roads crossing each other in the open
@@ -1137,7 +1140,7 @@ final class Roadside {
 			}
 		}
 		for (Map.Entry<BlockPos, List<Dest>> e : found.entrySet()) {
-			crossroads(server, owner, e.getKey(), e.getValue(), along.get(e.getKey()));
+			crossroads(server, owner, e.getKey(), e.getValue(), along.get(e.getKey()), from.get(e.getKey()));
 		}
 	}
 
@@ -1156,7 +1159,7 @@ final class Roadside {
 		return new BlockPos((int) Math.round(a1.getX() + t * rx), a1.getY(), (int) Math.round(a1.getZ() + t * rz));
 	}
 
-	private static void crossroads(MinecraftServer server, UUID owner, BlockPos at, List<Dest> dests, Road road) {
+	private static void crossroads(MinecraftServer server, UUID owner, BlockPos at, List<Dest> dests, Road road, Direction gate) {
 		ServerLevel level = server.overworld();
 		String have = null;
 		Settlement keeper = null;
@@ -1184,7 +1187,7 @@ final class Roadside {
 		String now = done;
 		BlockPos post = null;
 		if (!done.contains("post")) {
-			post = signpost(server, s, level, at, dests);
+			post = signpost(server, s, level, at, dests, gate);
 			if (post != null) {
 				now = now.isEmpty() ? "post@" + str(post) : now + ";post@" + str(post);
 			}
@@ -1225,7 +1228,7 @@ final class Roadside {
 	}
 
 	/** A signpost by the crossroads: a sign toward every road that comes in, naming the places the others lead to. */
-	private static BlockPos signpost(MinecraftServer server, Settlement s, ServerLevel level, BlockPos at, List<Dest> dests) {
+	private static BlockPos signpost(MinecraftServer server, Settlement s, ServerLevel level, BlockPos at, List<Dest> dests, Direction gate) {
 		BlockPos base = null;
 		for (Direction d : Direction.Plane.HORIZONTAL) {
 			base = base != null ? base : besideRoad(level, at, d, 4);
@@ -1244,6 +1247,9 @@ final class Roadside {
 		Set<Direction> faces = new HashSet<>();
 		for (Dest d : dests) {
 			faces.add(horizontalDir(d.dx(), d.dz()));
+		}
+		if (gate != null) {
+			faces.add(gate);
 		}
 		for (Direction f : faces) {
 			List<Dest> shown = new ArrayList<>(dests.stream().filter(d -> !behind(f, d) && d.dist() > 8).toList());

@@ -493,12 +493,18 @@ def arch(b, style, zc):
             b.put(0, 6, z, "chiseled_stone_bricks")
             stairs(b, "stone_brick_stairs", -1, 6, z, "west", top=True)
             stairs(b, "stone_brick_stairs", 1, 6, z, "east", top=True)
-        for x in range(-6, 7):        # crow steps rising to the middle
-            step = 8 + max(0, 3 - abs(x) // 2)
+        for x in range(-6, 7):        # a crenellated parapet with slate copes, a gablet over the keystone
             for z in zs:
-                for y in range(8, step):
-                    stone(b, style, x, y, z)
-                b.put(x, step, z, "deepslate_tile_slab", type="bottom", waterlogged="false")
+                stone(b, style, x, 8, z)
+                if abs(x) <= 1:
+                    stone(b, style, x, 9, z)
+                    b.put(x, 10, z, "deepslate_tile_slab", type="bottom", waterlogged="false") if abs(x) == 1 else b.put(x, 10, z, r["trim"])
+                elif x % 2 == 0:
+                    b.put(x, 9, z, r["trim"])
+                    b.put(x, 10, z, "deepslate_tile_slab", type="bottom", waterlogged="false")
+                else:
+                    b.put(x, 9, z, "deepslate_tile_slab", type="bottom", waterlogged="false")
+        b.put(0, 11, zc, "stone_brick_wall", **WALL)
         ban_y, lan = 7, [(-3, 3), (3, 3)]
     elif style == "wild":
         # a Southeast Asian gate: red-lacquered posts and beams, a two-tier flared roof with upturned ends
