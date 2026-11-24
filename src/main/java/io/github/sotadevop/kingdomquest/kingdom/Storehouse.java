@@ -685,6 +685,7 @@ public final class Storehouse {
 		stock.used = 0;
 		stock.limits.put("minecraft:wheat", 100);
 		stock.off.add("miner|cobblestone");
+		stock.off.add("quarryman|cobblestone"); // the quarry makes it too (every producer has its own switch)
 		stock.last = now - Production.DAY;
 		stock.save(server, max);
 		Production.produce(level, max, now);

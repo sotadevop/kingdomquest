@@ -5101,9 +5101,8 @@ def windmill(style, level):
     b.put(cx + 1, 0, cz + 2, "barrel", facing="up", open="false")
     b.put(cx - 1, 0, cz + 2, "white_wool")
     b.put(x0 + 1, 0, z1 - 1, "hay_block", axis="y")
-    for y in range(0, 5):
-        b.put(x1 - 1, y, cz, "ladder", facing="west", waterlogged="false")
-    b.put(x1 - 1, 4, cz, "ladder", facing="west", waterlogged="false")
+    for y in range(0, 5):                                    # beside the window: the ladder needs the wall behind it
+        b.put(x1 - 1, y, cz + 1, "ladder", facing="west", waterlogged="false")
     b.put(cx, H - 1, cz, "lantern", hanging="true", waterlogged="false")
     b.put(cx, 3, cz, "lantern", hanging="true", waterlogged="false")
     b.put(*shop_store("mill"), "barrel", facing="up", open="false")
@@ -5134,6 +5133,8 @@ def herb_beds(b, style, level):
             b.put(x, -1, gz0 + 3, "water", level="0")
     for x in (gx0 + 1, gx1 - 1):
         for z in range(gz0 + 1, gz1):
+            if z in (gz0 + 1, gz0 + 5, gz0 + 6):
+                b.put(x, -1, z, "grass_block", snowy="false")     # bushes and flowers need soil, also in the desert
             if z in (gz0 + 1, gz0 + 5):
                 b.put(x, 0, z, "sweet_berry_bush", age="3")
             elif z == gz0 + 6:

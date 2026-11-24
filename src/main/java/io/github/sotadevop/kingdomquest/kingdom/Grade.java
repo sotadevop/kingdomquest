@@ -338,8 +338,23 @@ final class Grade {
 	 */
 	static Planned plan(ServerLevel level, BlockPos clicked, Rotation r, int look, boolean round) {
 		int[] ring = ringBox(clicked, r, round);
-		int x0 = ring[0] - PAD - MARGIN, z0 = ring[1] - PAD - MARGIN;
-		int w = ring[2] - ring[0] + 1 + 2 * (PAD + MARGIN), d = ring[3] - ring[1] + 1 + 2 * (PAD + MARGIN);
+		// the places outside the walls that are levelled with the plateau (the tournament field), as world rectangles;
+		// the plan reaches far enough around them for their slopes back to the land
+		List<int[]> outside = new ArrayList<>();
+		for (int[] o : Layout.outside().values()) {
+			BlockPos a = clicked.offset(Template.rotate(new BlockPos(o[0] - Layout.HX, 0, o[1] - Layout.HZ), r));
+			BlockPos c = clicked.offset(Template.rotate(new BlockPos(o[2] - Layout.HX, 0, o[3] - Layout.HZ), r));
+			outside.add(new int[] {Math.min(a.getX(), c.getX()), Math.min(a.getZ(), c.getZ()), Math.max(a.getX(), c.getX()), Math.max(a.getZ(), c.getZ())});
+		}
+		int bx0 = ring[0] - PAD - MARGIN, bz0 = ring[1] - PAD - MARGIN, bx1 = ring[2] + PAD + MARGIN, bz1 = ring[3] + PAD + MARGIN;
+		for (int[] o : outside) {
+			bx0 = Math.min(bx0, o[0] - 40);
+			bz0 = Math.min(bz0, o[1] - 40);
+			bx1 = Math.max(bx1, o[2] + 40);
+			bz1 = Math.max(bz1, o[3] + 40);
+		}
+		int x0 = bx0, z0 = bz0;
+		int w = bx1 - bx0 + 1, d = bz1 - bz0 + 1;
 		int n = w * d;
 		int[] bed = new int[n];
 		int[] surf = new int[n];
@@ -463,13 +478,7 @@ final class Grade {
 		}
 		lifts.put(Progression.GATE, -heartLevel); // the gate stands in the wall, on the plateau
 		lifts.put("tourney", -heartLevel); // the tournament field lies outside, on the plateau's level
-		// the places outside the walls that are levelled with the plateau, as world rectangles
-		List<int[]> outside = new ArrayList<>();
-		for (int[] o : Layout.outside().values()) {
-			BlockPos a = clicked.offset(Template.rotate(new BlockPos(o[0] - Layout.HX, 0, o[1] - Layout.HZ), r));
-			BlockPos c = clicked.offset(Template.rotate(new BlockPos(o[2] - Layout.HX, 0, o[3] - Layout.HZ), r));
-			outside.add(new int[] {Math.min(a.getX(), c.getX()), Math.min(a.getZ(), c.getZ()), Math.max(a.getX(), c.getX()), Math.max(a.getZ(), c.getZ())});
-		}
+
 		// what stays flat: the ring and its band, its edge wobbling a little
 		float[] cut = new float[n];
 		float[] fill = new float[n];
