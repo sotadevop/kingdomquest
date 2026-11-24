@@ -1225,7 +1225,7 @@ WIDE_STREETS = {t[0] for t in ROAD_TRUNKS if not t[0].startswith(("castle_", "pl
 ROAD_GOALS = {
     "smith": [(1, (-12, 10))], "wood": [(1, (-31, 20))], "farm": [(1, (26, 11)), (1, (20, 5)), (2, (39, 10))],
     "stables": [(1, (47, 25))], "apiary": [(1, (52, 11))], "kennel": [(1, (52, 22))], "lair": [(1, (9, -23))],
-    "cellar": [(1, (3, 11))], "garden": [(1, (79, -75))],
+    "cellar": [(1, (3, 11))], "garden": [(1, (79, -75))], "markethall": [(1, (-13, 2))],
 }
 # Where each track's plot lies in the big site: a move of the whole track (all levels) from where its templates draw
 # it (after the spacing moves of build_jobs). The one source of truth for the layout: written to
@@ -5315,6 +5315,148 @@ def garden(style, level):
     return b.b
 
 
+# ---- the covered market hall (Town) and the belfry (Castle) ----
+# Picks (user, 2026-11-24): a medieval trading hall / marketplace. An open hall: a great roof on heavy posts over a stone
+# floor, stalls under it, open on every side; market day fills it (see 19.11). The belfry: a free-standing bell tower by
+# the square, its bells ring when the signal fires are lit.
+MARKETHALL_AT = (-19, -16)     # x0, z0 of the 13 x 17 plot west of the keep, its long side to the square
+BELFRY_AT = (21, -3)           # x0, z0 of the 9 x 9 plot at the square's north-east corner
+
+
+def markethall(style, level):
+    P = TOWNHALL[style]
+    roof, rstair, rslab = P["roof"]
+    b = B()
+    W, L = 13, 17
+    x0, z0 = MARKETHALL_AT
+    post = P["frame"] if "log" in P["frame"] else P["base"][0]
+    for x in range(W):
+        for z in range(L):
+            b.put(x0 + x, -1, z0 + z, "stone_bricks" if style != "arid" else "cut_sandstone")
+            b.put(x0 + x, 0, z0 + z, pick(("polished_andesite", "stone_bricks", "andesite") if style != "arid" else ("smooth_sandstone", "cut_sandstone"), x, 0, z)
+                  if 0 < x < W - 1 and 0 < z < L - 1 else ("stone_brick_slab" if style != "arid" else "cut_sandstone_slab"),
+                  **({} if 0 < x < W - 1 and 0 < z < L - 1 else {"type": "bottom", "waterlogged": "false"}))
+    # posts on a stone foot, braces under the plate
+    for x in (1, W // 2, W - 2):
+        for z in range(1, L - 1, 4):
+            if x == W // 2 and z not in (1, L - 2 - (L - 3) % 4):
+                continue
+            b.put(x0 + x, 1, z0 + z, P["base"][0])
+            for y in range(2, 6):
+                b.put(x0 + x, y, z0 + z, post, **({"axis": "y"} if "log" in post else {}))
+    for z in range(1, L - 1):
+        for x in (1, W - 2):
+            b.put(x0 + x, 6, z0 + z, post, **({"axis": "z"} if "log" in post else {}))
+    for x in range(1, W - 1):
+        for z in (1, L - 2):
+            b.put(x0 + x, 6, z0 + z, post, **({"axis": "x"} if "log" in post else {}))
+    for z in range(1, L - 1, 4):
+        for x, f in ((2, "west"), (W - 3, "east")):
+            b.put(x0 + x, 5, z0 + z, f"{P['door']}_stairs", facing=f, half="top", shape="straight", waterlogged="false")
+    # the great roof, ridge along the hall
+    if P["flat"]:
+        for x in range(0, W):
+            for z in range(0, L):
+                b.put(x0 + x, 7, z0 + z, roof if 1 <= x <= W - 2 and 1 <= z <= L - 2 else rslab,
+                      **({} if 1 <= x <= W - 2 and 1 <= z <= L - 2 else {"type": "bottom", "waterlogged": "false"}))
+        for x in range(0, W, 2):
+            for z in (0, L - 1):
+                b.put(x0 + x, 8, z0 + z, P["frame"])
+    else:
+        t = B()
+        zroof(t, -1, W, -1, L, 7, (1, 1, 2, 2, 2, 2, 2), lambda x, y, z: roof, lambda x, y, z: rstair, rslab)
+        for (x, y, z), v in t.b.items():
+            b.b[(x0 + x, y, z0 + z)] = v
+        for z in (1, L - 2):                      # the gables over the ends: boarded, a round window
+            for x in range(2, W - 2):
+                for y in range(7, 7 + min(x - 1, W - 2 - x) * 2):
+                    if (x0 + x, y, z0 + z) not in b.b:
+                        b.put(x0 + x, y, z0 + z, P["fill"])
+            b.put(x0 + W // 2, 9, z0 + z, "glass_pane", **PANE_X)
+    # stalls in two rows: counters with goods, awnings in the kingdom colour on one
+    goods = ("barrel", "hay_block", "pumpkin", "melon", "barrel", "composter")
+    for i, z in enumerate(range(3, L - 3, 3)):
+        for x, f in ((3, "east"), (W - 4, "west")):
+            b.put(x0 + x, 1, z0 + z, f"{P['door']}_slab", type="top", waterlogged="false")
+            b.put(x0 + x, 1, z0 + z + 1, f"{P['door']}_slab", type="top", waterlogged="false")
+            g = goods[(i + x) % len(goods)]
+            b.put(x0 + x - (1 if f == "east" else -1), 1, z0 + z, g, **({"axis": "y"} if g == "hay_block" else {"facing": "up", "open": "false"} if g == "barrel" else {"level": "0"} if g == "composter" else {}))
+            b.put(x0 + x, 2, z0 + z + 1, "candle", candles="1", lit="false", waterlogged="false") if i % 2 else None
+    for z in range(2, L - 2, 4):
+        b.put(x0 + W // 2, 5, z0 + z, "lantern", hanging="true", waterlogged="false")
+        for y in (6,):
+            b.put(x0 + W // 2, y, z0 + z, post, **({"axis": "x"} if "log" in post else {}))
+        for x in range(1, W - 1):
+            b.put(x0 + x, 6, z0 + z, post, **({"axis": "x"} if "log" in post else {}))
+    return b.b
+
+
+def belfry(style, level):
+    P = TOWNHALL[style]
+    roof, rstair, rslab = P["roof"]
+    b = B()
+    x0, z0 = BELFRY_AT
+    T, H = 7, 24
+    ox, oz = x0 + 1, z0 + 1
+    base = lambda x, y, z: pick(P["base"], x, y, z)
+    for x in range(x0, x0 + 9):
+        for z in range(z0, z0 + 9):
+            b.put(x, -1, z, "stone_bricks" if style != "arid" else "cut_sandstone")
+    for x in range(ox, ox + T):
+        for z in range(oz, oz + T):
+            edge = x in (ox, ox + T - 1) or z in (oz, oz + T - 1)
+            corner = x in (ox, ox + T - 1) and z in (oz, oz + T - 1)
+            if not edge:
+                b.put(x, 0, z, P["floor"])
+                continue
+            for y in range(0, H + 1):
+                opening = not corner and H - 5 <= y <= H - 2
+                slit = not corner and y in (7, 8, 13, 14) and (x - ox == 3 or z - oz == 3)
+                if opening:
+                    b.put(x, y, z, "iron_bars" if style not in ("frozen", "wild") else f"{P['door']}_fence",
+                          north="false", south="false", east="false", west="false", waterlogged="false")
+                elif slit:
+                    b.put(x, y, z, "glass_pane", **(PANE_X if z in (oz, oz + T - 1) else PANE_Z))
+                else:
+                    b.put(x, y, z, P["frame"] if corner and "log" in P["frame"] else base(x, y, z) if not corner else P["base"][0],
+                          **({"axis": "y"} if corner and "log" in P["frame"] else {}))
+    # a ladder up the inside of the north wall to the bell floor
+    cx, cz = ox + 3, oz + 3
+    for x in range(ox + 1, ox + T - 1):
+        for z in range(oz + 1, oz + T - 1):
+            b.put(x, H - 6, z, P["floor"])
+    for y in range(1, H - 5):
+        b.put(cx, y, oz + 1, "ladder", facing="south", waterlogged="false")
+    b.b[(cx, H - 6, oz + 1)] = ("minecraft:ladder", {"facing": "south", "waterlogged": "false"})
+    for x in range(ox + 1, ox + T - 1):
+        for z in range(oz + 1, oz + T - 1):
+            b.put(x, H, z, base(x, H, z))
+    b.put(cx, H - 1, cz, "bell", attachment="ceiling", facing="south", powered="false")
+    # the door (south), a clock over it, the spire
+    for yy in (1, 2):
+        b.b.pop((cx, yy, oz + T - 1), None)
+    b.put(cx, 1, oz + T - 1, f"{P['door']}_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, oz + T - 1, f"{P['door']}_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    b.put(cx, 0, oz + T, "stone_brick_slab" if style != "arid" else "cut_sandstone_slab", type="bottom", waterlogged="false")
+    for k_ in (-1, 0, 1):
+        for yy in (H - 9, H - 8, H - 7):
+            b.put(cx + k_, yy, oz + T - 1, "calcite" if (k_, yy) != (0, H - 8) else "smooth_quartz")
+    b.put(cx, H - 8, oz + T, "polished_blackstone_button", face="wall", facing="south", powered="false")
+    b.put(cx, H - 7, oz + T, "polished_blackstone_button", face="wall", facing="south", powered="false")
+    if P["flat"]:
+        for x in range(ox - 1, ox + T + 1):
+            for z in range(oz - 1, oz + T + 1):
+                if x in (ox - 1, ox + T) or z in (oz - 1, oz + T):
+                    b.put(x, H, z, "cut_sandstone_slab", type="top", waterlogged="false")
+                    if (x + z) % 2 == 0:
+                        b.put(x, H + 1, z, P["frame"])
+        b.put(cx, H + 1, cz, "lantern", hanging="false", waterlogged="false")
+    else:
+        pyramid_roof(b, ox - 1, oz - 1, T + 2, H + 1, roof, rstair, 2 if style in ("temperate", "highland") else 1,
+                     style in ("wild", "frozen"), ("lightning_rod", dict(facing="up", powered="false", waterlogged="false")), solid=True)
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -5729,6 +5871,8 @@ def build_jobs(styles=None):
             jobs.append((style, f"church_{level}", church(style, level), secs, None, None))
         jobs.append((style, "townhall_1", townhall(style, 1), 600, None, None))
         jobs.append((style, "garden_1", garden(style, 1), 300, None, None))
+        jobs.append((style, "markethall_1", markethall(style, 1), 420, None, None))
+        jobs.append((style, "belfry_1", belfry(style, 1), 420, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:

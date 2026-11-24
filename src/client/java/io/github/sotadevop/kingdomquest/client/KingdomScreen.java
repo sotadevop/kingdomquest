@@ -30,7 +30,7 @@ public class KingdomScreen extends Screen {
 	private static final int TAB_H = 18;
 	private static final int CARD_H = 50;
 	private static final int CARD_GAP = 4;
-	private static final int MAX_CARDS = 3;
+	private static final int MAX_CARDS = 4;
 	private static final int TABS_PER_ROW = 6;
 	private static final int H = HEADER + 2 * TAB_H + 10 + MAX_CARDS * (CARD_H + CARD_GAP) + 26;
 
@@ -38,14 +38,14 @@ public class KingdomScreen extends Screen {
 	}
 
 	private static final List<Tab> TABS = List.of(
-			new Tab("kingdomquest.tab.settlement", List.of("main", "cellar", "royal", "townhall", "garden")),
-			new Tab("kingdomquest.tab.defense", List.of("walls", "gate", "barracks")),
+			new Tab("kingdomquest.tab.settlement", List.of("main", "cellar", "royal", "townhall")),
+			new Tab("kingdomquest.tab.defense", List.of("walls", "gate", "barracks", "belfry")),
 			new Tab("kingdomquest.tab.guild", List.of("guild")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps")),
-			new Tab("kingdomquest.tab.farming", List.of("farm", "stables", "apiary")),
+			new Tab("kingdomquest.tab.farming", List.of("farm", "stables", "apiary", "garden")),
 			new Tab("kingdomquest.tab.resources", List.of("wood", "mine", "dock")),
 			new Tab("kingdomquest.tab.crafts", List.of("smith", "workshop", "armorer")),
-			new Tab("kingdomquest.tab.trade", List.of("tavern", "market", "tannery")),
+			new Tab("kingdomquest.tab.trade", List.of("tavern", "market", "markethall", "tannery")),
 			new Tab("kingdomquest.tab.culture", List.of("library", "brewery", "music", "church")),
 			new Tab("kingdomquest.tab.discovery", List.of("cartographer", "archaeology", "nether")),
 			new Tab("kingdomquest.tab.pets", List.of("kennel", "trophy", "lair")),
