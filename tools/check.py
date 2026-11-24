@@ -354,9 +354,9 @@ def check_roads(world, out):
             out.append(("roads", f"no road to the door of {track} at {door}"))
 
 
-def check_walk(world, out, quiet=False):
+def check_walk(world, out, quiet=False, start=None):
     grid = Grid(world)
-    start = (bld.HEART[0] * 2, 0, (bld.HEART[2] + 2) * 2)
+    start = start or (bld.HEART[0] * 2, 0, (bld.HEART[2] + 2) * 2)
     easy = walk(grid, start, 1, False)
     hop = walk(grid, start, 1, True)
     wide = walk(grid, start, 2, False)
@@ -469,6 +469,38 @@ def check_floating(world, out):
 JOBS = {}
 
 
+class Roadside:
+    """One roadside template (tools/roadside.py) on flat ground, the road through x = -1..1: checked like a settlement."""
+
+    def __init__(self, name, blocks):
+        self.blocks = {p: v for p, v in blocks.items() if short(v[0]) != "air"}
+        self.owner = {p: name for p in self.blocks}
+        self.by_track = {name: self.blocks}
+        self.storage = {}
+        self.levels = {}
+
+    def get(self, p):
+        b = self.blocks.get(p)
+        return b if b is not None else GROUND if p[1] < 0 else AIR
+
+
+def check_roadside(styles):
+    """Support, floating blocks and the walk from the road (every door, bed, chest reached) of each roadside building."""
+    import roadside
+    found = {}
+    for style, name, blocks, _ in roadside.jobs():
+        if style not in styles:
+            continue
+        world = Roadside(f"{style}/{name}", blocks)
+        out = []
+        check_support(world, out)
+        check_floating(world, out)
+        check_walk(world, out, True, (0, 0, -2 * roadside.STRAIGHT))
+        for kind, text in out:
+            found[(kind, text)] = [0]
+    return found
+
+
 def run(style, mains, quiet=False):
     if style not in JOBS:
         JOBS[style] = bld.build_jobs([style])
@@ -499,4 +531,9 @@ if __name__ == "__main__":
             tiers = "all tiers" if len(ms) == len(mains) and len(mains) > 1 else "main " + ",".join(map(str, ms))
             print(f"  [{kind}] {text}  ({tiers})")
         total += len(found)
+    found = check_roadside(args or list(bld.STYLES))
+    print(f"== roadside: {len(found)} problems")
+    for (kind, text) in sorted(found):
+        print(f"  [{kind}] {text}")
+    total += len(found)
     sys.exit(1 if total else 0)
