@@ -120,6 +120,8 @@ public final class Settlements {
 		Storehouse.register();
 		Tram.register();
 		Chronicle.register();
+		MarketDay.register();
+		Realm.registerMapTable();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {

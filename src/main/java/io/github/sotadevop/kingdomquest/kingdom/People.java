@@ -132,6 +132,14 @@ final class People {
 		return v;
 	}
 
+	private static final String[] FOLK = {"Anna", "Bertram", "Clara", "Dietrich", "Elsa", "Friedrich", "Greta", "Hans", "Ida", "Jakob",
+			"Lena", "Matthias", "Nora", "Otto", "Paula"};
+
+	/** A townsperson who comes to look (market day); sent off again by whoever called him. */
+	static KingdomNpc visitor(ServerLevel level, Settlement s, String role, BlockPos at) {
+		return spawn(level, s, role, FOLK[level.getRandom().nextInt(FOLK.length)], at);
+	}
+
 	/** Every 10 seconds: settlements with a house get their Architect (again, if he went missing). */
 	static void ensureArchitect(ServerLevel level, Settlement s) {
 		// villagers from older versions of the mod (before our own NPCs) are retired
