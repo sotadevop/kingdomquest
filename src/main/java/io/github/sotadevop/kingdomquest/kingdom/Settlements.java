@@ -1549,7 +1549,7 @@ public final class Settlements {
 					if (p.offset().getX() == p.anchor().getX() && p.offset().getZ() == p.anchor().getZ()) {
 						long a = BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ());
 						planTop.merge(a, p.offset().getY(), Math::max);
-						planYs.computeIfAbsent(a, k -> new ArrayList<>()).add(p.offset().getY());
+						planYs.computeIfAbsent(a, n0 -> new ArrayList<>()).add(p.offset().getY());
 					}
 				}
 			}
