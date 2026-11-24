@@ -4976,6 +4976,8 @@ def write_layout(jobs, plots):
          "plots": {k: v for k, v in sorted(union.items())}, "keep": keep,
          "square": [plaza[1][0], plaza[2][0], plaza[1][1], plaza[2][1]],
          "reserved": {k: list(v) for k, v in RESERVED.items()},
+         # the town houses of the main track per style: x0, z0, x1, z1 (each set on the graded land, only where it is flat)
+         "houses": {st: [list(r) for r in rs] for st, rs in sorted(HOUSE_RECTS.items())},
          # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
          "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS
                      if name != "plaza" and not name.startswith("place_")]}
@@ -5157,12 +5159,9 @@ if __name__ == "__main__":
             continue
         cells = [(x, z) for (x, y, z), v in blocks.items() if y >= 0 and v[0] != "minecraft:air"]
         if track_of(name) == "main":
+            # the town houses stand on the plateau, not on the main building's plot (the mod sets each on the graded land)
             houses = HOUSE_RECTS.get(style, [])
             cells = [c for c in cells if not any(r[0] <= c[0] <= r[2] and r[1] <= c[1] <= r[3] for r in houses)]
-            rects = plots.setdefault((style, "main"), [])
-            for r in houses:
-                if any(r[0] <= x <= r[2] and r[1] <= z <= r[3] for (x, y, z) in blocks if y >= 0) and r not in rects:
-                    rects.append(r)
         if cells:
             rect = (min(c[0] for c in cells), min(c[1] for c in cells), max(c[0] for c in cells), max(c[1] for c in cells))
             rects = plots.setdefault((style, track_of(name)), [])

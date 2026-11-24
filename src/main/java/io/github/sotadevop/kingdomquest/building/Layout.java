@@ -36,6 +36,7 @@ public final class Layout {
 	private static final Map<Integer, List<int[]>> TOWERS = new HashMap<>();
 	private static final int[] KEEP;
 	private static final List<int[]> STREETS = new ArrayList<>();
+	private static final Map<String, List<int[]>> HOUSES = new HashMap<>();
 	private static final int[] SQUARE;
 
 	static {
@@ -57,6 +58,15 @@ public final class Layout {
 		readMap(j, "relocate", MOVES);
 		readMap(j, "plots", PLOTS);
 		readMap(j, "reserved", RESERVED);
+		if (j.has("houses")) {
+			for (Map.Entry<String, JsonElement> e : j.getAsJsonObject("houses").entrySet()) {
+				List<int[]> rs = new ArrayList<>();
+				for (JsonElement r : e.getValue().getAsJsonArray()) {
+					rs.add(ints(r.getAsJsonArray(), null));
+				}
+				HOUSES.put(e.getKey(), List.copyOf(rs));
+			}
+		}
 		if (j.has("streets")) {
 			for (JsonElement e : j.getAsJsonArray("streets")) {
 				STREETS.add(ints(e.getAsJsonArray(), null));
@@ -148,6 +158,11 @@ public final class Layout {
 
 	public static Map<String, int[]> plots() {
 		return Map.copyOf(PLOTS);
+	}
+
+	/** The town houses of the main track in a style: x0, z0, x1, z1 in the base frame. */
+	public static List<int[]> houses(String style) {
+		return HOUSES.getOrDefault(style, List.of());
 	}
 
 	/** Plots kept free for buildings of a later wave (the church): x0, z0, x1, z1 in the base frame. */
