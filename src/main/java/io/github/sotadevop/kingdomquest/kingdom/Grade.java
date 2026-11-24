@@ -465,8 +465,9 @@ final class Grade {
 				double ox = Math.max(0, Math.max(ring[0] - x, x - ring[2])), oz = Math.max(0, Math.max(ring[1] - z, z - ring[3]));
 				boolean flat = Math.sqrt(ox * ox + oz * oz) <= Math.max(PAD - 3, pad);
 				double vary = 0.65 + 0.7 * (noise(x + 913, z - 377, 9) * 0.5 + 0.5);
-				cut[c] = (float) (vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 2.0; default -> 1.0; });
-				fill[c] = (float) (vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 1.4; default -> 1.0; });
+				// never steeper than two blocks a block: a rock face, not a cliff
+				cut[c] = (float) Math.min(1.9, vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 1.7; default -> 1.0; });
+				fill[c] = (float) Math.min(1.9, vary * switch (mat[c]) { case 0 -> 0.7; case 2 -> 1.4; default -> 1.0; });
 				if (flat) {
 					hi[c] = lo[c] = (float) (p + relief[c]);
 					kind[c] = PLATEAU;
@@ -524,7 +525,7 @@ final class Grade {
 					kind[c] = UNTOUCHED;
 				} else if (kind[c] == SLOPE) {
 					// a cone from the plan's edge back to the land, continuous with the slopes from the plateau
-					int reach = (int) Math.floor(edge * 1.3);
+					int reach = (int) Math.floor(edge * (top[c] < bed[c] ? cut[c] : fill[c]));
 					int t = Math.max(bed[c] - reach, Math.min(bed[c] + reach, top[c]));
 					top[c] = (short) t;
 					if (t == bed[c]) {
@@ -917,6 +918,12 @@ final class Grade {
 				if ((SiteWork.trunk(st) || st.is(BlockTags.LEAVES)) && !built.contains(pos.asLong())) {
 					SiteWork.removeTreeAt(level, pos.immutable(), built);
 				}
+			}
+		}
+		if (kd != SLOPE || t != g) {
+			// bamboo, cactus and cane on the old ground go whole (a cut would leave them standing on nothing)
+			for (int y = g + 1; y <= g + 24 && SiteWork.stalk(level.getBlockState(pos.set(x, y, z))) && !built.contains(pos.asLong()); y++) {
+				level.setBlock(pos, Blocks.AIR.defaultBlockState(), SiteWork.FLAGS);
 			}
 		}
 		for (int y = g + 1; y <= g + 3; y++) {

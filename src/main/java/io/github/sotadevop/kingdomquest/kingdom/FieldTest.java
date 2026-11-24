@@ -966,7 +966,7 @@ public final class FieldTest {
 				for (int k = 0; k < n; k++) {
 					int x = heart.getX() - R + i;
 					int z = heart.getZ() - R + k;
-					int g = SiteWork.groundDeep(level, x, z, heart.getY(), built);
+					int g = SiteWork.groundDeep(level, x, z, heart.getY(), built, 90, 140); // deep: the whole site, mountains and valleys
 					ground[i * n + k] = g;
 					top[i * n + k] = name(level.getBlockState(pos.set(x, g, z)));
 					BlockState over = level.getBlockState(pos.set(x, g + 1, z));
@@ -1137,7 +1137,7 @@ public final class FieldTest {
 				int x = base.x0() + i, z = base.z0() + k;
 				long col = BlockPos.asLong(x, 0, z);
 				open[i * n + k] = !builtCols.contains(col) && !moat.contains(col);
-				now[i * n + k] = SiteWork.groundDeep(level, x, z, h.getY(), builtAll);
+				now[i * n + k] = SiteWork.groundDeep(level, x, z, h.getY(), builtAll, 90, 140);
 			}
 		}
 		int cliffs = 0;

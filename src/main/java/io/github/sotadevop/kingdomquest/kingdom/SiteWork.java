@@ -1375,8 +1375,13 @@ public final class SiteWork {
 
 	/** {@code skip}: blocks to look through (what the settlement built: a road under a gatehouse lies on the ground, not on its roof). */
 	public static int groundDeep(ServerLevel level, int x, int z, int heartY, Set<Long> skip) {
+		return groundDeep(level, x, z, heartY, skip, 30, 48);
+	}
+
+	/** {@link #groundDeep(ServerLevel, int, int, int, Set)} searching {@code up} blocks above and {@code down} below. */
+	public static int groundDeep(ServerLevel level, int x, int z, int heartY, Set<Long> skip, int up, int down) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-		for (int y = heartY + 30; y >= heartY - 48; y--) {
+		for (int y = heartY + up; y >= heartY - down; y--) {
 			pos.set(x, y, z);
 			if (!skip.isEmpty() && skip.contains(pos.asLong())) {
 				continue;
