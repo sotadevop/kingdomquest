@@ -297,10 +297,16 @@ public final class Progression {
 			new Step(CHURCH, "church_2", 2, "kingdomquest.church.church_2", 11, adv("end/kill_dragon"), "kingdomquest.req.dragon",
 					List.of(item(Items.STONE_BRICKS, 768), item(Items.GLASS_PANE, 64), item(Items.GOLD_BLOCK, 4), item(Items.EMERALD, 96))));
 
+	/** The town hall with its clock tower (Town): the council over an arcade on the square's east street. */
+	public static final String TOWNHALL = "townhall";
+	public static final List<Step> TOWNHALL_STEPS = List.of(
+			new Step(TOWNHALL, "townhall_1", 1, "kingdomquest.townhall.townhall_1", 8, adv("adventure/trade"), "kingdomquest.req.trade",
+					List.of(item(Items.STONE_BRICKS, 192), tag(ItemTags.LOGS, "logs", 64), item(Items.BELL, 1), item(Items.EMERALD, 24))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE, CHURCH);
+			STOREHOUSE, CHURCH, TOWNHALL);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -319,6 +325,7 @@ public final class Progression {
 			case LAMPS -> LAMP_STEPS;
 			case STOREHOUSE -> STOREHOUSE_STEPS;
 			case CHURCH -> CHURCH_STEPS;
+			case TOWNHALL -> TOWNHALL_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}
