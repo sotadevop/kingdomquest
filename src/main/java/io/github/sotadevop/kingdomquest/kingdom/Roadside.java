@@ -787,7 +787,8 @@ final class Roadside {
 		write(server, at, b.toString());
 	}
 
-	private static final Map<Long, String> WRITTEN = new HashMap<>();
+	/** Text last written per sign block entity: a sign re-placed by a rebuild is a new entity and gets written again. */
+	private static final Map<SignBlockEntity, String> WRITTEN = new java.util.WeakHashMap<>();
 
 	/** The sign's lines from its places' current names: "↑ Eastmarch" / "240 blocks" for each. */
 	static List<String> lines(MinecraftServer server, Direction facing, String value) {
@@ -820,10 +821,10 @@ final class Roadside {
 		}
 		List<String> text = lines(server, st.getValue(BlockStateProperties.HORIZONTAL_FACING), value);
 		String joined = String.join("\n", text);
-		if (joined.equals(WRITTEN.get(at.asLong()))) {
+		if (joined.equals(WRITTEN.get(be))) {
 			return;
 		}
-		WRITTEN.put(at.asLong(), joined);
+		WRITTEN.put(be, joined);
 		List<Component> comps = text.stream().map(l -> (Component) Component.literal(l)).toList();
 		SignText t = new SignText(comps, comps, DyeColor.BLACK, false);
 		for (net.minecraft.world.level.block.entity.SignTextSlot slot : net.minecraft.world.level.block.entity.SignTextSlot.values()) {
@@ -1259,23 +1260,31 @@ final class Roadside {
 			BlockPos cell = road.path().get(k);
 			BlockPos a = road.path().get(Math.max(0, k - 1)), b = road.path().get(Math.min(road.path().size() - 1, k + 1));
 			Direction dir = horizontalDir(b.getX() - a.getX(), b.getZ() - a.getZ());
-			BlockPos c = cell.relative(dir, 8);
-			String style = Style.forBiome(level.getBiome(c).getRegisteredName());
-			Template t = Template.get(style + "/shrine");
-			for (Rotation r : List.of(Rotation.NONE, Rotation.CLOCKWISE_90, Rotation.CLOCKWISE_180, Rotation.COUNTERCLOCKWISE_90)) {
-				BlockPos z = turn(0, 0, 1, r);
-				if (t == null || Math.abs(z.getX()) != Math.abs(dir.getStepX())) {
-					continue; // the template's road along this road
+			// a little way along the road, where the land beside it is level enough
+			search:
+			for (int dist : new int[] {8, 12, 16, 20, -8, -12, -16, -20}) {
+				BlockPos c = cell.relative(dir, dist);
+				level.getChunk(c.getX() >> 4, c.getZ() >> 4);
+				String style = Style.forBiome(level.getBiome(c).getRegisteredName());
+				Template t = Template.get(style + "/shrine");
+				if (t == null) {
+					break;
 				}
-				BlockPos side = turn(1, 0, 0, r);
-				int[] g = ground(level, c.getX() + side.getX() * 3, c.getZ() + side.getZ() * 3);
-				if (g[1] == 1 || Math.abs(g[0] - cell.getY()) > 2) {
-					continue;
+				for (Rotation r : List.of(Rotation.NONE, Rotation.CLOCKWISE_90, Rotation.CLOCKWISE_180, Rotation.COUNTERCLOCKWISE_90)) {
+					BlockPos z = turn(0, 0, 1, r);
+					if (Math.abs(z.getX()) != Math.abs(dir.getStepX())) {
+						continue; // the template's road along this road
+					}
+					BlockPos side = turn(1, 0, 0, r);
+					int[] g = ground(level, c.getX() + side.getX() * 3, c.getZ() + side.getZ() * 3);
+					if (g[1] == 1 || Math.abs(g[0] - c.getY()) > 2 || Math.abs(g[0] - cell.getY()) > 4) {
+						continue;
+					}
+					BlockPos origin = new BlockPos(c.getX(), g[0] + 1, c.getZ());
+					place(level, t.placements("white", r), origin, SiteWork.surface(level, c));
+					now = now + ";shrine@" + str(origin) + "@" + r.ordinal() + "@" + style;
+					break search;
 				}
-				BlockPos origin = new BlockPos(c.getX(), g[0] + 1, c.getZ());
-				place(level, t.placements("white", r), origin, SiteWork.surface(level, c));
-				now = now + ";shrine@" + str(origin) + "@" + r.ordinal() + "@" + style;
-				break;
 			}
 		}
 		if (!now.equals(done)) {
