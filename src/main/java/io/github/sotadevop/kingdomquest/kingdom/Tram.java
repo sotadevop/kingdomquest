@@ -279,7 +279,10 @@ public final class Tram {
 			path.add(new Vec3(b.getX() + 0.5, b.getY() + 0.0625, b.getZ() + 0.5));
 		}
 		ServerLevel level = (ServerLevel) player.level();
-		Entity cart = EntityType.MINECART.create(level, EntitySpawnReason.EVENT);
+		// looked up by id: the field's name changed between versions
+		EntityType<?> type = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getValue(
+				net.minecraft.resources.Identifier.withDefaultNamespace("minecart"));
+		Entity cart = type == null ? null : type.create(level, EntitySpawnReason.EVENT);
 		if (cart == null) {
 			return;
 		}
