@@ -6288,8 +6288,9 @@ def tourney(style, level):
         for x in range(cx - 2, cx + 3):
             for z in range(cz - 2, cz + 3):
                 if (x in (cx - 2, cx + 2) or z in (cz - 2, cz + 2)) and not (x == cx + 2 and z == cz):
-                    b.put(x, 0, z, f"{col}_wool")
-                    b.put(x, 1, z, f"{col}_wool")
+                    stripe = f"{col}_wool" if (x + z) % 2 else ("white_wool" if col != "white" else "{color}_wool")
+                    b.put(x, 0, z, stripe)
+                    b.put(x, 1, z, stripe)
         b.put(cx, 5, cz, "{color}_banner", rotation="12")
     # the archery range: a shooting line at the south, three targets on straw at the north
     for x in (24, 27, 30):
