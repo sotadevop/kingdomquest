@@ -620,7 +620,8 @@ final class Roadside {
 				List<Dest> dests = List.of(new Dest("s:" + s.id(), Math.max(0, idx), -fwd.getX(), -fwd.getZ()),
 						new Dest(targetRef(st.key()), Math.max(0, len - idx), fwd.getX(), fwd.getZ()));
 				Direction facing = p.state().getValue(WallSignBlock.FACING);
-				sign(server, s.id(), at, dests.stream().filter(d -> !behind(facing, d)).toList());
+				List<Dest> ahead = dests.stream().filter(d -> !behind(facing, d)).toList();
+				sign(server, s.id(), at, ahead.isEmpty() ? dests : ahead); // a sign across the road names both ways
 			}
 		}
 		if (st.style().equals(Style.FROZEN)) {
@@ -1135,7 +1136,15 @@ final class Roadside {
 				// on the shared road itself, a little way out of the gate (past the drawbridge and the bank)
 				BlockPos j = any.path().get(Math.min(any.path().size() - 1, 2));
 				for (BlockPos c : any.path()) {
-					if (horizontal(c, exit) >= 10) {
+					if (horizontal(c, exit) < 10 || horizontal(c, exit) > 48) {
+						continue;
+					}
+					server.overworld().getChunk(c.getX() >> 4, c.getZ() >> 4);
+					boolean room = false;
+					for (Direction d : Direction.Plane.HORIZONTAL) {
+						room |= besideRoad(server.overworld(), c, d, 4) != null;
+					}
+					if (room) {
 						j = c;
 						break;
 					}
