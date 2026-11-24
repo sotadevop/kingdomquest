@@ -196,7 +196,7 @@ final class RoadTest {
 		}
 		StringBuilder b = new StringBuilder();
 		for (int i = 0; i < 4; i++) {
-			b.append(be.getFrontText().getMessage(i, false).getString()).append(i < 3 ? " / " : "");
+			b.append(be.getText(net.minecraft.world.level.block.entity.SignTextSlot.values()[0]).getMessage(i, false).getString()).append(i < 3 ? " / " : "");
 		}
 		return b.toString();
 	}
