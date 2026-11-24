@@ -88,6 +88,22 @@ final class StreetPlan {
 				feet.put(col, top + 1 - h.getY());
 			}
 		}
+		// a street never steps two blocks: where a terrace meets a hill's street, the lower cells are raised (filled
+		// under) until every step is one block, so the road ramps instead of leaving a step to jump
+		int[][] near = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+		for (boolean changed = true; changed; ) {
+			changed = false;
+			for (Map.Entry<Long, Integer> e : feet.entrySet()) {
+				int x = BlockPos.getX(e.getKey()), z = BlockPos.getZ(e.getKey());
+				for (int[] d : near) {
+					Integer n = feet.get(BlockPos.asLong(x + d[0], 0, z + d[1]));
+					if (n != null && n - e.getValue() >= 2) {
+						e.setValue(n - 1);
+						changed = true;
+					}
+				}
+			}
+		}
 		Map<Long, Integer> half = new HashMap<>();
 		Set<Long> steep = new HashSet<>();
 		int[][] four = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};

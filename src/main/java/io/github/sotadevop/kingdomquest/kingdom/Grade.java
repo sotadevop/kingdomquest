@@ -1189,8 +1189,9 @@ final class Grade {
 		List<Holder<PlacedFeature>> pick = new ArrayList<>();
 		for (Holder<PlacedFeature> h : steps.get(step).stream().toList()) {
 			String name = h.getRegisteredName();
-			if (name.contains("sea") || name.contains("kelp") || name.contains("sugar_cane") || name.contains("waterlily") || name.contains("lily")) {
-				continue; // water plants
+			if (name.contains("sea") || name.contains("kelp") || name.contains("sugar_cane") || name.contains("waterlily") || name.contains("lily")
+					|| name.contains("bamboo")) {
+				continue; // water plants; bamboo groves are left to the land around (placed on slopes they stood on nothing)
 			}
 			boolean isTree = isTree(h.value().feature(), 0);
 			boolean common = name.contains("flower") || name.contains("grass") || name.contains("fern") || name.contains("dead_bush");
