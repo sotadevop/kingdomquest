@@ -307,7 +307,7 @@ public final class Progression {
 	public static final String GARDEN = "garden";
 	public static final List<Step> GARDEN_STEPS = List.of(
 			new Step(GARDEN, "garden_1", 1, "kingdomquest.garden.garden_1", 9, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
-					List.of(item(Items.STONE_BRICKS, 96), tag(ItemTags.LEAVES, "leaves", 64), tag(ItemTags.SMALL_FLOWERS, "flowers", 32), item(Items.EMERALD, 16))));
+					List.of(item(Items.STONE_BRICKS, 96), tag(ItemTags.LEAVES, "leaves", 64), item(Items.POPPY, 16), item(Items.DANDELION, 16), item(Items.EMERALD, 16))));
 
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
