@@ -250,7 +250,10 @@ final class RoadTest {
 				if (level.getBlockState(at).getBlock() != p.state().getBlock()) {
 					wrong++;
 				}
-				low.merge(BlockPos.asLong(at.getX(), 0, at.getZ()), at.getY(), Math::min);
+				if (p.offset().getY() <= 0) {
+					// only the foundation must stand on ground; eaves, rafters and the arch over the road hang on purpose
+					low.merge(BlockPos.asLong(at.getX(), 0, at.getZ()), at.getY(), Math::min);
+				}
 				if (p.state().getBlock() instanceof BedBlock) {
 					bed = at;
 				}
@@ -300,9 +303,9 @@ final class RoadTest {
 		int signs = 0, named = 0, stones = 0, posts = 0, shrines = 0, miles = 0, btowers = 0, wtowers = 0;
 		for (Map.Entry<String, String> e : s.names().entrySet()) {
 			if (e.getKey().startsWith(Roadside.SIGN)) {
-				signs++;
 				String txt = text(level, pos(e.getKey().substring(Roadside.SIGN.length())));
-				named += txt.contains("FT Roads") ? 1 : 0;
+				signs++;
+				named += txt.contains("FT Roads") && !txt.matches(".* 0 blocks.*") ? 1 : 0;
 				if (named == 1 && !views.containsKey("sign_l" + lvl)) {
 					views.put("sign_l" + lvl, pos(e.getKey().substring(Roadside.SIGN.length())));
 					KingdomQuest.LOG.info("Field test roads: sign at {} reads: {}", e.getKey(), txt);

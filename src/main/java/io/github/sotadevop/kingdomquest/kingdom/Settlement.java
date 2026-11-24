@@ -41,10 +41,14 @@ public record Settlement(UUID id, UUID owner, String name, int color, Identifier
 			Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("names", Map.of()).forGetter(Settlement::names)
 	).apply(i, Settlement::new));
 
-	/** Names the lord chose (pets: "pet_wolf", ...). */
+	/** Names the lord chose (pets: "pet_wolf", ...); a null value removes the key. */
 	public Settlement withName(String key, String value) {
 		Map<String, String> m = new HashMap<>(this.names);
-		m.put(key, value);
+		if (value == null) {
+			m.remove(key);
+		} else {
+			m.put(key, value);
+		}
 		return new Settlement(id, owner, name, color, logo, style, heart, rotation, levels, job, jobTrack, jobIndex, built, Map.copyOf(m));
 	}
 

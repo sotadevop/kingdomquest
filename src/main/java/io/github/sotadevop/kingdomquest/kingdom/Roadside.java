@@ -24,6 +24,7 @@ import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.WallBlock;
+import net.minecraft.world.level.block.SignBlock;
 import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
@@ -599,6 +600,16 @@ final class Roadside {
 		}
 		Station done = new Station(s, st.key(), st.n(), st.origin(), st.rot(), st.style(), lvl, st.dir());
 		put(server, s.id(), st.id(), value(done));
+		// a rebuilt station may have its signs elsewhere: forget the old ones in its area
+		Settlement cur = byId(server, s.id().toString());
+		if (cur != null) {
+			for (String k : List.copyOf(cur.names().keySet())) {
+				if (k.startsWith(SIGN) && horizontal(pos(k.substring(SIGN.length())), st.origin()) <= 16
+						&& !(level.getBlockState(pos(k.substring(SIGN.length()))).getBlock() instanceof SignBlock)) {
+					put(server, s.id(), k, null);
+				}
+			}
+		}
 		// the signpost's two signs: each shows the place the reader is heading for
 		for (Template.Placement p : now) {
 			if (p.state().getBlock() instanceof WallSignBlock) {
@@ -635,6 +646,10 @@ final class Roadside {
 			if (horizontal(path.get(k), st.origin()) < horizontal(path.get(m), st.origin())) {
 				m = k;
 			}
+		}
+		if (path.isEmpty() || horizontal(path.get(m), st.origin()) > 16) {
+			// no stored path near the station: the straight distance home
+			return (int) horizontal(st.origin(), s.heart());
 		}
 		return m * SAMPLE;
 	}
@@ -1117,7 +1132,14 @@ final class Roadside {
 				}
 			}
 			if (dests.size() >= 2 && any != null) {
-				BlockPos j = at.atY(any.path().get(Math.min(any.path().size() - 1, 2)).getY());
+				// on the shared road itself, a little way out of the gate (past the drawbridge and the bank)
+				BlockPos j = any.path().get(Math.min(any.path().size() - 1, 2));
+				for (BlockPos c : any.path()) {
+					if (horizontal(c, exit) >= 10) {
+						j = c;
+						break;
+					}
+				}
 				found.put(j, dests);
 				along.put(j, any);
 				from.put(j, horizontalDir(-out.getX(), -out.getZ())); // a sign for those coming out of the gate
