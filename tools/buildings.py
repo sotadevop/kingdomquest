@@ -5303,7 +5303,7 @@ def garden(style, level):
             elif d <= 2:
                 b.put(x, -1, z, "water", level="0")
                 b.put(x, -2, z, P["basin"])
-    for y in range(0, 3):
+    for y in range(-2, 3):                    # the column stands on the basin's floor
         b.put(cx, y, cz, P["trim"])
     b.put(cx, 3, cz, "water", level="0") if style != "frozen" else b.put(cx, 3, cz, "lantern", hanging="false", waterlogged="false")
     # benches facing the fountain, lanterns on posts at the path crossings
