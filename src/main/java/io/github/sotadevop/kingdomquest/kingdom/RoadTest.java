@@ -194,11 +194,28 @@ final class RoadTest {
 		if (!(level.getBlockEntity(at) instanceof SignBlockEntity be)) {
 			return "";
 		}
-		StringBuilder b = new StringBuilder();
-		for (int i = 0; i < 4; i++) {
-			b.append(be.getText(net.minecraft.world.level.block.entity.SignTextSlot.values()[0]).messages()[i].getString()).append(i < 3 ? " / " : "");
+		// SignText's accessors changed between versions: find the one that returns the lines (test code only)
+		Object t = be.getText(net.minecraft.world.level.block.entity.SignTextSlot.values()[0]);
+		for (java.lang.reflect.Method m : t.getClass().getMethods()) {
+			if (m.getReturnType() != net.minecraft.network.chat.Component[].class) {
+				continue;
+			}
+			try {
+				Object[] args = m.getParameterCount() == 0 ? new Object[0] : m.getParameterCount() == 1 && m.getParameterTypes()[0] == boolean.class ? new Object[] {false} : null;
+				if (args == null) {
+					continue;
+				}
+				StringBuilder b = new StringBuilder();
+				net.minecraft.network.chat.Component[] lines = (net.minecraft.network.chat.Component[]) m.invoke(t, args);
+				for (int i = 0; i < lines.length; i++) {
+					b.append(lines[i].getString()).append(i < lines.length - 1 ? " / " : "");
+				}
+				return b.toString();
+			} catch (ReflectiveOperationException e) {
+				return "";
+			}
 		}
-		return b.toString();
+		return "";
 	}
 
 	private static void measure(MinecraftServer server, ServerLevel level, Settlement s, int lvl, StringBuilder report, List<String> problems,
