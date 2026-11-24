@@ -1114,6 +1114,42 @@ public final class Settlements {
 		return false;
 	}
 
+	/**
+	 * The town houses of the main track (user, 2026-11-24): each stands on the plateau, wherever the main building
+	 * stands (a hill castle's keep is on its motte). Heart-relative column -> extra lift, or MIN_VALUE where the house's
+	 * spot isn't flat (a hill of the look): that house isn't built.
+	 */
+	private static Map<Long, Integer> houseLifts(Settlement s) {
+		return houseLifts(s, 0);
+	}
+
+	/** As {@link #houseLifts(Settlement)}, each house's area grown by {@code margin} (the ground worked around it). */
+	private static Map<Long, Integer> houseLifts(Settlement s, int margin) {
+		List<int[]> houses = io.github.sotadevop.kingdomquest.building.Layout.houses(s.style());
+		Grade g = server == null || houses.isEmpty() ? null : Grade.of(server, s);
+		if (g == null) {
+			return Map.of();
+		}
+		Rotation r = Rotation.values()[s.rotation()];
+		Map<Long, Integer> out = new HashMap<>();
+		for (int[] h : houses) {
+			int lift = g.plateau + 1 - s.heart().getY();
+			for (int[] c : new int[][] {{h[0], h[1]}, {h[2], h[1]}, {h[0], h[3]}, {h[2], h[3]}, {(h[0] + h[2]) / 2, (h[1] + h[3]) / 2}}) {
+				BlockPos q = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(r, c[0], 0, c[1]));
+				if (g.topAt(q.getX(), q.getZ()) != g.plateau) {
+					lift = Integer.MIN_VALUE;
+				}
+			}
+			for (int x = h[0] - margin; x <= h[2] + margin; x++) {
+				for (int z = h[1] - margin; z <= h[3] + margin; z++) {
+					BlockPos o = io.github.sotadevop.kingdomquest.building.Layout.rel(r, x, 0, z);
+					out.putIfAbsent(BlockPos.asLong(o.getX(), 0, o.getZ()), lift);
+				}
+			}
+		}
+		return out;
+	}
+
 	private static List<Template.Placement> basePlacements(Settlement s, String job) {
 		Template t = Template.get(job);
 		if (t == null) {
@@ -1139,12 +1175,24 @@ public final class Settlements {
 		int dy = lift(s, job);
 		String track = builtTrack(job); // "wall_3" is the walls track, "road_2" the roads
 		boolean red = (track.equals(Progression.ROADS) || track.equals(Progression.WALLS) || track.equals(Progression.GATE)) && redLand(s);
-		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy + (red ? "|red" : "");
+		Map<Long, Integer> houseLift = Settlement.MAIN.equals(track) ? houseLifts(s) : Map.of();
+		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy + (red ? "|red" : "")
+				+ (houseLift.isEmpty() ? "" : "|" + s.id());
 		return PLACEMENTS.computeIfAbsent(key, k -> {
 			List<Template.Placement> all = new ArrayList<>();
 			for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
 				BlockState st = red ? reddened(p.state()) : p.state();
-				all.add(dy == 0 && !red ? p : new Template.Placement(p.offset().above(dy), st, p.segment(), p.anchor()));
+				int extra = 0;
+				if (!houseLift.isEmpty()) {
+					Integer h = houseLift.get(BlockPos.asLong(p.offset().getX(), 0, p.offset().getZ()));
+					if (h != null) {
+						if (h == Integer.MIN_VALUE) {
+							continue; // a town house whose spot isn't flat (a hill of the look): it isn't built
+						}
+						extra = h;
+					}
+				}
+				all.add(dy + extra == 0 && !red ? p : new Template.Placement(p.offset().above(dy + extra), st, p.segment(), p.anchor()));
 			}
 			// blocks that hang on others (ladders, torches, banners, doors, beds...) come after the solid ones
 			all.sort(java.util.Comparator.comparingInt((Template.Placement p) -> attached(p.state()) ? 1 : 0));
@@ -1965,12 +2013,18 @@ public final class Settlements {
 		Set<Long> loose = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
 		BlockState surface = SiteWork.surface(level, s.heart());
+		// the town houses of the main track stand on the plateau: their ground is worked at their own level
+		Map<Long, Integer> houseGround = Settlement.MAIN.equals(s.jobTrack()) ? houseLifts(s, 4) : Map.of();
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
 			SiteWork.Column c = columns.get(index);
 			if (moat.contains(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()))) {
 				continue; // the moat is nobody's building ground: never levelled, never filled
 			}
-			SiteWork.clear(level, base, c, allBuilt, surface, loose);
+			Integer h = houseGround.get(BlockPos.asLong(c.dx(), 0, c.dz()));
+			if (h != null && h == Integer.MIN_VALUE) {
+				continue; // a house that isn't built (on a hill of the look)
+			}
+			SiteWork.clear(level, h == null ? base : base.above(h), c, allBuilt, surface, loose);
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
