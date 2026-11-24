@@ -321,10 +321,16 @@ public final class Progression {
 			new Step(BELFRY, "belfry_1", 1, "kingdomquest.belfry.belfry_1", 9, adv("adventure/voluntary_exile"), "kingdomquest.req.voluntary_exile",
 					List.of(item(Items.STONE_BRICKS, 256), item(Items.BELL, 1), item(Items.EMERALD, 32))));
 
+	/** The monastery (Castle) at the town's north-east edge: cloister, chapel, scriptorium (enchanted books, see Production). */
+	public static final String MONASTERY = "monastery";
+	public static final List<Step> MONASTERY_STEPS = List.of(
+			new Step(MONASTERY, "monastery_1", 1, "kingdomquest.monastery.monastery_1", 9, adv("story/enchant_item"), "kingdomquest.req.enchant",
+					List.of(item(Items.STONE_BRICKS, 384), item(Items.BOOKSHELF, 8), item(Items.BELL, 1), item(Items.EMERALD, 40))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY);
+			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -347,6 +353,7 @@ public final class Progression {
 			case GARDEN -> GARDEN_STEPS;
 			case MARKETHALL -> MARKETHALL_STEPS;
 			case BELFRY -> BELFRY_STEPS;
+			case MONASTERY -> MONASTERY_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}
