@@ -279,6 +279,19 @@ public final class Progression {
 				Map.entry("herbs", List.of(
 					new Step("herbs", "herbs_1", 1, "kingdomquest.trade.herbs_1", 4, null, null, List.of(item(Items.BREWING_STAND, 1), item(Items.COMPOSTER, 1), tag(ItemTags.PLANKS, "planks", 32))),
 					new Step("herbs", "herbs_2", 2, "kingdomquest.trade.herbs_2", 6, null, null, List.of(item(Items.FLOWER_POT, 4), item(Items.EMERALD, 8))))),
+				Map.entry("quarry", List.of(
+					new Step("quarry", "quarry_1", 1, "kingdomquest.trade.quarry_1", 6, adv("story/mine_stone"), "kingdomquest.req.mine_stone",
+							List.of(item(Items.STONE_PICKAXE, 2), tag(ItemTags.LOGS, "logs", 24), item(Items.STONECUTTER, 1))),
+					new Step("quarry", "quarry_2", 2, "kingdomquest.trade.quarry_2", 8, null, null, List.of(item(Items.IRON_PICKAXE, 1), item(Items.EMERALD, 12))))),
+				Map.entry("lumbercamp", List.of(
+					new Step("lumbercamp", "lumbercamp_1", 1, "kingdomquest.trade.lumbercamp_1", 5, null, null,
+							List.of(item(Items.STONE_AXE, 2), tag(ItemTags.LOGS, "logs", 16), item(Items.CAMPFIRE, 1))),
+					new Step("lumbercamp", "lumbercamp_2", 2, "kingdomquest.trade.lumbercamp_2", 7, null, null, List.of(item(Items.IRON_AXE, 1), item(Items.EMERALD, 12))))),
+				Map.entry("minecamp", List.of(
+					new Step("minecamp", "minecamp_1", 1, "kingdomquest.trade.minecamp_1", 7, adv("story/iron_tools"), "kingdomquest.req.iron_tools",
+							List.of(item(Items.IRON_PICKAXE, 1), item(Items.RAIL, 16), item(Items.LANTERN, 2))),
+					new Step("minecamp", "minecamp_2", 2, "kingdomquest.trade.minecamp_2", 9, adv("story/mine_diamond"), "kingdomquest.req.diamond",
+							List.of(item(Items.DIAMOND_PICKAXE, 1), item(Items.EMERALD, 24))))),
 				Map.entry("tourney", List.of(
 					new Step("tourney", "tourney_1", 1, "kingdomquest.trade.tourney_1", 9, null, null,
 							List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.WOOL, "wool", 32), item(Items.TARGET, 3), item(Items.EMERALD, 24))))),
@@ -381,7 +394,7 @@ public final class Progression {
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
 			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM,
-			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney");
+			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney", "quarry", "lumbercamp", "minecamp");
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

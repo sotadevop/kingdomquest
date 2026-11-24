@@ -1565,7 +1565,7 @@ def plan_roads(style, jobs):
     for j in jobs:
         name, blocks = j[1], j[2]
         track, level = track_of(name), int(name.rsplit("_", 1)[1])
-        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_", "tourney_")):
+        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_", "tourney_", "quarry_", "lumbercamp_", "minecamp_")):
             continue
         if track == "main":
             level += {"hamlet": 3, "village": 6, "town": 7, "castle": 8, "citadel": 10}[name.rsplit("_", 1)[0]]
@@ -6306,6 +6306,118 @@ def tourney(style, level):
     return b.b
 
 
+# Outposts (19.1, 19.11): the quarry, the lumber camp and the mine camp outside the walls, beyond the moat's band
+# (west, east, south-east). They look like real workings (stone heaps, a crane, log stacks, a shaft head with ore
+# carts) but take nothing from the land: their output is worked out like any producer's. Each heap or rig stands on
+# the ground at its own middle (follows the land). Kept in step with the workers' spots in Workers.java.
+OUTPOSTS = {"quarry": (-205, 0), "lumbercamp": (205, -18), "minecamp": (205, 40)}
+
+
+def outpost(style, name, level):
+    wood = STYLES[style]["wood"]
+    log = MAT[style]["log"]
+    b = B()
+    FOLLOW.add(id(b.b))
+    ANCHORS_OF[id(b.b)] = b.anchors
+    ox, oz = OUTPOSTS[name]
+
+    def heap(cx, cz, blocks, r=2):
+        """A heap: a cluster standing on the ground at its middle, higher in the middle."""
+        b.anchor = (cx, cz)
+        for x in range(cx - r, cx + r + 1):
+            for z in range(cz - r, cz + r + 1):
+                h = r + 1 - max(abs(x - cx), abs(z - cz))
+                for y in range(0, h):
+                    b.put(x, y, z, blocks[(x * 7 + z * 13 + y) % len(blocks)])
+                b.put(x, -1, z, "coarse_dirt")
+
+    def tent(cx, cz, col):
+        b.anchor = (cx, cz)
+        for x in range(cx - 1, cx + 2):
+            for z in range(cz - 1, cz + 2):
+                b.put(x, -1, z, "coarse_dirt")
+        for z in (cz - 1, cz, cz + 1):
+            b.put(cx - 1, 0, z, f"{col}_wool"); b.put(cx + 1, 0, z, f"{col}_wool")
+            b.put(cx, 1, z, f"{col}_wool")
+        b.put(cx, 0, cz + 1, f"{col}_wool")
+
+    def camp(cx, cz):
+        b.anchor = (cx, cz)
+        b.put(cx, 0, cz, "campfire", facing="north", lit="true", signal_fire="false", waterlogged="false")
+        for dx, dz, f in ((2, 0, "west"), (-2, 0, "east")):
+            b.put(cx + dx, 0, cz + dz, f"{wood}_stairs", facing=f, half="bottom", shape="straight", waterlogged="false")
+
+    if name == "quarry":
+        heap(ox - 5, oz - 4, ("cobblestone", "stone", "andesite", "cobblestone"))
+        heap(ox + 4, oz - 5, ("stone", "diorite", "granite", "stone"), r=1)
+        heap(ox - 4, oz + 5, ("stone_bricks", "stone", "cobblestone"), r=1)
+        # the crane: a log mast with a jib, a chain and a hanging block of stone
+        b.anchor = (ox + 3, oz + 3)
+        for y in range(0, 7):
+            b.put(ox + 3, y, oz + 3, log, axis="y")
+        for x in range(ox + 1, ox + 4):
+            b.put(x, 7, oz + 3, log, axis="x")
+        b.put(ox + 1, 6, oz + 3, "iron_chain", axis="y", waterlogged="false")
+        b.put(ox + 1, 5, oz + 3, "iron_chain", axis="y", waterlogged="false")
+        b.put(ox + 1, 4, oz + 3, "stone")
+        b.put(ox + 4, 0, oz + 3, "stonecutter", facing="west")
+        b.put(ox + 4, 0, oz + 2, "barrel", facing="up", open="false")
+        tent(ox + 6, oz - 1, "white")
+        camp(ox, oz)
+        if level >= 2:
+            heap(ox - 6, oz + 1, ("tuff", "calcite", "stone"), r=1)
+    elif name == "lumbercamp":
+        for i, (cx, cz) in enumerate(((ox - 4, oz - 3), (ox - 4, oz + 2), (ox + 4, oz - 4))):
+            b.anchor = (cx, cz)
+            for x in range(cx - 2, cx + 3):
+                for y in range(0, 2 if i else 3):
+                    b.put(x, y, cz, log, axis="x")
+                    b.put(x, -1, cz, "coarse_dirt")
+        # the sawhorse and the chopping block
+        b.anchor = (ox + 3, oz + 2)
+        b.put(ox + 2, 0, oz + 2, f"{wood}_fence"); b.put(ox + 4, 0, oz + 2, f"{wood}_fence")
+        for x in range(ox + 2, ox + 5):
+            b.put(x, 1, oz + 2, f"stripped_{wood}_log" if wood not in ("bamboo",) else "bamboo_block", axis="x")
+        b.put(ox + 5, 0, oz + 4, log, axis="y")
+        for dx, dz in ((-7, -6), (7, 5), (-6, 6)):                 # stumps of felled trees
+            b.anchor = (ox + dx, oz + dz)
+            b.put(ox + dx, 0, oz + dz, log, axis="y")
+        tent(ox, oz + 6, "brown")
+        camp(ox + 1, oz - 1)
+        if level >= 2:
+            b.anchor = (ox + 6, oz)
+            for z in range(oz - 1, oz + 2):
+                b.put(ox + 6, 0, z, f"{wood}_planks"); b.put(ox + 6, 1, z, f"{wood}_planks")
+    else:
+        # the shaft head: a log headframe over a closed shaft, the winch beam with a chain, ore carts by it
+        b.anchor = (ox, oz)
+        for x in range(ox - 1, ox + 2):
+            for z in range(oz - 1, oz + 2):
+                b.put(x, -1, z, f"{wood}_planks")
+                if (x, z) == (ox, oz):
+                    b.put(x, 0, z, f"{wood}_trapdoor", facing="north", half="bottom", open="false", powered="false", waterlogged="false")
+        for x, z in ((ox - 1, oz - 1), (ox + 1, oz - 1), (ox - 1, oz + 1), (ox + 1, oz + 1)):
+            for y in range(0, 5):
+                b.put(x, y, z, log, axis="y")
+        for x in range(ox - 1, ox + 2):
+            b.put(x, 5, oz, log, axis="x")
+        b.put(ox, 4, oz, "iron_chain", axis="y", waterlogged="false")
+        b.put(ox, 3, oz, "lantern", hanging="true", waterlogged="false")
+        b.anchor = (ox + 4, oz)
+        for z in range(oz - 2, oz + 3):
+            b.put(ox + 4, 0, z, "rail", shape="north_south", waterlogged="false")
+            b.put(ox + 4, -1, z, "gravel")
+        b.put(ox + 5, 0, oz - 1, "chest", facing="west", type="single", waterlogged="false")
+        heap(ox - 4, oz + 4, ("cobblestone", "coal_ore", "cobblestone", "iron_ore"), r=1)
+        heap(ox - 4, oz - 4, ("cobblestone", "stone", "copper_ore"), r=1)
+        tent(ox + 1, oz + 6, "gray")
+        camp(ox - 1, oz - 6)
+        if level >= 2:
+            heap(ox + 5, oz + 5, ("deepslate", "cobbled_deepslate", "redstone_ore"), r=1)
+    b.anchor = None
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -6760,6 +6872,9 @@ def build_jobs(styles=None):
         for level in (1, 2, 3):
             jobs.append((style, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
         jobs.append((style, "tourney_1", tourney(style, 1), 600, None, None))
+        for name in OUTPOSTS:
+            for level in (1, 2):
+                jobs.append((style, f"{name}_{level}", outpost(style, name, level), 300 + 120 * level, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
@@ -6805,7 +6920,7 @@ if __name__ == "__main__":
     jobs = [j for j in jobs if not j[0].endswith("_round")]
     # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
     # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
-    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern", "tram")
+    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern", "tram", "quarry", "lumbercamp", "minecamp")
     plots = {}
     for style, name, blocks, *_ in jobs:
         if name.startswith("tent_") or track_of(name) in NO_PLOT:

@@ -1234,6 +1234,26 @@ public final class Settlements {
 		});
 	}
 
+	/** Where the road from the gate ends for the places outside the walls (base frame): the outposts' edge, the lists. */
+	private static final Map<String, int[]> ROAD_OUT = Map.of("quarry", new int[] {-195, 0}, "lumbercamp", new int[] {195, -18},
+			"minecamp", new int[] {195, 40}, "tourney", new int[] {5, -143});
+
+	/** A place outside the walls is finished: a road leads to it from the gate (once; later tiers rebuild it). */
+	static void roadOut(MinecraftServer server, Settlement s, String track) {
+		int[] end = ROAD_OUT.get(track);
+		if (s == null || end == null || s.names().containsKey(RoadLink.PREFIX + "outpost:" + track)) {
+			return;
+		}
+		BlockPos p = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], end[0], 0, end[1]));
+		String name = switch (track) {
+			case "quarry" -> "the quarry";
+			case "lumbercamp" -> "the lumber camp";
+			case "minecamp" -> "the mine camp";
+			default -> "the tournament field";
+		};
+		RoadLink.link(server, null, s, "outpost:" + track, p, name);
+	}
+
 	/** Whether the settlement's castle is round (founding menu; 19.11). */
 	public static boolean round(Settlement s) {
 		return s.level(Grade.SHAPE) == 1;
@@ -2333,6 +2353,7 @@ public final class Settlements {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
 			}
 			Chronicle.built(server, byHeart(server, s.heart()), s.jobTrack());
+			roadOut(server, byHeart(server, s.heart()), s.jobTrack());
 			Settlement latest = byHeart(server, s.heart());
 			if (latest != null) {
 				Progression.Step cur = Progression.current(latest, s.jobTrack());

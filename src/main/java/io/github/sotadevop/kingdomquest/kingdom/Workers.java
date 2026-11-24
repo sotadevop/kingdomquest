@@ -59,6 +59,9 @@ final class Workers {
 			new Spec("sawmill", 1, "Sawyer", "iron_axe", 26, -75, "Logs in, planks out. The saw sings all day."),
 			new Spec("smelter", 1, "Smelter", "coal", 92, 74, "The furnaces are roaring. Ingots for the storehouse."),
 			new Spec("saddler", 1, "Saddler", "leather", 36, 33, "A good saddle makes a good rider, my lord."),
+			new Spec("quarry", 1, "Quarryman", "stone_pickaxe", -203, 2, "Good stone, my lord. The walls will stand a thousand years."),
+			new Spec("lumbercamp", 1, "Forester", "iron_axe", 203, -16, "For every tree we fell, we plant two."),
+			new Spec("minecamp", 1, "Prospector", "iron_pickaxe", 203, 43, "The seams run deep here. Mind the shaft."),
 			new Spec(Progression.TOWNHALL, 1, "Chronicler", "writable_book", 55, 8, "Every deed of the realm goes into my book. Shall I read to you?"));
 
 	/** Inside the houses (base frame): main house, then the three houses on the square. */
