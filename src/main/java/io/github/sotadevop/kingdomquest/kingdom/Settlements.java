@@ -446,7 +446,7 @@ public final class Settlements {
 
 	static int trackLift(Settlement s, String track) {
 		return switch (track) {
-			case Settlement.MAIN, Progression.ROADS, Progression.LAMPS, Progression.WALLS, Progression.DOCK -> 0;
+			case Settlement.MAIN, Progression.ROADS, Progression.LAMPS, Progression.WALLS, Progression.DOCK, Progression.POSTERN -> 0;
 			default -> s.level("lift_" + track);
 		};
 	}
@@ -1174,7 +1174,15 @@ public final class Settlements {
 		}
 		StringBuilder mask = new StringBuilder();
 		for (Template.Segment seg : t.segments) {
-			boolean on = seg.any().stream().anyMatch(r -> s.level(r.getKey()) >= r.getValue());
+			// a rule (track, level) holds once the track has the level; (track, -level) while it hasn't yet (a wall's plug
+			// stays until the postern that opens it is built)
+			boolean on = seg.any().stream().anyMatch(r -> {
+				int v = r.getValue();
+				if (r.getKey().equals(Progression.POSTERN)) {
+					return posternOn(s, Math.abs(v)) == v > 0;
+				}
+				return v >= 0 ? s.level(r.getKey()) >= v : s.level(r.getKey()) < -v;
+			});
 			mask.append(on ? '1' : '0');
 		}
 		int dy = lift(s, job);
@@ -1212,6 +1220,62 @@ public final class Settlements {
 			}
 			return List.copyOf(out);
 		});
+	}
+
+	private static final Map<String, Boolean> POSTERN_FITS = new HashMap<>();
+
+	/**
+	 * Whether side gate n stands: bought, and its spot fits. The ground just inside, at the door and on the far bank
+	 * of the ditch must lie within 2 blocks of each other: on a hill site the inside can stand far above the land
+	 * outside the wall, and a door there would open into the fill. Such a side stays closed (its wall keeps the plug).
+	 */
+	static boolean posternOn(Settlement s, int n) {
+		if (s.level(Progression.POSTERN) < n) {
+			return false;
+		}
+		if (server == null) {
+			return true;
+		}
+		String key = s.id() + "|" + s.rotation() + "|" + n;
+		Boolean known = POSTERN_FITS.get(key);
+		if (known != null) {
+			return known;
+		}
+		Grade plan = Grade.of(server, s);
+		Template t = Template.get(s.style() + "/postern_3");
+		if (plan == null || t == null) {
+			return false; // worked out once the site's plan is known
+		}
+		boolean fits = false;
+		for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
+			if (p.segment() != n - 1 || !(p.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
+					|| p.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF) != net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+				continue;
+			}
+			BlockPos door = s.heart().offset(p.offset());
+			net.minecraft.core.Direction in = p.state().getValue(net.minecraft.world.level.block.DoorBlock.FACING);
+			BlockPos inside = door.relative(in, 3);
+			BlockPos bank = door.relative(in.getOpposite(), 12);
+			int a = plan.topAt(door.getX(), door.getZ());
+			int b = plan.topAt(inside.getX(), inside.getZ());
+			int c = plan.topAt(bank.getX(), bank.getZ());
+			fits = a != Integer.MIN_VALUE && b != Integer.MIN_VALUE && c != Integer.MIN_VALUE
+					&& Math.max(a, Math.max(b, c)) - Math.min(a, Math.min(b, c)) <= 2;
+			// and the street inside (its lane to the door) must come down to the sill: on a hill site the streets
+			// can run well above the land at the foot of the wall (field test: 9 blocks)
+			StreetPlan streets = StreetPlan.of(server, s);
+			for (int k = 2; fits && streets != null && k <= 6; k++) {
+				BlockPos q = door.relative(in, k);
+				Integer f = streets.feetAt(BlockPos.asLong(q.getX(), 0, q.getZ()));
+				if (f != null) {
+					fits = Math.abs(f - (a + 1 - s.heart().getY())) <= 2;
+					break;
+				}
+			}
+			break;
+		}
+		POSTERN_FITS.put(key, fits);
+		return fits;
 	}
 
 	private static final Map<UUID, Boolean> RED = new HashMap<>();
@@ -1479,10 +1543,13 @@ public final class Settlements {
 			Progression.Step standing = Progression.current(s, track);
 			boolean same = walls && !own.isEmpty() && !job.equals(s.job()) && standing != null && job.endsWith("/" + standing.building());
 			Map<Long, Integer> planTop = new HashMap<>();
+			Map<Long, List<Integer>> planYs = new HashMap<>();
 			if (same) {
 				for (Template.Placement p : base) {
 					if (p.offset().getX() == p.anchor().getX() && p.offset().getZ() == p.anchor().getZ()) {
-						planTop.merge(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.offset().getY(), Math::max);
+						long a = BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ());
+						planTop.merge(a, p.offset().getY(), Math::max);
+						planYs.computeIfAbsent(a, n0 -> new ArrayList<>()).add(p.offset().getY());
 					}
 				}
 			}
@@ -1515,6 +1582,7 @@ public final class Settlements {
 			for (Template.Placement p : base) {
 				BlockPos col = s.heart().offset(lampPost.getOrDefault(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.anchor()));
 				Integer top = planTop.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
+				List<Integer> ys = planYs.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
 				int off = ground.computeIfAbsent(col.asLong(), c -> {
 					int g;
 					Grade plan = Grade.of(server, s);
@@ -1522,11 +1590,26 @@ public final class Settlements {
 						return Math.max(-40, Math.min(30, plan.topAt(col.getX(), col.getZ()) + 1 - heartY));
 					}
 					if (top != null) {
+						// the height at which the most of this column's own blocks are found built (the highest built
+						// block can belong to a tower anchored elsewhere: field test, a palisade corner's roof slab
+						// put its wall's ground strip 11 up once the plan was worked out again)
 						BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-						for (int y = heartY + 70; y >= heartY - 70; y--) {
-							if (own.contains(at.set(col.getX(), y, col.getZ()).asLong())) {
-								return y - heartY - top;
+						int best = 0;
+						int bestOff = 0;
+						for (int o = -40; o <= 30; o++) {
+							int hits = 0;
+							for (int y : ys) {
+								if (own.contains(at.set(col.getX(), heartY + y + o, col.getZ()).asLong())) {
+									hits++;
+								}
 							}
+							if (hits > best) {
+								best = hits;
+								bestOff = o;
+							}
+						}
+						if (best > 0) {
+							return bestOff;
 						}
 					}
 					if (walls && !own.isEmpty()) {

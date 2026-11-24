@@ -86,7 +86,7 @@ class World:
             _, _, blocks, _, storage, _, _ = jobs[name]
             segs = bld.SEGS_OF.get(id(blocks))
             if segs:
-                on = [any(levels.get(t, 0) >= l for t, l in rules) for _, rules in bld.SEGDEF_OF[id(blocks)]]
+                on = [any(levels.get(t, 0) >= l if l >= 0 else levels.get(t, 0) < -l for t, l in rules) for _, rules in bld.SEGDEF_OF[id(blocks)]]
                 blocks = {p: v for p, v in blocks.items() if p not in segs or any(on[i] for i in segs[p])}
             self.by_track[track] = blocks
             self.blocks.update(blocks)

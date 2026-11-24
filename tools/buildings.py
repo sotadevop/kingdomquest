@@ -1109,6 +1109,49 @@ def tower_spots(level):
     return spots
 
 
+# Side gates (user, 2026-11-23): one main gate, small posterns on the other sides, bought one by one (track postern:
+# 1 west, 2 east, 3 north). The wall keeps a plug in each opening until its postern is built (a segment with the rule
+# (postern, -n): on while the postern track is below n).
+POSTERNS = ((1, "w"), (2, "e"), (3, "n"))
+
+
+def postern_cells():
+    # each on the anchor column of its wall section (palisade and stone wall stand on the same ground there)
+    x0, x1, z0, z1 = WALL
+    return {1: (x0, 26), 2: (x1, 26), 3: (-45, z0)}
+
+
+POSTERN_DIRS = {1: ((-1, 0), (0, 1)), 2: ((1, 0), (0, 1)), 3: ((0, -1), (1, 0))}  # n -> (outward, across)
+
+
+def plug_segments(b):
+    """Registers the postern plugs' segments on a walls template; returns {ring cell: segment index}."""
+    SEGDEF_OF[id(b.b)] = [(f"postern_{n}", [("postern", -n)]) for n, _ in POSTERNS]
+    SEGS_OF[id(b.b)] = {}
+    return {cell: n - 1 for n, cell in postern_cells().items()}
+
+
+def postern_columns(n):
+    """Columns outside the wall that postern n builds on: its bridge and the posts at its foot."""
+    cx, cz = postern_cells()[n]
+    out, across = POSTERN_DIRS[n]
+    cols = set(postern_deck(n))
+    cols |= {(cx + out[0] + across[0] * k * 2, cz + out[1] + across[1] * k * 2) for k in (-1, 1)}
+    return cols
+
+
+def mark_plugs(b, plugs, top):
+    """Puts the blocks of the plug cells up to y top, and whatever the wall has where the postern's bridge goes,
+    into their postern's segment."""
+    segs = SEGS_OF[id(b.b)]
+    cols = {c: n - 1 for n, _ in POSTERNS for c in postern_columns(n)}
+    for (x, y, z) in list(b.b):
+        if (x, z) in plugs and 0 <= y <= top:
+            segs[(x, y, z)] = [plugs[(x, z)]]
+        elif (x, z) in cols:
+            segs[(x, y, z)] = [cols[(x, z)]]
+
+
 def walls(style, level):
     """Walls track. 1: log palisade with sharpened tops and a gate on the main road.
     2: inner walkway, corner watchtowers and gate towers with lanterns."""
@@ -1118,6 +1161,7 @@ def walls(style, level):
     b = B()
     FOLLOW.add(id(b.b))
     ANCHORS_OF[id(b.b)] = b.anchors
+    plugs = plug_segments(b)
     w = s["wood"]
     log = MAT[style]["log"]
     x0, x1, z0, z1 = WALL
@@ -1172,6 +1216,7 @@ def walls(style, level):
             fx, fz = outer_corner(cx, cz, tx, tz)
             b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])   # on the roof, over its outer corner post
             b.anchor = None
+    mark_plugs(b, plugs, 1)
     return b.b
 
 
@@ -1226,6 +1271,7 @@ ROAD_GOALS = {
     "smith": [(1, (-12, 10))], "wood": [(1, (-31, 20))], "farm": [(1, (26, 11)), (1, (20, 5)), (2, (39, 10))],
     "stables": [(1, (47, 25))], "apiary": [(1, (52, 11))], "kennel": [(1, (52, 22))], "lair": [(1, (9, -23))],
     "cellar": [(1, (3, 11))], "garden": [(1, (79, -75))], "markethall": [(1, (-13, 2))],
+    "postern": [(1, (-120, 26)), (2, (134, 26)), (3, (-45, -97))],
 }
 # Where each track's plot lies in the big site: a move of the whole track (all levels) from where its templates draw
 # it (after the spacing moves of build_jobs). The one source of truth for the layout: written to
@@ -1710,6 +1756,7 @@ def stone_walls(style, level):
     # the wall steps up and down with the hills instead of floating over valleys
     FOLLOW.add(id(b.b))
     ANCHORS_OF[id(b.b)] = b.anchors
+    plugs = plug_segments(b)
     WM = WALLMAT[style]
     main, alt, crack, wall_top, slab = WM["main"], WM["alt"], WM["crack"], WM["top"], WM["slab"]
     gal = WM.get("gallery")
@@ -1855,6 +1902,7 @@ def stone_walls(style, level):
                     fx += 1 if fx == tx0 else -1
                 b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])
     b.anchor = None
+    mark_plugs(b, plugs, 1)
     return b.b
 
 
@@ -2773,6 +2821,10 @@ def gate(style, level):
                 b.put(x, y, z, "air")
             b.put(x, -depth - 1, z, "coarse_dirt")
         b.anchor = None
+        # under a postern's bridge the ditch's top layer is left to the bridge once the postern is built
+        SEGDEF_OF[id(b.b)] = [(f"postern_{n}", [("postern", -n)]) for n, _ in POSTERNS]
+        SEGS_OF[id(b.b)] = {(x, y, z): [n - 1] for n, _ in POSTERNS for (x, z), (i, _) in postern_deck(n).items()
+                            if (x, z) in ring for y in ((-3, -2, -1) if i == 3 else (-1,))}
         # drawbridge: five wide over the moat (crimson wood doesn't burn: lava trap), a fixed sill in front of the gate
         for x in range(gx - 2, gx + 3):
             for z in range(z1 + 2, z1 + 7):
@@ -3274,6 +3326,8 @@ def lava_trap(style, level):
     g4 = gate(style, 4)
     b.b.update(g4)
     ANCHORS_OF[id(b.b)] = ANCHORS_OF.pop(id(g4), {})  # the moat keeps following the land (it used to lose its anchors here)
+    SEGDEF_OF[id(b.b)] = SEGDEF_OF.pop(id(g4))
+    SEGS_OF[id(b.b)] = SEGS_OF.pop(id(g4))
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
     for x in range(gx - 1, gx + 2):
@@ -5623,6 +5677,52 @@ def monastery(style, level):
     return b.b
 
 
+def postern_deck(n):
+    """{(x, z)} of postern n's bridge, from the wall outward over the ditch to the far bank."""
+    cx, cz = postern_cells()[n]
+    out, across = POSTERN_DIRS[n]
+    return {(cx + out[0] * i + across[0] * k, cz + out[1] * i + across[1] * k): (i, k) for i in range(1, 12) for k in (-1, 0, 1)}
+
+
+def postern(style, level):
+    """The side gates up to this level: a door through the wall and a small fixed drawbridge outside, over the
+    ditch, with rails, and posts with lanterns by the wall. It follows the land at the door: the whole bridge is
+    level with the door's sill, so the way out is always walkable (over a dug ditch it spans it; where a steep side
+    got no ditch it runs out level)."""
+    wood = STYLES[style]["wood"]
+    b = B()
+    FOLLOW.add(id(b.b))
+    ANCHORS_OF[id(b.b)] = b.anchors
+    SEGDEF_OF[id(b.b)] = [(f"postern_{n}", [("postern", n)]) for n, _ in POSTERNS]
+    SEGS_OF[id(b.b)] = segs = {}
+    for n, side in POSTERNS[:level]:
+        cx, cz = postern_cells()[n]
+        out, across = POSTERN_DIRS[n]
+        b.anchor = (cx, cz)
+        before = set(b.b)
+        inward = {"w": "east", "e": "west", "n": "south"}[side]
+        b.put(cx, 0, cz, f"{wood}_door", facing=inward, half="lower", hinge="left", open="false", powered="false")
+        b.put(cx, 1, cz, f"{wood}_door", facing=inward, half="upper", hinge="left", open="false", powered="false")
+        for (x, z), (i, k) in postern_deck(n).items():
+            if k == 0 or i % 2:
+                b.put(x, -1, z, f"{wood}_planks")
+            else:
+                b.put(x, -1, z, f"{wood}_slab", type="top", waterlogged="false")
+            if k and 2 <= i <= 10:
+                b.put(x, 0, z, f"{wood}_fence")
+            if i == 3:                            # a pier on the ditch's inner edge: no hollow left under the bridge
+                for y in (-3, -2):
+                    b.put(x, y, z, WALLMAT[style]["main"])
+        for k in (-1, 1):                         # posts either side of the bridge's foot, lanterns on top
+            px, pz = cx + out[0] + across[0] * k * 2, cz + out[1] + across[1] * k * 2
+            for y in range(-1, 3):
+                b.put(px, y, pz, MAT[style]["log"], axis="y")
+            b.put(px, 3, pz, "lantern", hanging="false", waterlogged="false")
+        segs.update({q: [n - 1] for q in set(b.b) - before})
+    b.anchor = None
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -6040,6 +6140,8 @@ def build_jobs(styles=None):
         jobs.append((style, "markethall_1", markethall(style, 1), 420, None, None))
         jobs.append((style, "belfry_1", belfry(style, 1), 420, None, None))
         jobs.append((style, "monastery_1", monastery(style, 1), 900, None, None))
+        for level in (1, 2, 3):
+            jobs.append((style, f"postern_{level}", postern(style, level), 120, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
@@ -6064,7 +6166,7 @@ if __name__ == "__main__":
     jobs = build_jobs()
     # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
     # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
-    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar")
+    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern")
     plots = {}
     for style, name, blocks, *_ in jobs:
         if name.startswith("tent_") or track_of(name) in NO_PLOT:
