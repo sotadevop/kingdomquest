@@ -230,6 +230,23 @@ final class Realm {
 			}
 			return net.minecraft.world.InteractionResult.PASS;
 		});
+		// the steward's lectern in the town hall: the kingdom's book (the same menu as at the heart)
+		net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
+			if (!(player instanceof ServerPlayer sp) || level.dimension() != net.minecraft.world.level.Level.OVERWORLD
+					|| !(level.getBlockState(hit.getBlockPos()).getBlock() instanceof net.minecraft.world.level.block.LecternBlock)) {
+				return net.minecraft.world.InteractionResult.PASS;
+			}
+			long at = hit.getBlockPos().asLong();
+			for (Settlement s : owned(sp.level().getServer(), sp.getUUID())) {
+				if (s.built().getOrDefault(Progression.TOWNHALL, List.of()).contains(at)) {
+					if (hand == net.minecraft.world.InteractionHand.MAIN_HAND) {
+						Settlements.sendInfo(sp, s);
+					}
+					return net.minecraft.world.InteractionResult.SUCCESS;
+				}
+			}
+			return net.minecraft.world.InteractionResult.PASS;
+		});
 	}
 
 	/** The Dimension Globe of Sota Tweaks (soft dependency): fast travel from the realm map works while it is carried. */

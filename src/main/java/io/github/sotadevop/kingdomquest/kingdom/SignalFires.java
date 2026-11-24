@@ -64,6 +64,17 @@ final class SignalFires {
 		ALARMS.remove(key);
 	}
 
+	/** The bells of a settlement's belfry toll (what it built there that is a bell, found in the world). */
+	static void ringBells(ServerLevel level, Settlement s) {
+		for (long l : s.built().getOrDefault(Progression.BELFRY, List.of())) {
+			BlockPos p = BlockPos.of(l);
+			if (level.isLoaded(p) && level.getBlockState(p).getBlock() instanceof net.minecraft.world.level.block.BellBlock) {
+				level.playSound(null, p, net.minecraft.sounds.SoundEvents.BELL_BLOCK, net.minecraft.sounds.SoundSource.BLOCKS, 3.0f, 0.9f);
+				level.gameEvent(null, net.minecraft.world.level.gameevent.GameEvent.BLOCK_CHANGE, p);
+			}
+		}
+	}
+
 	/** Where a settlement's signal fires stand (only a campfire found there in the world is lit or put out). */
 	static List<BlockPos> fires(Settlement s) {
 		Object[] cached = FIRES.get(s.id());
@@ -139,6 +150,14 @@ final class SignalFires {
 				alarm(server, s.owner(), key, s.name(), s.heart());
 			} else {
 				allClear(key);
+			}
+		}
+		// the belfries ring the alarm while an attack on their lord's realm is under way (19.11)
+		if (server.getTickCount() % 60 == 0 && !ALARMS.isEmpty()) {
+			for (Settlement s : all) {
+				if (s.level(Progression.BELFRY) > 0 && ALARMS.values().stream().anyMatch(a -> a.owner().equals(s.owner()))) {
+					ringBells(level, s);
+				}
 			}
 		}
 		boolean sweep = server.getTickCount() % 100 == 0; // fires lit without an attack (by hand, or before a restart) go out
