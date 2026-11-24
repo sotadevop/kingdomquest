@@ -231,6 +231,19 @@ final class Roadside {
 	}
 
 	/** The destination ref of a road key: another kingdom ("s:id") or a village ("v:x,z"). */
+	/** Where a sign's destination lies ("s:id" its heart, "v:x,z" the village); {@code fallback} if unknown. */
+	static BlockPos placePos(MinecraftServer server, String ref, BlockPos fallback) {
+		if (ref.startsWith("s:")) {
+			Settlement s = byId(server, ref.substring(2));
+			return s == null ? fallback : s.heart();
+		}
+		if (ref.startsWith("v:")) {
+			String[] p = ref.substring(2).split(",");
+			return new BlockPos(Integer.parseInt(p[0]), fallback.getY(), Integer.parseInt(p[1]));
+		}
+		return fallback;
+	}
+
 	static String targetRef(String key) {
 		return key.startsWith("v:") ? key : "s:" + key;
 	}
@@ -600,16 +613,6 @@ final class Roadside {
 		}
 		Station done = new Station(s, st.key(), st.n(), st.origin(), st.rot(), st.style(), lvl, st.dir());
 		put(server, s.id(), st.id(), value(done));
-		// a rebuilt station may have its signs elsewhere: forget the old ones in its area
-		Settlement cur = byId(server, s.id().toString());
-		if (cur != null) {
-			for (String k : List.copyOf(cur.names().keySet())) {
-				if (k.startsWith(SIGN) && horizontal(pos(k.substring(SIGN.length())), st.origin()) <= 16
-						&& !(level.getBlockState(pos(k.substring(SIGN.length()))).getBlock() instanceof SignBlock)) {
-					put(server, s.id(), k, null);
-				}
-			}
-		}
 		// the signpost's two signs: each shows the place the reader is heading for
 		for (Template.Placement p : now) {
 			if (p.state().getBlock() instanceof WallSignBlock) {
@@ -617,11 +620,27 @@ final class Roadside {
 				int idx = stationIndex(server, done);
 				int len = length(byId(server, s.id().toString()), st.key());
 				BlockPos fwd = turn(0, 0, st.dir(), st.rot());
+				int ahead = len - idx > 0 ? len - idx : (int) horizontal(st.origin(), placePos(server, targetRef(st.key()), st.origin()));
 				List<Dest> dests = List.of(new Dest("s:" + s.id(), Math.max(0, idx), -fwd.getX(), -fwd.getZ()),
-						new Dest(targetRef(st.key()), Math.max(0, len - idx), fwd.getX(), fwd.getZ()));
+						new Dest(targetRef(st.key()), ahead, fwd.getX(), fwd.getZ()));
 				Direction facing = p.state().getValue(WallSignBlock.FACING);
 				List<Dest> ahead = dests.stream().filter(d -> !behind(facing, d)).toList();
 				sign(server, s.id(), at, ahead.isEmpty() ? dests : ahead); // a sign across the road names both ways
+			}
+		}
+		// a rebuilt station may have moved or re-placed its signs: forget the gone ones, write the text on the rest
+		Settlement cur = byId(server, s.id().toString());
+		if (cur != null) {
+			for (Map.Entry<String, String> e : List.copyOf(cur.names().entrySet())) {
+				if (!e.getKey().startsWith(SIGN) || horizontal(pos(e.getKey().substring(SIGN.length())), st.origin()) > 16) {
+					continue;
+				}
+				BlockPos sp = pos(e.getKey().substring(SIGN.length()));
+				if (level.getBlockState(sp).getBlock() instanceof SignBlock) {
+					write(server, sp, e.getValue());
+				} else {
+					put(server, s.id(), e.getKey(), null);
+				}
 			}
 		}
 		if (st.style().equals(Style.FROZEN)) {
@@ -820,7 +839,12 @@ final class Roadside {
 		for (Settlement s : Settlements.all(server)) {
 			for (Map.Entry<String, String> e : s.names().entrySet()) {
 				if (e.getKey().startsWith(SIGN)) {
-					write(server, pos(e.getKey().substring(SIGN.length())), e.getValue());
+					BlockPos sp = pos(e.getKey().substring(SIGN.length()));
+					if (server.overworld().isLoaded(sp) && !(server.overworld().getBlockState(sp).getBlock() instanceof SignBlock)) {
+						put(server, s.id(), e.getKey(), null); // the sign is gone (rebuilt elsewhere)
+					} else {
+						write(server, sp, e.getValue());
+					}
 				}
 			}
 		}
