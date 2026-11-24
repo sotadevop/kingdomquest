@@ -289,10 +289,18 @@ public final class Progression {
 			new Step(STOREHOUSE, "storehouse_5", 5, "kingdomquest.storehouse.storehouse_5", 9, adv("story/mine_diamond"), "kingdomquest.req.diamond",
 					List.of(item(Items.STONE_BRICKS, 128), item(Items.HAY_BLOCK, 16), item(Items.EMERALD, 48))));
 
+	/** The church (Town) and the cathedral (Citadel), on the plot kept for it (a hill town's highest hill). */
+	public static final String CHURCH = "church";
+	public static final List<Step> CHURCH_STEPS = List.of(
+			new Step(CHURCH, "church_1", 1, "kingdomquest.church.church_1", 8, adv("story/enchant_item"), "kingdomquest.req.enchant",
+					List.of(item(Items.STONE_BRICKS, 256), item(Items.GLASS_PANE, 32), item(Items.BELL, 1), item(Items.EMERALD, 32))),
+			new Step(CHURCH, "church_2", 2, "kingdomquest.church.church_2", 11, adv("end/kill_dragon"), "kingdomquest.req.dragon",
+					List.of(item(Items.STONE_BRICKS, 768), item(Items.GLASS_PANE, 64), item(Items.GOLD_BLOCK, 4), item(Items.EMERALD, 96))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE);
+			STOREHOUSE, CHURCH);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -310,6 +318,7 @@ public final class Progression {
 			case ROADS -> ROAD_STEPS;
 			case LAMPS -> LAMP_STEPS;
 			case STOREHOUSE -> STOREHOUSE_STEPS;
+			case CHURCH -> CHURCH_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}

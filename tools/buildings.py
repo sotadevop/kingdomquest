@@ -1199,7 +1199,7 @@ ROAD_TRUNKS = [
     ("east_s", (70, 74), (17, 92), ("x", 72), "sq_e2", [("main", 8)]),
     ("castle_w", (-25, -23), (-60, 17), ("x", -24), "sq_w1", []),               # lanes past the castle to the north
     ("castle_e", (37, 39), (-60, 17), ("x", 38), "sq_e1", []),
-    ("north_w", (-110, -59), (-62, -58), ("z", -60), "west_n", [("main", 8)]),             # the street behind the castle
+    # (the street behind the castle has no western stretch: the church and its churchyard stand there)
     ("north_c1", (-58, 7), (-62, -58), ("z", -60), "west_n", [("main", 8)]),
     ("north_c2", (7, 72), (-62, -58), ("z", -60), "east_n", [("main", 8)]),
     ("north_e", (73, 124), (-62, -58), ("z", -60), "east_n", [("main", 8)]),
@@ -1217,7 +1217,7 @@ ROAD_TRUNKS = [
     ("place_s", (2, 12), (53, 63), ("x", 7), "gate", [("main", 8)]),
 ]
 # a plot kept free for a building of a later wave (the church on the highest hill of a hill town): no lane crosses it
-RESERVED = {"church": (-96, -56, -70, -32)}
+RESERVED = {"church": (-100, -66, -62, -29)}
 # the streets a building keeps 3 blocks of clear ground from (main and side streets; not lanes, alleys or the square)
 WIDE_STREETS = {t[0] for t in ROAD_TRUNKS if not t[0].startswith(("castle_", "plaza", "place_"))}
 # places without a door that still need a way to them: track -> [(level, (x, z))], in the frame of the templates
@@ -4725,6 +4725,307 @@ def storehouse_ledger():
     return ((x0 + x1) // 2 - 2, 1, z0 + 2)
 
 
+# ---- the church (Town) and the cathedral (Citadel) ----
+# Style targets (user's picks, 2026-11-24): a stone village church with buttresses, tall lancet windows and a west tower
+# with a spire; each region in its own historical form: a Romanesque-Gothic stone church (temperate), a Norse stave
+# church with stacked steep roofs (frozen), a plain Scottish kirk with a squat tower (highland), a Mozarabic church
+# with horseshoe arches and a flat-topped tower (arid), and a tiered-roof hall (wild).
+CHURCH = {
+    "temperate": dict(wall=("stone_bricks", "stone_bricks", "andesite", "mossy_stone_bricks"), trim="polished_andesite",
+                      roof=("deepslate_tiles", "deepslate_tile_stairs", "deepslate_tile_slab"), spire=3, glass=("yellow_stained_glass_pane", "blue_stained_glass_pane"),
+                      door="dark_oak", floor=("polished_andesite", "stone_bricks"), pew="spruce", form="gothic"),
+    "highland": dict(wall=("cobblestone", "stone", "andesite", "mossy_cobblestone"), trim="stone_bricks",
+                     roof=("deepslate_tiles", "deepslate_tile_stairs", "deepslate_tile_slab"), spire=1, glass=("glass_pane", "light_gray_stained_glass_pane"),
+                     door="spruce", floor=("stone", "cobblestone"), pew="spruce", form="gothic"),
+    "frozen": dict(wall=("dark_oak_planks", "dark_oak_planks", "spruce_planks", "dark_oak_planks"), trim="stripped_dark_oak_log",
+                   roof=("dark_oak_planks", "dark_oak_stairs", "dark_oak_slab"), spire=3, glass=("glass_pane", "orange_stained_glass_pane"),
+                   door="spruce", floor=("spruce_planks", "dark_oak_planks"), pew="spruce", form="stave"),
+    "arid": dict(wall=("smooth_sandstone", "smooth_sandstone", "sandstone", "cut_sandstone"), trim="cut_sandstone",
+                 roof=("terracotta", "granite_stairs", "granite_slab"), spire=0, glass=("orange_stained_glass_pane", "yellow_stained_glass_pane"),
+                 door="acacia", floor=("smooth_sandstone", "terracotta"), pew="acacia", form="mozarabic"),
+    "wild": dict(wall=("bamboo_planks", "bamboo_planks", "stripped_bamboo_block", "bamboo_planks"), trim="stripped_jungle_log",
+                 roof=("spruce_planks", "spruce_stairs", "spruce_slab"), spire=0, glass=("glass_pane", "green_stained_glass_pane"),
+                 door="jungle", floor=("jungle_planks", "bamboo_mosaic"), pew="bamboo", form="tiered"),
+}
+CHURCH_FRONT = -66     # the church's door faces east, toward the west street (x -60..-56), past its clear strip
+CHURCH_AXIS = -48      # (room north of the churchyard for the way to the bard's house)
+
+
+def church_body(b, style, W, L, H, tower, towers=1):
+    """A church in the local frame: the nave x 0..W-1, z 0..L-1, the entrance and tower(s) at the south end (z >= L),
+    the apse at the north end. H: wall height. tower: the tower's side. Returns the local z of the front step."""
+    P = CHURCH[style]
+    wall = lambda x, y, z: pick(P["wall"], x, y, z)
+    roof, rstair, rslab = P["roof"]
+    cx = (W - 1) // 2
+    form = P["form"]
+    # plinth and floor
+    for x in range(-1, W + 1):
+        for z in range(-1, L + 1):
+            b.put(x, -1, z, P["trim"] if x in (-1, W) or z in (-1, L) else "stone")
+            if 0 <= x < W and 0 <= z < L:
+                b.put(x, 0, z, pick(P["floor"], x, 0, z) if (x + z) % 2 else P["floor"][0])
+    # walls, buttresses and lancet windows on the long sides
+    for z in range(0, L):
+        for x in (0, W - 1):
+            for y in range(1, H + 1):
+                win = z % 4 == 2 and 2 <= z <= L - 3 and 2 <= y <= H - 2 and form != "tiered"
+                if win:
+                    b.put(x, y, z, P["glass"][(y + z // 4) % 2] if form == "gothic" else "glass_pane", **PANE_Z)
+                else:
+                    b.put(x, y, z, P["trim"] if y == H or form == "stave" and y in (1, H) else wall(x, y, z))
+            if form == "mozarabic" and z % 4 == 2 and 2 <= z <= L - 3:
+                b.put(x, H - 1, z, "smooth_sandstone_stairs", facing="south", half="top", shape="straight", waterlogged="false")
+        if z % 4 == 0 and 0 < z < L - 1 and form in ("gothic", "mozarabic"):
+            for x, f in ((-1, "west"), (W, "east")):
+                for y in range(0, H - 2):
+                    b.put(x, y, z, P["trim"])
+                b.put(x, H - 2, z, P["trim"].replace("polished_", "polished_") + "_stairs" if P["trim"].startswith("polished") else
+                      ("stone_brick_stairs" if "stone" in P["trim"] else "sandstone_stairs"), facing={"west": "east", "east": "west"}[f], **ST)
+    # the back wall and its gable, the apse beyond it
+    for x in range(0, W):
+        for y in range(1, H + 1):
+            b.put(x, y, 0, wall(x, y, 0) if not (x == cx and 3 <= y <= H - 2) else P["glass"][0], **(PANE_X if x == cx and 3 <= y <= H - 2 else {}))
+    apse = [(x, z) for z in range(-4, 0) for x in range(cx - 3 + max(0, -z - 2), cx + 4 - max(0, -z - 2))]
+    for x, z in apse:
+        b.put(x, -1, z, P["trim"])
+        b.put(x, 0, z, P["floor"][0])
+        edge = (x - 1, z) not in apse or (x + 1, z) not in apse or (x, z - 1) not in apse
+        for y in range(1, H - 1):
+            if edge:
+                b.put(x, y, z, P["glass"][1] if y in (3, 4, 5) and x == cx and z == -4 else wall(x, y, z),
+                      **(PANE_X if y in (3, 4, 5) and x == cx and z == -4 else {}))
+            elif (x, y, z) in b.b:
+                del b.b[(x, y, z)]
+        b.put(x, H - 1, z, rslab, type="bottom", waterlogged="false")
+    for x in range(cx - 3, cx + 4):
+        if (x, 0, -1) in b.b:
+            for y in range(1, H):
+                b.b.pop((x, y, 0), None) if x != cx else None
+    # the roof over the nave
+    if form == "tiered":
+        steps = (1,) * ((W + 2) // 2)
+    elif form == "mozarabic":
+        steps = (1, 0, 1, 0, 1, 0, 1, 0, 1)[: (W + 2) // 2]
+        steps = tuple(max(1, s) if i % 2 == 0 else 0 for i, s in enumerate(steps)) or (1,)
+        steps = (1,) * ((W + 2) // 2)
+    else:
+        steps = (1, 1, 2, 2, 2, 2, 2, 2, 2)[: (W + 2) // 2]
+    top, low = zroof(b, -1, W, -1, L - 1, H + 1, steps, lambda x, y, z: roof, lambda x, y, z: rstair, rslab)
+    for x in range(0, W):                  # the front wall (behind the tower) and both gables up to the roof
+        for y in range(1, H + 1):
+            b.put(x, y, L - 1, P["trim"] if y == H else wall(x, y, L - 1))
+        for z in (0, L - 1):
+            for y in range(H + 1, low.get(x, H + 1)):
+                b.put(x, y, z, wall(x, y, z))
+    if form == "stave":
+        # the stave church's skirt: a low roof round the nave, under the windows
+        for z in range(-1, L):
+            for x, f in ((-2, "east"), (W + 1, "west")):
+                b.put(x, 4, z, rstair, facing=f, **ST)
+                b.put(x, 0, z, P["trim"]) if z % 3 == 0 else None
+                for y in (1, 2, 3):
+                    b.put(x, y, z, "dark_oak_fence") if z % 3 == 0 else None
+    # interior: pews either side of the aisle, the altar under the east window, lanterns
+    for z in range(5, L - 3, 2):
+        for x in range(1, W - 1):
+            if abs(x - cx) >= 1:
+                b.put(x, 1, z, f"{P['pew']}_stairs", facing="south", **ST)
+    for z in range(2, L - 1):
+        b.put(cx, 1, z, "{color}_carpet")
+    b.put(cx, 1, 2, "chiseled_stone_bricks" if form != "arid" else "chiseled_sandstone")
+    b.put(cx, 2, 2, "candle", candles="3", lit="true", waterlogged="false")
+    b.put(cx - 1, 1, 2, f"{P['pew']}_slab", type="top", waterlogged="false")
+    b.put(cx + 1, 1, 2, f"{P['pew']}_slab", type="top", waterlogged="false")
+    b.put(cx - 1, 2, 2, "candle", candles="2", lit="true", waterlogged="false")
+    b.put(cx + 1, 2, 2, "candle", candles="2", lit="true", waterlogged="false")
+    b.put(cx + 2, 1, 3, "lectern", facing="south", has_book="false", powered="false")
+    for z in range(4, L - 2, 6):              # lanterns on chains from the ridge
+        for y in range(H - 1, low.get(cx, H + 1)):
+            b.put(cx, y, z, "iron_chain", axis="y", waterlogged="false")
+        b.put(cx, H - 2, z, "lantern", hanging="true", waterlogged="false")
+    for x in (1, W - 2):
+        wall_banner(b, x, H - 2, 1, "south")
+    # the tower(s) at the front
+    fronts = []
+    tx_list = [cx - (tower - 1) // 2] if towers == 1 else [0, W - tower]
+    zf = L
+    for tx in tx_list:
+        TH = H + 12 if towers == 1 else H + 19   # twin towers rise well over the nave's ridge
+        for x in range(tx, tx + tower):
+            for z in range(zf, zf + tower):
+                edge = x in (tx, tx + tower - 1) or z in (zf, zf + tower - 1)
+                b.put(x, -1, z, P["trim"])
+                if not edge:
+                    b.put(x, 0, z, P["floor"][0])
+                    continue
+                for y in range(0, TH + 1):
+                    corner = x in (tx, tx + tower - 1) and z in (zf, zf + tower - 1)
+                    belfry = not corner and TH - 4 <= y <= TH - 2 and (x - tx) % (tower - 1) != 0 or not corner and TH - 4 <= y <= TH - 2 and (z - zf) % (tower - 1) != 0
+                    if belfry and form != "stave":
+                        # louvres in the belfry's openings (the bell is heard, nobody climbs in)
+                        b.put(x, y, z, "iron_bars" if form in ("gothic", "mozarabic") else f"{P['door']}_fence",
+                              **({"north": "false", "south": "false", "east": "false", "west": "false", "waterlogged": "false"}))
+                        if y == TH - 2 and form == "mozarabic":
+                            b.put(x, y, z, "smooth_sandstone_stairs", facing="north" if z == zf + tower - 1 else "south" if z == zf else "east" if x == tx else "west", half="top", shape="straight", waterlogged="false")
+                    else:
+                        b.put(x, y, z, P["trim"] if corner or y in (0, TH) else wall(x, y, z))
+        # the bell
+        bx, bz = tx + tower // 2, zf + tower // 2
+        b.put(bx, TH - 1, bz, "bell", attachment="ceiling", facing="north", powered="false")
+        for x in range(tx + 1, tx + tower - 1):
+            for z in range(zf + 1, zf + tower - 1):
+                b.put(x, TH, z, roof if form != "mozarabic" else P["trim"])
+        # spire / cap
+        if form == "mozarabic":
+            for x in range(tx, tx + tower):
+                for z in range(zf, zf + tower):
+                    if (x in (tx, tx + tower - 1) or z in (zf, zf + tower - 1)) and (x + z) % 2 == 0:
+                        b.put(x, TH + 1, z, P["trim"])
+            b.put(bx, TH + 1, bz, "lantern", hanging="false", waterlogged="false")
+        elif form == "tiered":
+            # stacked roofs, each on a short drum standing on the solid roof below (a pagoda's tiers)
+            y0, x0, z0, sz = TH + 1, tx - 1, zf - 1, tower + 2
+            while sz >= 3:
+                pyramid_roof(b, x0, z0, sz, y0, roof, rstair, 1, True, None, solid=True)
+                x0, z0, sz = x0 + 2, z0 + 2, sz - 4
+                if sz < 3:
+                    break
+                for x in range(x0, x0 + sz):          # (solid: no hollow nobody can reach)
+                    for z in range(z0, z0 + sz):
+                        for y in range(y0 + 1, y0 + 8):   # tall enough that the tier above doesn't roof the one below
+                            b.put(x, y, z, P["trim"] if x in (x0, x0 + sz - 1) and z in (z0, z0 + sz - 1) else wall(x, y, z))
+                x0, z0, sz, y0 = x0 - 1, z0 - 1, sz + 2, y0 + 8
+            top = max(y for (x, y, z) in b.b if (x, z) == (bx, bz))
+            b.put(bx, top + 1, bz, "lightning_rod", facing="up", powered="false", waterlogged="false")
+        else:
+            rise = P["spire"]
+            o = 1 if towers == 1 else 0           # twin spires stand on their towers' walls (no overhang to clash)
+            pyramid_roof(b, tx - o, zf - o, tower + 2 * o, TH + 1, roof, rstair, rise, form == "stave",
+                         ("lightning_rod", dict(facing="up", powered="false", waterlogged="false")), solid=True)
+        fronts.append((tx, tx + tower - 1))
+    # the door: through the tower (one tower) or between the towers
+    dz = zf + tower - 1 if towers == 1 else L - 1
+    if towers == 2:
+        # the porch between the towers: its front flush with theirs, roofed, open to the nave behind
+        front = zf + tower - 1
+        for x in range(tower, W - tower):
+            for z in range(L, front + 1):
+                b.put(x, -1, z, P["trim"])
+                b.put(x, 0, z, P["floor"][0])
+                b.put(x, H + 3, z, P["trim"])
+            for y in range(1, H + 3):
+                b.put(x, y, front, P["trim"] if y in (H + 2,) else wall(x, y, front))
+            for y in range(H + 4, H + 7):
+                if abs(x - cx) <= (H + 6 - y):
+                    b.put(x, y, front, wall(x, y, front))
+        b.put(cx, 6, front, P["glass"][0], **PANE_X)
+        b.put(cx, 7, front, P["glass"][1], **PANE_X)
+        for y in range(1, 4):
+            for x in (cx - 1, cx, cx + 1):
+                b.b.pop((x, y, L - 1), None)
+        dz = front
+    for y in range(1, 4):
+        for x in (cx - 1, cx, cx + 1) if towers == 2 else (cx,):
+            b.b.pop((x, y, dz), None)
+    b.put(cx, 1, dz, f"{P['door']}_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, dz, f"{P['door']}_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    if towers == 2:
+        for x in (cx - 1, cx + 1):
+            b.put(x, 1, dz, f"{P['door']}_door", facing="south", half="lower", hinge="right" if x < cx else "left", open="false", powered="false")
+            b.put(x, 2, dz, f"{P['door']}_door", facing="south", half="upper", hinge="right" if x < cx else "left", open="false", powered="false")
+    # the opening through the tower into the nave
+    if towers == 1:
+        for z in range(L - 1, dz):
+            for y in range(1, 4):
+                b.b.pop((cx, y, z), None)
+    arch = f"{'stone_brick' if form in ('gothic',) else 'sandstone' if form == 'mozarabic' else P['door']}_stairs"
+    b.put(cx - 1, 3, dz + 1, arch, facing="east", half="top", shape="straight", waterlogged="false") if towers == 1 else None
+    b.put(cx + 1, 3, dz + 1, arch, facing="west", half="top", shape="straight", waterlogged="false") if towers == 1 else None
+    for x in range(cx - 2, cx + 3):
+        b.put(x, 0, dz + 1, f"{'stone_brick' if form != 'mozarabic' else 'sandstone'}_slab", type="bottom", waterlogged="false")
+    return dz + 1
+
+
+def church(style, level):
+    """The church (level 1, Town) and the cathedral (level 2, Citadel) on the reserved plot: door east to the street."""
+    loc = B()
+    if level == 1:
+        front = church_body(loc, style, 11, 21, 9, 7)
+    else:
+        front = church_body(loc, style, 15, 25, 12, 6, towers=2)
+        # the transept: arms east and west of the crossing (local x), as high as the nave
+        P = CHURCH[style]
+        for z in range(8, 15):
+            for x in list(range(-6, 0)) + list(range(15, 21)):
+                loc.put(x, -1, z, P["trim"])
+                loc.put(x, 0, z, P["floor"][0])
+                edge = x in (-6, 20) or z in (8, 14)
+                for y in range(1, 13):
+                    if edge:
+                        win = x in (-6, 20) and z == 11 and 3 <= y <= 10
+                        loc.put(x, y, z, P["glass"][y % 2] if win else pick(P["wall"], x, y, z), **(PANE_Z if win else {}))
+            for x in (0, 14):
+                for y in range(1, 12):
+                    loc.b.pop((x, y, z), None) if 9 <= z <= 13 else None
+        roof, rstair, rslab = P["roof"]
+        # the transept roof: the nave's pitch, its ridge across the nave (lower than the nave's)
+        steps = (1, 1, 2, 2)
+        under = {}
+        for x in list(range(-7, 1)) + list(range(14, 22)):
+            h = 12
+            for k, st_ in enumerate(steps):
+                lo, h = h + 1, h + st_
+                under[7 + k] = under[15 - k] = h
+                for z, f in ((7 + k, "south"), (15 - k, "north")):
+                    for y in range(lo, h):
+                        loc.put(x, y, z, roof)
+                    loc.put(x, h, z, rstair, facing=f, **ST)
+            for y in range(13, h + 2):
+                loc.put(x, y, 11, roof)
+            loc.put(x, h + 2, 11, rslab, type="bottom", waterlogged="false")
+            if x in (-6, 20):                 # the gable ends: wall up under the roof
+                for z in range(8, 15):
+                    for y in range(13, under.get(z, h + 2)):
+                        if (x, y, z) not in loc.b:
+                            loc.put(x, y, z, pick(P["wall"], x, y, z))
+    # into the site frame: turned so the door faces east, the axis on CHURCH_AXIS
+    W = 11 if level == 1 else 15
+    turned_ = turned(loc.b, False)          # local south -> east
+    dx = CHURCH_FRONT - max(z for _x, _y, z in loc.b)    # the frontmost block (step or tower) on CHURCH_FRONT
+    dz = CHURCH_AXIS + (W - 1) // 2
+    b = B()
+    for (x, y, z), v in turned_.items():
+        b.b[(x + dx, y, z + dz)] = v
+    # the churchyard: a low wall with a gate to the street, a path, headstones and a tree
+    wallb = {"temperate": "cobblestone_wall", "highland": "cobblestone_wall", "frozen": "spruce_fence", "arid": "sandstone_wall",
+             "wild": "bamboo_fence"}[style]
+    xs = [x for x, y, z in b.b]
+    zs = [z for x, y, z in b.b]
+    x0, x1, z0, z1 = min(xs) - 3, CHURCH_FRONT + 1, min(zs) - 4, max(zs) + 4
+    gate_z = CHURCH_AXIS
+    for x in range(x0, x1 + 1):
+        for z in (z0, z1):
+            b.put(x, 0, z, wallb, **({"up": "true", "north": "none", "south": "none", "east": "low", "west": "low", "waterlogged": "false"} if wallb.endswith("_wall") else {"north": "false", "south": "false", "east": "true", "west": "true", "waterlogged": "false"}))
+    for z in range(z0, z1 + 1):
+        for x in (x0, x1):
+            if x == x1 and abs(z - gate_z) <= 1:
+                continue
+            b.put(x, 0, z, wallb, **({"up": "true", "north": "low", "south": "low", "east": "none", "west": "none", "waterlogged": "false"} if wallb.endswith("_wall") else {"north": "true", "south": "true", "east": "false", "west": "false", "waterlogged": "false"}))
+    for x in range(CHURCH_FRONT - 1, x1 + 1):
+        for z in range(gate_z - 1, gate_z + 2):
+            if (x, 0, z) not in b.b or x >= CHURCH_FRONT:
+                b.put(x, -1, z, "gravel" if style != "arid" else "smooth_sandstone")
+    if style in ("temperate", "highland", "frozen"):
+        stones = [(x, z) for x in range(x0 + 3, CHURCH_FRONT - 4, 4) for z in (z0 + 2, z1 - 2)]
+        for i, (x, z) in enumerate(stones):
+            if (x, 0, z) not in b.b and (x, 1, z) not in b.b:
+                b.put(x, 0, z, "mossy_stone_brick_wall" if i % 2 else "stone_brick_wall", up="true", north="none", south="none", east="none", west="none", waterlogged="false")
+                b.put(x + 1, 0, z, pick(("poppy", "cornflower", "lily_of_the_valley", "oxeye_daisy"), x, 0, z))
+    tree = (x0 + 2, z1 - 2) if style != "arid" else None
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -5135,6 +5436,8 @@ def build_jobs(styles=None):
             jobs.append((style, f"wood_{level}", woodcutter(style, level), secs, WOOD_STORE, None))
         for level in (1, 2, 3, 4, 5):
             jobs.append((style, f"storehouse_{level}", storehouse(style, level), 180 + 60 * level, storehouse_ledger(), None))
+        for level, secs in ((1, 600), (2, 900)):
+            jobs.append((style, f"church_{level}", church(style, level), secs, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
