@@ -305,7 +305,12 @@ final class RoadTest {
 			if (e.getKey().startsWith(Roadside.SIGN)) {
 				String txt = text(level, pos(e.getKey().substring(Roadside.SIGN.length())));
 				signs++;
-				named += txt.contains("FT Roads") && !txt.matches(".* 0 blocks.*") ? 1 : 0;
+				boolean ok = txt.contains("FT Roads") && !txt.matches(".* 0 blocks.*");
+				named += ok ? 1 : 0;
+				if (!ok) {
+					KingdomQuest.LOG.info("Field test roads: unnamed sign at {} ({}) reads: {}", e.getKey(),
+							level.getBlockState(pos(e.getKey().substring(Roadside.SIGN.length()))).getBlock(), txt);
+				}
 				if (named == 1 && !views.containsKey("sign_l" + lvl)) {
 					views.put("sign_l" + lvl, pos(e.getKey().substring(Roadside.SIGN.length())));
 					KingdomQuest.LOG.info("Field test roads: sign at {} reads: {}", e.getKey(), txt);
