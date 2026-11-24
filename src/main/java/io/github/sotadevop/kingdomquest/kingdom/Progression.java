@@ -253,16 +253,16 @@ public final class Progression {
 					new Step("tannery", "tannery_1", 1, "kingdomquest.trade.tannery_1", 5, adv("husbandry/breed_an_animal"), "kingdomquest.req.breed", List.of(item(Items.CAULDRON, 2), item(Items.LEATHER, 8), tag(ItemTags.LOGS, "logs", 32))),
 					new Step("tannery", "tannery_2", 2, "kingdomquest.trade.tannery_2", 7, adv("husbandry/tame_an_animal"), "kingdomquest.req.tame", List.of(item(Items.SMOKER, 1), item(Items.LEATHER, 16))))),
 				Map.entry("mill", List.of(
-					new Step("mill", "mill_1", 1, "kingdomquest.trade.mill_1", 5, null, null, List.of(tag(ItemTags.PLANKS, "planks", 64), item(Items.GRINDSTONE, 1), item(Items.WHITE_WOOL, 8))),
-					new Step("mill", "mill_2", 2, "kingdomquest.trade.mill_2", 7, null, null, List.of(item(Items.WHITE_WOOL, 16), item(Items.EMERALD, 12))))),
+					new Step("mill", "mill_1", 1, "kingdomquest.trade.mill_1", 5, null, null, List.of(tag(ItemTags.PLANKS, "planks", 64), item(Items.GRINDSTONE, 1), tag(ItemTags.WOOL, "wool", 8))),
+					new Step("mill", "mill_2", 2, "kingdomquest.trade.mill_2", 7, null, null, List.of(tag(ItemTags.WOOL, "wool", 16), item(Items.EMERALD, 12))))),
 				Map.entry("bakery", List.of(
 					new Step("bakery", "bakery_1", 1, "kingdomquest.trade.bakery_1", 6, null, null, List.of(item(Items.SMOKER, 2), item(Items.BRICKS, 32), item(Items.WHEAT, 32))),
 					new Step("bakery", "bakery_2", 2, "kingdomquest.trade.bakery_2", 8, null, null, List.of(item(Items.SMOKER, 1), item(Items.CAKE, 1), item(Items.EMERALD, 12))))),
 				Map.entry("weaver", List.of(
-					new Step("weaver", "weaver_1", 1, "kingdomquest.trade.weaver_1", 7, null, null, List.of(item(Items.LOOM, 3), item(Items.WHITE_WOOL, 16), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("weaver", "weaver_1", 1, "kingdomquest.trade.weaver_1", 7, null, null, List.of(item(Items.LOOM, 3), tag(ItemTags.WOOL, "wool", 16), tag(ItemTags.LOGS, "logs", 32))),
 					new Step("weaver", "weaver_2", 2, "kingdomquest.trade.weaver_2", 9, null, null, List.of(item(Items.LOOM, 2), item(Items.EMERALD, 16))))),
 				Map.entry("dyehouse", List.of(
-					new Step("dyehouse", "dyehouse_1", 1, "kingdomquest.trade.dyehouse_1", 8, null, null, List.of(item(Items.CAULDRON, 3), item(Items.WHITE_WOOL, 16), tag(ItemTags.LOGS, "logs", 32))),
+					new Step("dyehouse", "dyehouse_1", 1, "kingdomquest.trade.dyehouse_1", 8, null, null, List.of(item(Items.CAULDRON, 3), tag(ItemTags.WOOL, "wool", 16), tag(ItemTags.LOGS, "logs", 32))),
 					new Step("dyehouse", "dyehouse_2", 2, "kingdomquest.trade.dyehouse_2", 10, null, null, List.of(item(Items.CAULDRON, 1), item(Items.EMERALD, 16))))),
 				Map.entry("carpenter", List.of(
 					new Step("carpenter", "carpenter_1", 1, "kingdomquest.trade.carpenter_1", 7, null, null, List.of(item(Items.CRAFTING_TABLE, 2), item(Items.FLETCHING_TABLE, 1), tag(ItemTags.LOGS, "logs", 48))),
