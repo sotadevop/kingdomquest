@@ -4842,7 +4842,7 @@ def church_body(b, style, W, L, H, tower, towers=1):
     b.put(cx + 2, 1, 3, "lectern", facing="south", has_book="false", powered="false")
     for z in range(4, L - 2, 6):              # lanterns on chains from the ridge
         for y in range(H - 1, low.get(cx, H + 1)):
-            b.put(cx, y, z, "chain", axis="y", waterlogged="false")
+            b.put(cx, y, z, "iron_chain", axis="y", waterlogged="false")
         b.put(cx, H - 2, z, "lantern", hanging="true", waterlogged="false")
     for x in (1, W - 2):
         wall_banner(b, x, H - 2, 1, "south")
