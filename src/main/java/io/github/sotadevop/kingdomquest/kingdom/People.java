@@ -177,7 +177,7 @@ final class People {
 		if (s.level(Settlement.MAIN) < 4) {
 			return s.heart().offset(Template_rotate(s, -3 + i * 2, 3));
 		}
-		int[][] homes = {{-5, 26}, {19, 26}, {31, 26}, {7, 1}};
+		int[][] homes = {{-6, 35}, {20, 35}, {-18, 35}, {7, 1}};
 		int[] h = homes[i % homes.length];
 		return s.heart().offset(Template_rotate(s, h[0] - 7, h[1] - 10));
 	}

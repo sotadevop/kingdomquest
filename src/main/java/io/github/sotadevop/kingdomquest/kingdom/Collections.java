@@ -48,8 +48,9 @@ final class Collections {
 	private Collections() {
 	}
 
-	private static BlockPos at(Settlement s, int bx, int by, int bz) {
-		return s.heart().offset(Template.rotate(new BlockPos(bx - 7, by, bz - 10), Rotation.values()[s.rotation()]));
+	/** A spot of {@code track} in the base frame of tools/buildings.py, moved with its plot and lifted to its level. */
+	private static BlockPos at(Settlement s, String track, int bx, int by, int bz) {
+		return io.github.sotadevop.kingdomquest.building.Layout.at(s.heart(), Rotation.values()[s.rotation()], track, bx, by + Settlements.liftAt(s, track, bx, bz), bz);
 	}
 
 	static String petKind(int kennelLevel) {
@@ -91,7 +92,7 @@ final class Collections {
 				continue;
 			}
 			if (type.create(home, EntitySpawnReason.MOB_SUMMONED) instanceof TamableAnimal animal) {
-				BlockPos spot = at(s, 50 + i * 2, 0, 17);
+				BlockPos spot = at(s, Progression.KENNEL, 50 + i * 2, 0, 17);
 				spot = new BlockPos(spot.getX(), home.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
 						spot.getX(), spot.getZ()), spot.getZ());
 				animal.snapTo(Vec3.atBottomCenterOf(spot), 0, 0);
@@ -114,7 +115,7 @@ final class Collections {
 			return;
 		}
 		var holder = server.getAdvancements().get(Identifier.withDefaultNamespace("end/dragon_egg"));
-		BlockPos nest = at(s, 9, 1, -32);
+		BlockPos nest = at(s, Progression.LAIR, 9, 1, -32);
 		if (holder != null && owner.getAdvancements().getOrStartProgress(holder).isDone() && level.getBlockState(nest).isAir()) {
 			level.setBlock(nest, Blocks.DRAGON_EGG.defaultBlockState(), Block.UPDATE_ALL);
 			level.sendParticles(ParticleTypes.PORTAL, nest.getX() + 0.5, nest.getY() + 0.5, nest.getZ() + 0.5, 60, 0.6, 0.6, 0.6, 0.4);
@@ -133,7 +134,7 @@ final class Collections {
 			if (holder == null || !owner.getAdvancements().getOrStartProgress(holder).isDone()) {
 				continue;
 			}
-			BlockPos pos = at(s, t.x(), t.y() + s.level("lift_" + Progression.TROPHY), t.z());
+			BlockPos pos = at(s, Progression.TROPHY, t.x(), t.y(), t.z());
 			BlockState now = level.getBlockState(pos);
 			if (now.isAir()) {
 				level.setBlock(pos, t.block().defaultBlockState(), Block.UPDATE_ALL);

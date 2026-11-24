@@ -37,6 +37,9 @@ public class FoundingScreen extends Screen {
 	/** Gate side: {@link CharterData#AUTO} or a rotation ordinal; the button cycles Auto, north, east, south, west. */
 	private int gate;
 	private static final int[] GATES = {CharterData.AUTO, 2, 3, 0, 1};
+	/** The site's look (flat castle, hill castle, hill town) and the castle's shape (square; round comes later). */
+	private int look;
+	private int shape;
 	private Item icon;
 	private int color;
 	private List<Item> shown = List.of();
@@ -57,6 +60,12 @@ public class FoundingScreen extends Screen {
 		this.icon = editing == null ? null : BuiltInRegistries.ITEM.getValue(editing.logo());
 		this.color = editing == null ? DyeColor.BLUE.getId() : editing.color();
 		this.gate = editing == null ? CharterData.AUTO : editing.gate();
+		this.look = editing == null ? 0 : editing.look();
+		this.shape = editing == null ? 0 : editing.shape();
+	}
+
+	private Component lookLabel() {
+		return Component.translatable("kingdomquest.founding.look", Component.translatable("kingdomquest.founding.look." + this.look));
 	}
 
 	private Component gateLabel() {
@@ -99,7 +108,7 @@ public class FoundingScreen extends Screen {
 		this.gridX = this.left + PAD + 1;
 		this.gridY = this.top + 84;
 		this.columns = (this.w - 2 * PAD - 2) / SLOT;
-		this.rows = Math.max(1, (this.h - 84 - 30) / SLOT);
+		this.rows = Math.max(1, (this.h - 84 - 52) / SLOT);
 		int buttonsY = this.top + this.h - 25;
 		int bw = Math.min(96, (this.w - 2 * PAD - 8) / 3);
 		int bx = this.left + (this.w - 3 * bw - 8) / 2;
@@ -111,6 +120,20 @@ public class FoundingScreen extends Screen {
 			this.gate = GATES[(i + 1) % GATES.length];
 			b.setMessage(gateLabel());
 		}).bounds(bx, buttonsY, bw, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.gate.tip"))).build());
+		// the site's look and the castle's shape: decided at the founding, every building and street is planned around them
+		int rowY = buttonsY - 22;
+		int half = (3 * bw + 8 - 4) / 2;
+		this.addRenderableWidget(Button.builder(lookLabel(), b -> {
+			this.look = (this.look + 1) % CharterData.LOOKS;
+			b.setMessage(lookLabel());
+			b.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.look.tip." + this.look)));
+		}).bounds(bx, rowY, half, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.look.tip." + this.look)))
+				.build());
+		Button shapeButton = Button.builder(Component.translatable("kingdomquest.founding.shape", Component.translatable("kingdomquest.founding.shape." + this.shape)),
+				b -> { }).bounds(bx + half + 4, rowY, half, 18)
+				.tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.founding.shape.tip"))).build();
+		shapeButton.active = false; // only the square castle is built so far
+		this.addRenderableWidget(shapeButton);
 		this.save = Button.builder(Component.translatable("kingdomquest.founding.confirm"), b -> save())
 				.bounds(bx + bw + 4, buttonsY, bw, 18).build();
 		this.addRenderableWidget(this.save);
@@ -139,7 +162,7 @@ public class FoundingScreen extends Screen {
 	private void save() {
 		var id = BuiltInRegistries.ITEM.getKey(this.icon);
 		String text = this.name.getValue().strip();
-		ClientPlayNetworking.send(new FoundingPayload(new CharterData(text, this.color, id, this.gate), this.offhand));
+		ClientPlayNetworking.send(new FoundingPayload(new CharterData(text, this.color, id, this.gate, this.look, this.shape), this.offhand));
 		this.onClose();
 	}
 

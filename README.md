@@ -7,6 +7,10 @@ in the Minecraft project.
 - Build: `./gradlew build` (Java 25). CI builds every push and publishes the jar to `ci-jar`.
 - `tools/buildings.py` generates every building template (JSON under `src/main/resources/kingdomquest/buildings`),
   including the road network, which is routed around the buildings. Run it after any change and commit the result.
+- The site plan (wall ring, gate, towers, every plot, streets) is written by `tools/buildings.py` to
+  `kingdomquest/layout.json`; the mod reads it through `Layout.java`, the one place positions come from.
+- The land is shaped once at the founding from one grading plan (`Grade.java`): a plateau inside the walls, natural
+  slopes around it, the hills of the hill looks; plots, streets, walls and moat read their heights from it.
 - `tools/check.py` puts a whole settlement together at every tier and style and tests it the way a player meets it:
   overlaps between tracks, blocks hanging on nothing, roads through buildings, doors without a road, and a walk
   simulation (can you reach every door, bed, store and room without jumping?). CI runs it on every push.
