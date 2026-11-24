@@ -38,7 +38,7 @@ public class KingdomScreen extends Screen {
 	}
 
 	private static final List<Tab> TABS = List.of(
-			new Tab("kingdomquest.tab.settlement", List.of("main", "cellar", "royal")),
+			new Tab("kingdomquest.tab.settlement", List.of("main", "cellar", "royal", "townhall")),
 			new Tab("kingdomquest.tab.defense", List.of("walls", "gate", "barracks")),
 			new Tab("kingdomquest.tab.guild", List.of("guild")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps")),

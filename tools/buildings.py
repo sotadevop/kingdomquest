@@ -5026,6 +5026,190 @@ def church(style, level):
     return b.b
 
 
+# ---- the town hall with its clock tower (Town) ----
+# Style target (user's pick, 2026-11-24): a medieval clock tower on a civic hall. A German Rathaus: gable to the street,
+# an open arcade on the ground floor (the market hall under the council), the council chamber above, a clock tower
+# over the front with a belfry and a spire. Each region in its own materials and roof form.
+TOWNHALL = {
+    "temperate": dict(base=("stone_bricks", "andesite", "stone_bricks", "mossy_stone_bricks"), frame="stripped_dark_oak_log", fill="calcite",
+                      roof=("deepslate_tiles", "deepslate_tile_stairs", "deepslate_tile_slab"), door="dark_oak", floor="spruce_planks", flat=False),
+    "frozen": dict(base=("cobblestone", "stone", "cobblestone", "mossy_cobblestone"), frame="stripped_spruce_log", fill="spruce_planks",
+                   roof=("dark_oak_planks", "dark_oak_stairs", "dark_oak_slab"), door="spruce", floor="spruce_planks", flat=False),
+    "highland": dict(base=("stone_bricks", "cobblestone", "stone", "stone_bricks"), frame="stone_bricks", fill="cobblestone",
+                     roof=("deepslate_tiles", "deepslate_tile_stairs", "deepslate_tile_slab"), door="spruce", floor="spruce_planks", flat=False),
+    "arid": dict(base=("cut_sandstone", "sandstone", "cut_sandstone", "smooth_sandstone"), frame="cut_sandstone", fill="smooth_sandstone",
+                 roof=("terracotta", "granite_stairs", "granite_slab"), door="acacia", floor="acacia_planks", flat=True),
+    "wild": dict(base=("mossy_cobblestone", "cobblestone", "mossy_cobblestone", "stone"), frame="stripped_jungle_log", fill="bamboo_planks",
+                 roof=("spruce_planks", "spruce_stairs", "spruce_slab"), door="jungle", floor="bamboo_planks", flat=False),
+}
+TOWNHALL_AT = (48, -7)   # the hall's local origin in the site: east of the square, front (south) on the east side street
+
+
+def townhall(style, level):
+    P = TOWNHALL[style]
+    roof, rstair, rslab = P["roof"]
+    b = B()
+    W, L = 11, 17                               # x 0..10, z 0..16; the front (south) is the gable to the street
+    cx = W // 2
+    base = lambda x, y, z: pick(P["base"], x, y, z)
+    for x in range(-1, W + 1):
+        for z in range(-1, L + 1):
+            b.put(x, -1, z, "stone_bricks" if style != "arid" else "cut_sandstone")
+            if 0 <= x < W and 0 <= z < L:
+                b.put(x, 0, z, "polished_andesite" if (x + z) % 2 and style != "arid" else "smooth_stone" if style != "arid" else "smooth_sandstone")
+    # ground floor (y 1..4): stone walls, an open arcade at the front: three bays under arches
+    cols = (0, 4, 6, 10)
+    for z in range(0, L):
+        for x in range(0, W):
+            edge = x in (0, W - 1) or z in (0, L - 1)
+            if not edge:
+                continue
+            for y in range(1, 5):
+                if z == L - 1 and x not in cols:     # the arcade's openings
+                    if y == 4:
+                        b.put(x, y, z, base(x, y, z))
+                    elif y == 3 and x in (1, 3, 7, 9):
+                        b.put(x, y, z, "stone_brick_stairs" if style != "arid" else "sandstone_stairs",
+                              facing="east" if x in (1, 7) else "west", half="top", shape="straight", waterlogged="false")
+                    continue
+                win = x in (0, W - 1) and z % 4 == 2 and 2 <= y <= 3
+                b.put(x, y, z, "glass_pane" if win else base(x, y, z), **(PANE_Z if win else {}))
+    # the inner wall behind the arcade with the hall's door
+    for x in range(1, W - 1):
+        for y in range(1, 5):
+            b.put(x, y, L - 4, base(x, y, L - 4))
+    for z in range(L - 4, L):
+        for x in (0, W - 1):
+            for y in range(1, 5):
+                b.put(x, y, z, base(x, y, z))
+    for y in (1, 2):
+        b.b.pop((cx, y, L - 4), None)
+    b.put(cx, 1, L - 4, f"{P['door']}_door", facing="south", half="lower", hinge="left", open="false", powered="false")
+    b.put(cx, 2, L - 4, f"{P['door']}_door", facing="south", half="upper", hinge="left", open="false", powered="false")
+    b.put(cx, 3, L - 3, "lantern", hanging="true", waterlogged="false")
+    b.put(cx, 4, L - 3, P["frame"] if "log" in P["frame"] else base(cx, 4, L - 3), **({"axis": "x"} if "log" in P["frame"] else {}))
+    # the upper floor (y 5..9): timber frame (or stone), the council chamber
+    for x in range(0, W):
+        for z in range(0, L):
+            b.put(x, 5, z, P["floor"] if 0 < x < W - 1 and 0 < z < L - 1 else (P["frame"] if "log" in P["frame"] else base(x, 5, z)),
+                  **({"axis": "z" if x in (0, W - 1) else "x"} if "log" in P["frame"] and not (0 < x < W - 1 and 0 < z < L - 1) else {}))
+    for z in range(0, L):
+        for x in range(0, W):
+            if not (x in (0, W - 1) or z in (0, L - 1)):
+                continue
+            along_x = z in (0, L - 1)
+            u = x if along_x else z
+            post = u % 4 == 0 or (along_x and x in (0, W - 1)) or (not along_x and z in (0, L - 1))
+            for y in range(6, 10):
+                if post:
+                    b.put(x, y, z, P["frame"], **({"axis": "y"} if "log" in P["frame"] else {}))
+                elif y == 9:
+                    b.put(x, y, z, P["frame"], **({"axis": "x" if along_x else "z"} if "log" in P["frame"] else {}))
+                elif y in (7, 8) and u % 4 in (1, 2, 3) and u % 4 != 0 and (u % 4 == 2 or along_x):
+                    b.put(x, y, z, "glass_pane", **(PANE_X if along_x else PANE_Z))
+                else:
+                    b.put(x, y, z, P["fill"])
+    # stairs up inside (along the west wall), the council table, the steward's desk
+    for i, z in enumerate(range(2, 7)):
+        b.put(1, 1 + i, z, f"{P['door']}_stairs", facing="south", **ST)
+        for y in range(2 + i, 6):
+            b.b.pop((1, y, z), None)
+        b.b.pop((1, 5, z), None)
+    for z in range(4, 12):
+        b.put(cx, 6, z, f"{P['door']}_slab", type="top", waterlogged="false")
+        for x, f in ((cx - 1, "east"), (cx + 1, "west")):
+            if z % 2 == 0:
+                b.put(x, 6, z, f"{P['door']}_stairs", facing=f, **ST)
+    b.put(cx, 1, 2, "lectern", facing="south", has_book="false", powered="false")     # the steward's desk, in the hall
+    b.put(cx, 2, 1, "{color}_wall_banner", facing="south")
+    b.put(cx, 7, 1, "{color}_wall_banner", facing="south")
+    for x in (2, W - 3):
+        b.put(x, 6, 1, "bookshelf")
+        b.put(x, 7, 1, "bookshelf")
+    b.put(cx, 8, 8, "lantern", hanging="true", waterlogged="false")
+    b.put(cx, 9, 8, P["frame"] if "log" in P["frame"] else base(cx, 9, 8), **({"axis": "x"} if "log" in P["frame"] else {}))
+    for x in range(1, W - 1):
+        b.put(x, 9, 8, P["frame"] if "log" in P["frame"] else base(x, 9, 8), **({"axis": "x"} if "log" in P["frame"] else {}))
+    # benches and barrels in the arcade
+    for x in (2, 8):
+        b.put(x, 1, L - 3, f"{P['door']}_stairs", facing="south", **ST)
+    b.put(1, 1, L - 2, "barrel", facing="up", open="false")
+    b.put(W - 2, 1, L - 2, "barrel", facing="up", open="false")
+    # the roof
+    if P["flat"]:
+        for x in range(-1, W + 1):
+            for z in range(-1, L + 1):
+                b.put(x, 10, z, roof if 0 <= x < W and 0 <= z < L else rslab, **({} if 0 <= x < W and 0 <= z < L else {"type": "bottom", "waterlogged": "false"}))
+                if x in (-1, W) or z in (-1, L):
+                    if (x + z) % 2 == 0:
+                        b.put(x, 11, z, P["frame"])
+        low = {x: 11 for x in range(W)}
+    else:
+        top, low = zroof(b, -1, W, -1, L - 1, 10, (1, 1, 2, 2, 2, 2), lambda x, y, z: roof, lambda x, y, z: rstair, rslab)
+        for z in (0, L - 1):
+            for x in range(0, W):
+                for y in range(10, low.get(x, 10)):
+                    b.put(x, y, z, P["fill"] if "log" in P["frame"] else base(x, y, z))
+            for y in range(11, 14):
+                b.put(cx, y, z, "glass_pane", **PANE_X) if y == 12 else None
+        # dormers on both roof sides
+        for z in (5, 11):
+            for x, f in ((0, "west"), (W - 1, "east")):
+                pass
+    # the clock tower over the front: 5 x 5, clock faces, a belfry with louvres, a spire
+    tx, tz, T = cx - 2, L - 3, 5
+    top_y = 21
+    for x in range(tx, tx + T):
+        for z in range(tz, tz + T):
+            edge = x in (tx, tx + T - 1) or z in (tz, tz + T - 1)
+            corner = x in (tx, tx + T - 1) and z in (tz, tz + T - 1)
+            for y in range(10, top_y + 1):
+                if not edge:
+                    b.b.pop((x, y, z), None)
+                    continue
+                if 18 <= y <= 19 and not corner:
+                    b.put(x, y, z, "iron_bars" if style != "frozen" and style != "wild" else f"{P['door']}_fence",
+                          north="false", south="false", east="false", west="false", waterlogged="false")
+                else:
+                    b.put(x, y, z, P["frame"] if corner or y in (17, top_y) else base(x, y, z),
+                          **({"axis": "y"} if "log" in P["frame"] and (corner or y in (17, top_y)) else {}))
+    for x in range(tx + 1, tx + T - 1):
+        for z in range(tz + 1, tz + T - 1):
+            b.put(x, top_y, z, base(x, top_y, z))
+            b.put(x, 10, z, P["floor"])
+    b.put(cx, top_y - 1, tz + 2, "bell", attachment="ceiling", facing="south", powered="false")
+    # clock faces on the three sides you see from the street (14..16): a pale disc, the hands a dark button
+    for face, (fx, fz, d) in {"south": (cx, tz + T - 1, (1, 0)), "east": (tx + T - 1, tz + 2, (0, 1)), "west": (tx, tz + 2, (0, 1))}.items():
+        for k in (-1, 0, 1):
+            for y in (14, 15, 16):
+                b.put(fx + d[0] * k, y, fz + d[1] * k, "calcite" if (k, y) != (0, 15) else "smooth_quartz")
+        ox, oz = {"south": (0, 1), "east": (1, 0), "west": (-1, 0)}[face]
+        b.put(fx + ox, 15, fz + oz, "polished_blackstone_button", face="wall", facing=face, powered="false")
+        b.put(fx + ox, 16, fz + oz, "polished_blackstone_button", face="wall", facing=face, powered="false")
+    if P["flat"]:
+        for x in range(tx - 1, tx + T + 1):
+            for z in range(tz - 1, tz + T + 1):
+                if (x in (tx - 1, tx + T) or z in (tz - 1, tz + T)) and (x + z) % 2 == 0:
+                    b.put(x, top_y + 1, z, P["frame"])
+        b.put(cx, top_y + 1, tz + 2, "lantern", hanging="false", waterlogged="false")
+    else:
+        pyramid_roof(b, tx - 1, tz - 1, T + 2, top_y + 1, roof, rstair, 2 if style in ("temperate", "highland") else 1,
+                     style in ("wild", "frozen"), ("lightning_rod", dict(facing="up", powered="false", waterlogged="false")), solid=True)
+    # the forecourt: paving in front of the arcade to the street, a step up along its whole front
+    for x in range(-1, W + 1):
+        for z in (L, L + 1):
+            if (x, 0, z) not in b.b:
+                b.put(x, -1, z, "stone_bricks" if style != "arid" else "cut_sandstone")
+    for x in range(0, W):
+        b.put(x, 0, L, "stone_brick_slab" if style != "arid" else "cut_sandstone_slab", type="bottom", waterlogged="false")
+    wall_banner(b, 0 - 1, 7, L - 1, "west") if False else None
+    out = B()
+    ox, oz = TOWNHALL_AT
+    for (x, y, z), v in b.b.items():
+        out.b[(x + ox, y, z + oz)] = v
+    return out.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -5438,6 +5622,7 @@ def build_jobs(styles=None):
             jobs.append((style, f"storehouse_{level}", storehouse(style, level), 180 + 60 * level, storehouse_ledger(), None))
         for level, secs in ((1, 600), (2, 900)):
             jobs.append((style, f"church_{level}", church(style, level), secs, None, None))
+        jobs.append((style, "townhall_1", townhall(style, 1), 600, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
