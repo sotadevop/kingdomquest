@@ -1217,7 +1217,7 @@ ROAD_TRUNKS = [
     ("place_s", (2, 12), (53, 63), ("x", 7), "gate", [("main", 8)]),
 ]
 # a plot kept free for a building of a later wave (the church on the highest hill of a hill town): no lane crosses it
-RESERVED = {"church": (-100, -70, -62, -32)}
+RESERVED = {"church": (-100, -66, -62, -29)}
 # the streets a building keeps 3 blocks of clear ground from (main and side streets; not lanes, alleys or the square)
 WIDE_STREETS = {t[0] for t in ROAD_TRUNKS if not t[0].startswith(("castle_", "plaza", "place_"))}
 # places without a door that still need a way to them: track -> [(level, (x, z))], in the frame of the templates
@@ -4747,8 +4747,8 @@ CHURCH = {
                  roof=("spruce_planks", "spruce_stairs", "spruce_slab"), spire=0, glass=("glass_pane", "green_stained_glass_pane"),
                  door="jungle", floor=("jungle_planks", "bamboo_mosaic"), pew="bamboo", form="tiered"),
 }
-CHURCH_FRONT = -66     # the church's door faces east, toward the west street (x -60..-56), past its clear strip; axis at z -51
-CHURCH_AXIS = -51
+CHURCH_FRONT = -66     # the church's door faces east, toward the west street (x -60..-56), past its clear strip
+CHURCH_AXIS = -48      # (room north of the churchyard for the way to the bard's house)
 
 
 def church_body(b, style, W, L, H, tower, towers=1):
@@ -4840,9 +4840,10 @@ def church_body(b, style, W, L, H, tower, towers=1):
     b.put(cx - 1, 2, 2, "candle", candles="2", lit="true", waterlogged="false")
     b.put(cx + 1, 2, 2, "candle", candles="2", lit="true", waterlogged="false")
     b.put(cx + 2, 1, 3, "lectern", facing="south", has_book="false", powered="false")
-    for z in range(4, L - 2, 6):
-        b.put(cx, H, z, "chain", axis="y", waterlogged="false")
-        b.put(cx, H - 1, z, "lantern", hanging="true", waterlogged="false")
+    for z in range(4, L - 2, 6):              # lanterns on chains from the ridge
+        for y in range(H - 1, low.get(cx, H + 1)):
+            b.put(cx, y, z, "chain", axis="y", waterlogged="false")
+        b.put(cx, H - 2, z, "lantern", hanging="true", waterlogged="false")
     for x in (1, W - 2):
         wall_banner(b, x, H - 2, 1, "south")
     # the tower(s) at the front
@@ -4862,7 +4863,9 @@ def church_body(b, style, W, L, H, tower, towers=1):
                     corner = x in (tx, tx + tower - 1) and z in (zf, zf + tower - 1)
                     belfry = not corner and TH - 4 <= y <= TH - 2 and (x - tx) % (tower - 1) != 0 or not corner and TH - 4 <= y <= TH - 2 and (z - zf) % (tower - 1) != 0
                     if belfry and form != "stave":
-                        b.b.pop((x, y, z), None)
+                        # louvres in the belfry's openings (the bell is heard, nobody climbs in)
+                        b.put(x, y, z, "iron_bars" if form in ("gothic", "mozarabic") else f"{P['door']}_fence",
+                              **({"north": "false", "south": "false", "east": "false", "west": "false", "waterlogged": "false"}))
                         if y == TH - 2 and form == "mozarabic":
                             b.put(x, y, z, "smooth_sandstone_stairs", facing="north" if z == zf + tower - 1 else "south" if z == zf else "east" if x == tx else "west", half="top", shape="straight", waterlogged="false")
                     else:
@@ -4881,10 +4884,20 @@ def church_body(b, style, W, L, H, tower, towers=1):
                         b.put(x, TH + 1, z, P["trim"])
             b.put(bx, TH + 1, bz, "lantern", hanging="false", waterlogged="false")
         elif form == "tiered":
-            y0 = TH + 1
-            for k, sz in enumerate((tower + 2, tower, tower - 2)):
-                y0 = pyramid_roof(b, bx - sz // 2, bz - sz // 2, sz, y0, roof, rstair, 1, True, None) + 1
-            b.put(bx, y0, bz, "lightning_rod", facing="up", powered="false", waterlogged="false")
+            # stacked roofs, each on a short drum standing on the solid roof below (a pagoda's tiers)
+            y0, x0, z0, sz = TH + 1, tx - 1, zf - 1, tower + 2
+            while sz >= 3:
+                pyramid_roof(b, x0, z0, sz, y0, roof, rstair, 1, True, None, solid=True)
+                x0, z0, sz = x0 + 2, z0 + 2, sz - 4
+                if sz < 3:
+                    break
+                for x in range(x0, x0 + sz):          # (solid: no hollow nobody can reach)
+                    for z in range(z0, z0 + sz):
+                        for y in range(y0 + 1, y0 + 8):   # tall enough that the tier above doesn't roof the one below
+                            b.put(x, y, z, P["trim"] if x in (x0, x0 + sz - 1) and z in (z0, z0 + sz - 1) else wall(x, y, z))
+                x0, z0, sz, y0 = x0 - 1, z0 - 1, sz + 2, y0 + 8
+            top = max(y for (x, y, z) in b.b if (x, z) == (bx, bz))
+            b.put(bx, top + 1, bz, "lightning_rod", facing="up", powered="false", waterlogged="false")
         else:
             rise = P["spire"]
             o = 1 if towers == 1 else 0           # twin spires stand on their towers' walls (no overhang to clash)
@@ -4894,14 +4907,24 @@ def church_body(b, style, W, L, H, tower, towers=1):
     # the door: through the tower (one tower) or between the towers
     dz = zf + tower - 1 if towers == 1 else L - 1
     if towers == 2:
+        # the porch between the towers: its front flush with theirs, roofed, open to the nave behind
+        front = zf + tower - 1
         for x in range(tower, W - tower):
-            for z in range(L - 1, L + 1):
-                for y in range(1, H + 1):
-                    b.put(x, y, z, wall(x, y, z))
-        dz = L
-        for x in range(tower, W - tower):
-            b.put(x, -1, L, P["trim"])
-            b.put(x, 0, L, P["floor"][0])
+            for z in range(L, front + 1):
+                b.put(x, -1, z, P["trim"])
+                b.put(x, 0, z, P["floor"][0])
+                b.put(x, H + 3, z, P["trim"])
+            for y in range(1, H + 3):
+                b.put(x, y, front, P["trim"] if y in (H + 2,) else wall(x, y, front))
+            for y in range(H + 4, H + 7):
+                if abs(x - cx) <= (H + 6 - y):
+                    b.put(x, y, front, wall(x, y, front))
+        b.put(cx, 6, front, P["glass"][0], **PANE_X)
+        b.put(cx, 7, front, P["glass"][1], **PANE_X)
+        for y in range(1, 4):
+            for x in (cx - 1, cx, cx + 1):
+                b.b.pop((x, y, L - 1), None)
+        dz = front
     for y in range(1, 4):
         for x in (cx - 1, cx, cx + 1) if towers == 2 else (cx,):
             b.b.pop((x, y, dz), None)
@@ -4930,7 +4953,7 @@ def church(style, level):
     if level == 1:
         front = church_body(loc, style, 11, 21, 9, 7)
     else:
-        front = church_body(loc, style, 15, 25, 12, 7, towers=2)
+        front = church_body(loc, style, 15, 25, 12, 6, towers=2)
         # the transept: arms east and west of the crossing (local x), as high as the nave
         P = CHURCH[style]
         for z in range(8, 15):
