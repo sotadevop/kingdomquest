@@ -986,15 +986,15 @@ final class Roadside {
 				ends.add(a.relative(fwd, 2));
 			}
 			for (BlockPos end : ends) {
-				String tag = "btower@" + end.getX() + "," + end.getZ();
-				if (have.contains(tag)) {
+				String tag = "btower@" + str(end.above());
+				if (have.stream().anyMatch(h -> h.startsWith(tag + "@"))) {
 					continue;
 				}
 				String style = Style.forBiome(level.getBiome(end).getRegisteredName());
 				Template t = Template.get(style + "/bridge_tower");
 				if (t != null) {
 					place(level, t.placements(Settlements.dye(s.color()), r), end.above(), Blocks.STONE.defaultBlockState());
-					addExtra(server, s.id(), key, tag + "@" + str(end.above()) + "@" + r.ordinal() + "@" + style);
+					addExtra(server, s.id(), key, tag + "@" + r.ordinal() + "@" + style);
 				}
 			}
 		}

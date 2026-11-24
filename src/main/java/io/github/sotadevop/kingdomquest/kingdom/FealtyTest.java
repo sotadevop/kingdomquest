@@ -233,7 +233,7 @@ final class FealtyTest {
 	}
 
 	/** The blocks around a point as a view for tools/render_view.py (same format as FieldTest's views). */
-	private static void view(ServerLevel level, BlockPos c, int half, Path file) {
+	static void view(ServerLevel level, BlockPos c, int half, Path file) {
 		int lo = c.getY() - 6;
 		int hi = c.getY() + 10;
 		Map<BlockState, Integer> pal = new LinkedHashMap<>();

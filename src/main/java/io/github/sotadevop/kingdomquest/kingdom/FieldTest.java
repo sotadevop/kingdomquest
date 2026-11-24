@@ -98,7 +98,13 @@ public final class FieldTest {
 			new Scenario("mesa", Set.of("wooded_badlands", "badlands", "savanna_plateau"), "shape"),
 			new Scenario("rolling", Set.of("dark_forest", "old_growth_birch_forest", "forest", "savanna", "sparse_jungle"), "shape"),
 			// the Fealty Ceremony at a real village's bell (see FealtyTest); CI runs it when named: [fieldtest fealty]
-			new Scenario("fealty", Set.of(), "village"));
+			new Scenario("fealty", Set.of(), "village"),
+			// waystations and the road's extras on roads between three kingdoms (see RoadTest): [fieldtest roads roads_frozen ...]
+			new Scenario("roads", Set.of("plains", "sunflower_plains", "forest", "meadow"), "roads"),
+			new Scenario("roads_frozen", Set.of("snowy_plains", "snowy_taiga"), "roads"),
+			new Scenario("roads_arid", Set.of("desert", "savanna"), "roads"),
+			new Scenario("roads_highland", Set.of("taiga", "windswept_hills", "old_growth_spruce_taiga"), "roads"),
+			new Scenario("roads_wild", Set.of("jungle", "sparse_jungle", "swamp"), "roads"));
 
 	private static final UUID OWNER = UUID.fromString("00000000-0000-0000-0000-00000000f1e1");
 	/** Half size of the inspected square around the heart: the wall ring, the moat, the beach and a margin. */
@@ -136,7 +142,8 @@ public final class FieldTest {
 			}
 			long t0 = System.nanoTime();
 			try {
-				bad += ("village".equals(sc.kind()) ? FealtyTest.run(server, REPORT, SUMMARY, dir) : runSite(server, level, sc, i, used, dir)) ? 0 : 1;
+				bad += ("village".equals(sc.kind()) ? FealtyTest.run(server, REPORT, SUMMARY, dir)
+						: "roads".equals(sc.kind()) ? RoadTest.run(server, sc, i, REPORT, SUMMARY, dir) : runSite(server, level, sc, i, used, dir)) ? 0 : 1;
 			} catch (Throwable e) {
 				KingdomQuest.LOG.error("Field test {} crashed", sc.name(), e);
 				REPORT.append("## ").append(sc.name()).append("\n\nCRASH: ").append(e).append(" at ").append(top(e)).append("\n\n");
