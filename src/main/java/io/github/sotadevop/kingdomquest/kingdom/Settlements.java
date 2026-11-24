@@ -1174,7 +1174,9 @@ public final class Settlements {
 		}
 		StringBuilder mask = new StringBuilder();
 		for (Template.Segment seg : t.segments) {
-			boolean on = seg.any().stream().anyMatch(r -> s.level(r.getKey()) >= r.getValue());
+			// a rule (track, level) holds once the track has the level; (track, -level) while it hasn't yet (a wall's plug
+			// stays until the postern that opens it is built)
+			boolean on = seg.any().stream().anyMatch(r -> r.getValue() >= 0 ? s.level(r.getKey()) >= r.getValue() : s.level(r.getKey()) < -r.getValue());
 			mask.append(on ? '1' : '0');
 		}
 		int dy = lift(s, job);

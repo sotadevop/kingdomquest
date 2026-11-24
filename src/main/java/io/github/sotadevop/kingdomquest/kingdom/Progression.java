@@ -327,10 +327,20 @@ public final class Progression {
 			new Step(MONASTERY, "monastery_1", 1, "kingdomquest.monastery.monastery_1", 9, adv("story/enchant_item"), "kingdomquest.req.enchant",
 					List.of(item(Items.STONE_BRICKS, 384), item(Items.BOOKSHELF, 8), item(Items.BELL, 1), item(Items.EMERALD, 40))));
 
+	/** Side gates (posterns) in the wall, each with a small drawbridge: west (1), east (2), north (3). */
+	public static final String POSTERN = "postern";
+	public static final List<Step> POSTERN_STEPS = List.of(
+			new Step(POSTERN, "postern_1", 1, "kingdomquest.postern.postern_1", 7, null, null,
+					List.of(tag(ItemTags.PLANKS, "planks", 48), item(Items.IRON_INGOT, 4), item(Items.EMERALD, 8))),
+			new Step(POSTERN, "postern_2", 2, "kingdomquest.postern.postern_2", 7, null, null,
+					List.of(tag(ItemTags.PLANKS, "planks", 48), item(Items.IRON_INGOT, 4), item(Items.EMERALD, 12))),
+			new Step(POSTERN, "postern_3", 3, "kingdomquest.postern.postern_3", 8, null, null,
+					List.of(tag(ItemTags.PLANKS, "planks", 48), item(Items.IRON_INGOT, 4), item(Items.EMERALD, 16))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY);
+			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -354,6 +364,7 @@ public final class Progression {
 			case MARKETHALL -> MARKETHALL_STEPS;
 			case BELFRY -> BELFRY_STEPS;
 			case MONASTERY -> MONASTERY_STEPS;
+			case POSTERN -> POSTERN_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}
