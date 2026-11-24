@@ -1121,7 +1121,7 @@ public final class FieldTest {
 			for (int z = Math.min(ra.getZ(), rb.getZ()) - 20; z <= Math.max(ra.getZ(), rb.getZ()) + 20; z++) {
 				long col = BlockPos.asLong(x, 0, z);
 				boolean inside = x > Math.min(ra.getX(), rb.getX()) && x < Math.max(ra.getX(), rb.getX()) && z > Math.min(ra.getZ(), rb.getZ())
-						&& z < Math.max(ra.getZ(), rb.getZ());
+						&& z < Math.max(ra.getZ(), rb.getZ()) && (!Settlements.round(s) || Grade.inside(h, r, true, x, z) > 0);
 				if (!inside && !moat.contains(col)) {
 					continue;
 				}
