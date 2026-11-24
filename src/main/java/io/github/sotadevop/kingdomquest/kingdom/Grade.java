@@ -66,7 +66,7 @@ final class Grade {
 	/** Flat ground beyond the wall line: the moat, its bank and the landing in front of the gate. */
 	static final int PAD = 16;
 	/** How far beyond the flat ground the plan reaches with its slopes back to the untouched land. */
-	static final int MARGIN = 48;
+	static final int MARGIN = 60;
 	/** The plateau lies at most this far above or below the ground where the charter was used. */
 	static final int CAP = 12;
 	/** Caves under made ground are filled this deep. */
@@ -522,8 +522,10 @@ final class Grade {
 				if (edge == 0) {
 					top[c] = (short) bed[c];
 					kind[c] = UNTOUCHED;
-				} else if (edge < 12 && kind[c] == SLOPE) {
-					int t = Math.max(bed[c] - edge, Math.min(bed[c] + edge, top[c]));
+				} else if (kind[c] == SLOPE) {
+					// a cone from the plan's edge back to the land, continuous with the slopes from the plateau
+					int reach = (int) Math.floor(edge * 1.3);
+					int t = Math.max(bed[c] - reach, Math.min(bed[c] + reach, top[c]));
 					top[c] = (short) t;
 					if (t == bed[c]) {
 						kind[c] = UNTOUCHED;
@@ -917,6 +919,12 @@ final class Grade {
 				}
 			}
 		}
+		for (int y = g + 1; y <= g + 3; y++) {
+			BlockState st = level.getBlockState(pos.set(x, y, z));
+			if (st.is(Blocks.MUSHROOM_STEM) && !built.contains(pos.asLong())) {
+				removeMushroom(level, pos.immutable(), built); // a huge mushroom goes whole, or its cap is left hanging
+			}
+		}
 		boolean steep = steepness(x, z) >= 2;
 		if (t < g) {
 			// cut: everything natural above the new top goes; the top gets the land's layers, bare rock where steep
@@ -1006,6 +1014,26 @@ final class Grade {
 				BlockState st = level.getBlockState(pos);
 				if ((st.isAir() || !st.getFluidState().isEmpty() || st.canBeReplaced()) && !built.contains(pos.asLong())) {
 					level.setBlock(pos, deep, SiteWork.FLAGS);
+				}
+			}
+		}
+	}
+
+	/** Every block of a huge mushroom connected to {@code start} (stem and caps). */
+	private static void removeMushroom(ServerLevel level, BlockPos start, Set<Long> built) {
+		java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>(List.of(start));
+		Set<Long> seen = new HashSet<>(List.of(start.asLong()));
+		int n = 0;
+		while (!queue.isEmpty() && n++ < 400) {
+			BlockPos p = queue.poll();
+			BlockState st = level.getBlockState(p);
+			if (!(st.is(Blocks.MUSHROOM_STEM) || st.is(Blocks.RED_MUSHROOM_BLOCK) || st.is(Blocks.BROWN_MUSHROOM_BLOCK)) || built.contains(p.asLong())) {
+				continue;
+			}
+			level.setBlock(p, Blocks.AIR.defaultBlockState(), SiteWork.FLAGS);
+			for (BlockPos q : BlockPos.betweenClosed(p.offset(-1, -1, -1), p.offset(1, 1, 1))) {
+				if (seen.add(q.asLong())) {
+					queue.add(q.immutable());
 				}
 			}
 		}
@@ -1164,7 +1192,7 @@ final class Grade {
 			if (name.contains("sea") || name.contains("kelp") || name.contains("sugar_cane") || name.contains("waterlily") || name.contains("lily")) {
 				continue; // water plants
 			}
-			boolean isTree = isTree(h.value().feature(), 0) || name.contains("bamboo");
+			boolean isTree = isTree(h.value().feature(), 0);
 			boolean common = name.contains("flower") || name.contains("grass") || name.contains("fern") || name.contains("dead_bush");
 			// inside the walls only grass and flowers: no leaf litter, pumpkins or berry bushes on the plots
 			boolean ground = !isTree && !name.contains("leaf_litter") && (common || !meadow && (name.contains("bush") || name.contains("patch") || name.contains("berr")));

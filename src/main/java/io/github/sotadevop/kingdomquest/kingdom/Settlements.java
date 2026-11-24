@@ -2092,7 +2092,9 @@ public final class Settlements {
 				int[] box = JOB_BOX.computeIfAbsent(s.id() + "|" + s.job(), k -> jobBox(s, list, columns));
 				SiteWork.dropFloating(level, box[0] - 4, box[1] - 4, box[2] + 4, box[3] + 4, nowBuilt);
 				SiteWork.stumps(level, box[0] - 8, box[1] - 8, box[2] + 8, box[3] + 8, nowBuilt, SiteWork.surface(level, s.heart()));
-				SiteWork.snowCover(level, box[0] - 8, box[1] - 8, box[2] + 8, box[3] + 8, nowBuilt);
+				// snow back on the whole worked area: the ring, the moat bank and the roads out of the gate (country roads too)
+				int[] ring = Grade.ringBox(s.heart(), Rotation.values()[s.rotation()]);
+				SiteWork.snowCover(level, ring[0] - 40, ring[1] - 40, ring[2] + 40, ring[3] + 40, nowBuilt);
 				JOB_BOX.remove(s.id() + "|" + s.job());
 			}
 			carryRoads(level, done, SiteWork.surface(level, s.heart()));
