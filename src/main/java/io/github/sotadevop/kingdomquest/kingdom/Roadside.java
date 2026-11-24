@@ -620,9 +620,9 @@ final class Roadside {
 				int idx = stationIndex(server, done);
 				int len = length(byId(server, s.id().toString()), st.key());
 				BlockPos fwd = turn(0, 0, st.dir(), st.rot());
-				int ahead = len - idx > 0 ? len - idx : (int) horizontal(st.origin(), placePos(server, targetRef(st.key()), st.origin()));
+				int toTarget = len - idx > 0 ? len - idx : (int) horizontal(st.origin(), placePos(server, targetRef(st.key()), st.origin()));
 				List<Dest> dests = List.of(new Dest("s:" + s.id(), Math.max(0, idx), -fwd.getX(), -fwd.getZ()),
-						new Dest(targetRef(st.key()), ahead, fwd.getX(), fwd.getZ()));
+						new Dest(targetRef(st.key()), toTarget, fwd.getX(), fwd.getZ()));
 				Direction facing = p.state().getValue(WallSignBlock.FACING);
 				List<Dest> ahead = dests.stream().filter(d -> !behind(facing, d)).toList();
 				sign(server, s.id(), at, ahead.isEmpty() ? dests : ahead); // a sign across the road names both ways
