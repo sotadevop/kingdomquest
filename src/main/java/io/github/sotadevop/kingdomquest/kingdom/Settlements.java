@@ -446,7 +446,7 @@ public final class Settlements {
 
 	static int trackLift(Settlement s, String track) {
 		return switch (track) {
-			case Settlement.MAIN, Progression.ROADS, Progression.LAMPS, Progression.WALLS, Progression.DOCK -> 0;
+			case Settlement.MAIN, Progression.ROADS, Progression.LAMPS, Progression.WALLS, Progression.DOCK, Progression.POSTERN -> 0;
 			default -> s.level("lift_" + track);
 		};
 	}
@@ -1261,6 +1261,17 @@ public final class Settlements {
 			int c = plan.topAt(bank.getX(), bank.getZ());
 			fits = a != Integer.MIN_VALUE && b != Integer.MIN_VALUE && c != Integer.MIN_VALUE
 					&& Math.max(a, Math.max(b, c)) - Math.min(a, Math.min(b, c)) <= 2;
+			// and the street inside (its lane to the door) must come down to the sill: on a hill site the streets
+			// can run well above the land at the foot of the wall (field test: 9 blocks)
+			StreetPlan streets = StreetPlan.of(server, s);
+			for (int k = 2; fits && streets != null && k <= 6; k++) {
+				BlockPos q = door.relative(in, k);
+				Integer f = streets.feetAt(BlockPos.asLong(q.getX(), 0, q.getZ()));
+				if (f != null) {
+					fits = Math.abs(f - (a + 1 - s.heart().getY())) <= 2;
+					break;
+				}
+			}
 			break;
 		}
 		POSTERN_FITS.put(key, fits);
@@ -1532,10 +1543,13 @@ public final class Settlements {
 			Progression.Step standing = Progression.current(s, track);
 			boolean same = walls && !own.isEmpty() && !job.equals(s.job()) && standing != null && job.endsWith("/" + standing.building());
 			Map<Long, Integer> planTop = new HashMap<>();
+			Map<Long, List<Integer>> planYs = new HashMap<>();
 			if (same) {
 				for (Template.Placement p : base) {
 					if (p.offset().getX() == p.anchor().getX() && p.offset().getZ() == p.anchor().getZ()) {
-						planTop.merge(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.offset().getY(), Math::max);
+						long a = BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ());
+						planTop.merge(a, p.offset().getY(), Math::max);
+						planYs.computeIfAbsent(a, k -> new ArrayList<>()).add(p.offset().getY());
 					}
 				}
 			}
@@ -1568,6 +1582,7 @@ public final class Settlements {
 			for (Template.Placement p : base) {
 				BlockPos col = s.heart().offset(lampPost.getOrDefault(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()), p.anchor()));
 				Integer top = planTop.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
+				List<Integer> ys = planYs.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
 				int off = ground.computeIfAbsent(col.asLong(), c -> {
 					int g;
 					Grade plan = Grade.of(server, s);
@@ -1575,11 +1590,26 @@ public final class Settlements {
 						return Math.max(-40, Math.min(30, plan.topAt(col.getX(), col.getZ()) + 1 - heartY));
 					}
 					if (top != null) {
+						// the height at which the most of this column's own blocks are found built (the highest built
+						// block can belong to a tower anchored elsewhere: field test, a palisade corner's roof slab
+						// put its wall's ground strip 11 up once the plan was worked out again)
 						BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
-						for (int y = heartY + 70; y >= heartY - 70; y--) {
-							if (own.contains(at.set(col.getX(), y, col.getZ()).asLong())) {
-								return y - heartY - top;
+						int best = 0;
+						int bestOff = 0;
+						for (int o = -40; o <= 30; o++) {
+							int hits = 0;
+							for (int y : ys) {
+								if (own.contains(at.set(col.getX(), heartY + y + o, col.getZ()).asLong())) {
+									hits++;
+								}
 							}
+							if (hits > best) {
+								best = hits;
+								bestOff = o;
+							}
+						}
+						if (best > 0) {
+							return bestOff;
 						}
 					}
 					if (walls && !own.isEmpty()) {

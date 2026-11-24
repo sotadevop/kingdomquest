@@ -6166,7 +6166,7 @@ if __name__ == "__main__":
     jobs = build_jobs()
     # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
     # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
-    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar")
+    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern")
     plots = {}
     for style, name, blocks, *_ in jobs:
         if name.startswith("tent_") or track_of(name) in NO_PLOT:
