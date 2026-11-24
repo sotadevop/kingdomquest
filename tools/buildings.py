@@ -1199,7 +1199,7 @@ ROAD_TRUNKS = [
     ("east_s", (70, 74), (17, 92), ("x", 72), "sq_e2", [("main", 8)]),
     ("castle_w", (-25, -23), (-60, 17), ("x", -24), "sq_w1", []),               # lanes past the castle to the north
     ("castle_e", (37, 39), (-60, 17), ("x", 38), "sq_e1", []),
-    ("north_w", (-110, -59), (-62, -58), ("z", -60), "west_n", [("main", 8)]),             # the street behind the castle
+    # (the street behind the castle has no western stretch: the church and its churchyard stand there)
     ("north_c1", (-58, 7), (-62, -58), ("z", -60), "west_n", [("main", 8)]),
     ("north_c2", (7, 72), (-62, -58), ("z", -60), "east_n", [("main", 8)]),
     ("north_e", (73, 124), (-62, -58), ("z", -60), "east_n", [("main", 8)]),
@@ -4747,7 +4747,7 @@ CHURCH = {
                  roof=("spruce_planks", "spruce_stairs", "spruce_slab"), spire=0, glass=("glass_pane", "green_stained_glass_pane"),
                  door="jungle", floor=("jungle_planks", "bamboo_mosaic"), pew="bamboo", form="tiered"),
 }
-CHURCH_FRONT = -63     # the church's door faces east, onto the west street (x -60..-56); its axis lies at z -51
+CHURCH_FRONT = -66     # the church's door faces east, toward the west street (x -60..-56), past its clear strip; axis at z -51
 CHURCH_AXIS = -51
 
 
@@ -4969,7 +4969,7 @@ def church(style, level):
     # into the site frame: turned so the door faces east, the axis on CHURCH_AXIS
     W = 11 if level == 1 else 15
     turned_ = turned(loc.b, False)          # local south -> east
-    dx = CHURCH_FRONT - front
+    dx = CHURCH_FRONT - max(z for _x, _y, z in loc.b)    # the frontmost block (step or tower) on CHURCH_FRONT
     dz = CHURCH_AXIS + (W - 1) // 2
     b = B()
     for (x, y, z), v in turned_.items():
