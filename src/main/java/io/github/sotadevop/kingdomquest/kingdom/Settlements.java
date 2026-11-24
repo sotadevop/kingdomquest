@@ -1120,6 +1120,11 @@ public final class Settlements {
 	 * spot isn't flat (a hill of the look): that house isn't built.
 	 */
 	private static Map<Long, Integer> houseLifts(Settlement s) {
+		return houseLifts(s, 0);
+	}
+
+	/** As {@link #houseLifts(Settlement)}, each house's area grown by {@code margin} (the ground worked around it). */
+	private static Map<Long, Integer> houseLifts(Settlement s, int margin) {
 		List<int[]> houses = io.github.sotadevop.kingdomquest.building.Layout.houses(s.style());
 		Grade g = server == null || houses.isEmpty() ? null : Grade.of(server, s);
 		if (g == null) {
@@ -1135,10 +1140,10 @@ public final class Settlements {
 					lift = Integer.MIN_VALUE;
 				}
 			}
-			for (int x = h[0]; x <= h[2]; x++) {
-				for (int z = h[1]; z <= h[3]; z++) {
+			for (int x = h[0] - margin; x <= h[2] + margin; x++) {
+				for (int z = h[1] - margin; z <= h[3] + margin; z++) {
 					BlockPos o = io.github.sotadevop.kingdomquest.building.Layout.rel(r, x, 0, z);
-					out.put(BlockPos.asLong(o.getX(), 0, o.getZ()), lift);
+					out.putIfAbsent(BlockPos.asLong(o.getX(), 0, o.getZ()), lift);
 				}
 			}
 		}
@@ -2008,12 +2013,18 @@ public final class Settlements {
 		Set<Long> loose = new HashSet<>(s.built().getOrDefault(Progression.ROADS, List.of()));
 		loose.addAll(s.built().getOrDefault(Progression.LAMPS, List.of()));
 		BlockState surface = SiteWork.surface(level, s.heart());
+		// the town houses of the main track stand on the plateau: their ground is worked at their own level
+		Map<Long, Integer> houseGround = Settlement.MAIN.equals(s.jobTrack()) ? houseLifts(s, 4) : Map.of();
 		for (int n = 0; n < colsPerTick && index < cols; n++, index++) {
 			SiteWork.Column c = columns.get(index);
 			if (moat.contains(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()))) {
 				continue; // the moat is nobody's building ground: never levelled, never filled
 			}
-			SiteWork.clear(level, base, c, allBuilt, surface, loose);
+			Integer h = houseGround.get(BlockPos.asLong(c.dx(), 0, c.dz()));
+			if (h != null && h == Integer.MIN_VALUE) {
+				continue; // a house that isn't built (on a hill of the look)
+			}
+			SiteWork.clear(level, h == null ? base : base.above(h), c, allBuilt, surface, loose);
 		}
 		// phase 2: place the blocks
 		int perTick = instant ? list.size() : fast ? Math.max(1, (int) Math.ceil(list.size() / (CREATIVE_TICKS * 0.6)))
