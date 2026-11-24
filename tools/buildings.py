@@ -1293,7 +1293,14 @@ def town_house(style, variant, side, along, edge):
     out = {(x + dx, y, z + dz): v for (x, y, z), v in blocks.items()}
     xs = [x for x, _, _ in out]
     zs = [z for _, _, z in out]
-    return out, (min(xs), min(zs), max(xs), max(zs))
+    # a house whose steps reach further (the stilt house's stair) moves back so it ends at the street's edge
+    sx = {"e": edge - min(xs), "w": edge - max(xs)}.get(side, 0)
+    sz = {"n": edge - max(zs), "s": edge - min(zs)}.get(side, 0)
+    sx = max(sx, 0) if side == "e" else min(sx, 0)
+    sz = max(sz, 0) if side == "s" else min(sz, 0)
+    if sx or sz:
+        out = {(x + sx, y, z + sz): v for (x, y, z), v in out.items()}
+    return out, (min(xs) + sx, min(zs) + sz, max(xs) + sx, max(zs) + sz)
 
 
 def add_town_houses(style, jobs):
