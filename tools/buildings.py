@@ -1349,6 +1349,14 @@ def walls(style, level):
             dx, dz = inward(cx, cz)
             lx, lz = ccx + dx, ccz + dz
             fx, fz = (dx, 0) if dx else (0, dz)  # the ladder leans on the wall behind it
+            if round_shape():
+                # the round wall crosses the tower slantwise: the ladder stands inside, against a wall log
+                inside = ring_info()[2]
+                opts = [((x, z), (-wx, -wz)) for x in range(tx + 1, tx + 4) for z in range(tz + 1, tz + 4)
+                        if (x, z) not in ring_set and (x, z) in inside
+                        for wx, wz in ((1, 0), (-1, 0), (0, 1), (0, -1)) if (x + wx, z + wz) in ring_set]
+                if opts:
+                    (lx, lz), (fx, fz) = min(opts)
             for y in range(0, 7):
                 b.put(lx, y, lz, "ladder", facing={(1, 0): "east", (-1, 0): "west", (0, 1): "south", (0, -1): "north"}[(fx, fz)], waterlogged="false")
             b.put(ccx, 9, ccz, "lantern", hanging="true", waterlogged="false")
