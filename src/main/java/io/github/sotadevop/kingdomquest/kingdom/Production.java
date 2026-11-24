@@ -180,6 +180,11 @@ public final class Production {
 			producer("librarian", Progression.LIBRARY, 1, "book", "story/enchant_item", "adventure/read_power_of_chiseled_bookshelf",
 					out("paper", 64), out("book", 32), out("lapis_lazuli", 32), rare("experience_bottle", 16, 4, NO),
 					rare("chiseled_bookshelf", 2, 5, NO)),
+			// the monastery's scriptorium: monks copy books, and some come out enchanted
+			producer("scribe", Progression.MONASTERY, 1, "book", "story/enchant_item", "adventure/read_power_of_chiseled_bookshelf",
+					out("book", 16), out("paper", 32), out("book:unbreaking:1", 1), out("book:efficiency:1", 1), out("book:protection:1", 1),
+					rare("book:sharpness:3", 1, 4, NO), rare("book:feather_falling:3", 1, 4, NO),
+					rare("book:mending:1", 0.5, 5, Milestone.DIAMONDS), rare("book:fortune:3", 0.5, 5, Milestone.DIAMONDS)),
 			producer("alchemist", Progression.BREWERY, 1, "glass_bottle", "nether/brew_potion", "nether/all_potions",
 					out("potion:healing", 4), out("glass_bottle", 32), rare("potion:swiftness", 2, 4, NO), rare("potion:regeneration", 2, 4, NO),
 					rare("potion:strong_healing", 2, 5, Milestone.NETHER), rare("potion:fire_resistance", 2, 5, Milestone.NETHER)),
@@ -247,6 +252,18 @@ public final class Production {
 
 	/** The stack (count 1) an output stands for in this style; empty if the item doesn't exist. */
 	static ItemStack stack(String spec, String style) {
+		if (spec.startsWith("book:")) {             // an enchanted book: "book:<enchantment>:<level>"
+			String[] b = spec.split(":");
+			MinecraftServer srv = Settlements.server();
+			if (srv == null || b.length != 3) {
+				return ItemStack.EMPTY;
+			}
+			return srv.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
+					.get(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.ENCHANTMENT, Identifier.withDefaultNamespace(b[1])))
+					.map(h -> net.minecraft.world.item.enchantment.EnchantmentHelper.createBook(
+							new net.minecraft.world.item.enchantment.EnchantmentInstance(h, Integer.parseInt(b[2]))))
+					.orElse(ItemStack.EMPTY);
+		}
 		if (spec.startsWith("potion:")) {
 			Holder<Potion> potion = POTIONS.get(spec.substring(7));
 			return potion == null ? ItemStack.EMPTY : PotionContents.createItemStack(Items.POTION, potion);

@@ -74,6 +74,11 @@ public final class Settlements {
 	private Settlements() {
 	}
 
+	/** The running server (null between worlds). */
+	static MinecraftServer server() {
+		return server;
+	}
+
 	public static void register() {
 		PayloadTypeRegistry.clientboundPlay().register(KingdomInfoPayload.TYPE, KingdomInfoPayload.CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(UpgradePayload.TYPE, UpgradePayload.CODEC);
@@ -411,7 +416,7 @@ public final class Settlements {
 	/** Add-ons that stand on their own terrace: at the height of the land where they are built. */
 	static final Set<String> LIFTED = Set.of("farm", "smith", "wood", "library", "brewery", "stables", "barracks", "guild", "apiary", "kennel",
 			"trophy", "tavern", "market", "cartographer", "music", "workshop", "armorer", "tannery", "archaeology", "mine", "nether", "royal",
-			Progression.STOREHOUSE, Progression.CHURCH, Progression.TOWNHALL, Progression.GARDEN, Progression.MARKETHALL, Progression.BELFRY);
+			Progression.STOREHOUSE, Progression.CHURCH, Progression.TOWNHALL, Progression.GARDEN, Progression.MARKETHALL, Progression.BELFRY, Progression.MONASTERY);
 
 	/** The track (key of {@link Settlement#built()}) a job's building belongs to. */
 	static String builtTrack(String job) {

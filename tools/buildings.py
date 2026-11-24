@@ -5461,6 +5461,168 @@ def belfry(style, level):
     return b.b
 
 
+# ---- the monastery (Castle) at the town's north-east edge ----
+# Four ranges round a cloister garden: the gate and the scriptorium (north, to the street), the chapel with its bell
+# tower (east), refectory and dormitory (south), stores and kitchen (west); an arcaded walk round the garth, a well
+# and herb beds in the middle. Every region in its own materials (TOWNHALL palettes).
+MONASTERY_AT = (98, -53)      # x0, z0 of the 25 x 25 plot
+
+
+def monastery(style, level):
+    P = TOWNHALL[style]
+    roof, rstair, rslab = P["roof"]
+    b = B()
+    x0, z0 = MONASTERY_AT
+    N, D, H = 25, 7, 5           # the plot, the ranges' depth, their wall height
+    base = lambda x, y, z: pick(P["base"], x, y, z)
+    wall = base
+    stone = "stone_bricks" if style != "arid" else "cut_sandstone"
+    for x in range(N):
+        for z in range(N):
+            b.put(x0 + x, -1, z0 + z, stone)
+    inner = (D, N - D - 1)       # the cloister walk and garth lie between these
+    def in_range(x, z):
+        return x < D or x >= N - D or z < D or z >= N - D
+    # the ranges: outer and inner walls, floors, a roof over each
+    for x in range(N):
+        for z in range(N):
+            if not in_range(x, z):
+                continue
+            outer = x in (0, N - 1) or z in (0, N - 1)
+            innerw = (x in (D - 1, N - D) and D - 1 <= z <= N - D) or (z in (D - 1, N - D) and D - 1 <= x <= N - D)
+            b.put(x0 + x, 0, z0 + z, P["floor"])
+            if outer or innerw:
+                for y in range(1, H + 1):
+                    win = y in (2, 3) and ((x % 4 == 2 and z in (0, N - 1)) or (z % 4 == 2 and x in (0, N - 1)))
+                    b.put(x0 + x, y, z0 + z, "glass_pane" if win else (P["frame"] if y == H and "log" in P["frame"] else wall(x, y, z)),
+                          **((PANE_X if z in (0, N - 1) else PANE_Z) if win else ({"axis": "x" if z in (0, N - 1, D - 1, N - D) else "z"} if y == H and "log" in P["frame"] else {})))
+    # roofs: four ranges, each a gable along its length
+    if P["flat"]:
+        for x in range(N):
+            for z in range(N):
+                if in_range(x, z):
+                    b.put(x0 + x, H + 1, z0 + z, roof)
+                    if (x in (0, N - 1) or z in (0, N - 1)) and (x + z) % 2 == 0:
+                        b.put(x0 + x, H + 2, z0 + z, P["frame"])
+    else:
+        # one hipped roof round the whole square: each cell rises with its distance from the nearer eave
+        for x in range(-1, N + 1):
+            for z in range(-1, N + 1):
+                do = min(x, z, N - 1 - x, N - 1 - z) + 1              # from the outer eave (overhang 1)
+                if do < 0 or do > D:
+                    continue
+                h = min(do, D - do)                                    # 0 at the eaves, highest mid-range
+                if h < 0:
+                    continue
+                y = H + 1 + h // 1
+                for yy in range(H + 1, y):
+                    b.put(x0 + x, yy, z0 + z, roof)
+                # the stair faces the ridge: the way the height grows
+                ups = []
+                for dx, dz, f in ((1, 0, "east"), (-1, 0, "west"), (0, 1, "south"), (0, -1, "north")):
+                    o = min(x + dx, z + dz, N - 1 - x - dx, N - 1 - z - dz) + 1
+                    if 0 <= o <= D and min(o, D - o) > h:
+                        ups.append(f)
+                if ups:
+                    b.put(x0 + x, y, z0 + z, rstair, facing=ups[0], **ST)
+                else:
+                    b.put(x0 + x, y, z0 + z, rslab, type="bottom", waterlogged="false")
+    # the cloister walk: an arcade of columns facing the garth, a lean-to roof
+    g0, g1 = D, N - D - 1
+    for x in range(g0, g1 + 1):
+        for z in range(g0, g1 + 1):
+            b.put(x0 + x, 0, z0 + z, P["floor"] if (x in (g0, g1) or z in (g0, g1) or x in (g0 + 1, g1 - 1) or z in (g0 + 1, g1 - 1)) else "grass_block",
+                  **({} if (x in (g0, g1) or z in (g0, g1) or x in (g0 + 1, g1 - 1) or z in (g0 + 1, g1 - 1)) else {"snowy": "false"}))
+            edge = x in (g0 + 2, g1 - 2) or z in (g0 + 2, g1 - 2)
+            if edge and g0 + 2 <= x <= g1 - 2 and g0 + 2 <= z <= g1 - 2:
+                col = (x - g0) % 3 == 2 if z in (g0 + 2, g1 - 2) else (z - g0) % 3 == 2
+                corner = x in (g0 + 2, g1 - 2) and z in (g0 + 2, g1 - 2)
+                if col or corner:
+                    for y in (1, 2, 3):
+                        b.put(x0 + x, y, z0 + z, P["frame"] if "log" in P["frame"] else stone + "_wall" if stone == "stone_bricks" else "sandstone_wall",
+                              **({"axis": "y"} if "log" in P["frame"] else wall_props("x_wall", True, True)))
+                b.put(x0 + x, 4, z0 + z, rslab, type="bottom", waterlogged="false")
+            if not edge and (x in (g0, g1, g0 + 1, g1 - 1) or z in (g0, g1, g0 + 1, g1 - 1)) and g0 <= x <= g1 and g0 <= z <= g1:
+                b.put(x0 + x, 4, z0 + z, rslab, type="bottom", waterlogged="false")
+    # the garth: herb beds, a well in the middle
+    c = N // 2
+    for x in range(g0 + 3, g1 - 2):
+        for z in range(g0 + 3, g1 - 2):
+            if abs(x - c) <= 1 and abs(z - c) <= 1:
+                continue
+            if (x + z) % 2 == 0 and abs(x - c) > 2 or abs(z - c) > 2 and (x + z) % 3 == 0:
+                f = pick(("fern", "lily_of_the_valley", "azure_bluet", "sweet_berry_bush" if style == "frozen" else "oxeye_daisy"), x, 0, z)
+                b.put(x0 + x, 1, z0 + z, f, **({"age": "3"} if f == "sweet_berry_bush" else {}))
+    for x in range(c - 1, c + 2):
+        for z in range(c - 1, c + 2):
+            if (x, z) == (c, c):
+                b.put(x0 + x, 0, z0 + z, "water", level="0")
+                b.put(x0 + x, -1, z0 + z, stone)
+            else:
+                b.put(x0 + x, 1, z0 + z, stone + "_wall" if stone == "stone_bricks" else "sandstone_wall", **wall_props("x_wall", False, False))
+                b.put(x0 + x, 0, z0 + z, stone)
+    # doors: the gate in the north range (to the street), doors from each range into the walk
+    gate = c
+    for y in (1, 2, 3):
+        b.b.pop((x0 + gate, y, z0), None)
+        b.b.pop((x0 + gate, y, z0 + D - 1), None)
+    b.put(x0 + gate, 1, z0, f"{P['door']}_door", facing="north", half="lower", hinge="left", open="false", powered="false")
+    b.put(x0 + gate, 2, z0, f"{P['door']}_door", facing="north", half="upper", hinge="left", open="false", powered="false")
+    b.put(x0 + gate, 3, z0, wall(gate, 3, 0))
+    b.put(x0 + gate, 0, z0 - 1, stone + "_slab" if stone == "stone_bricks" else "cut_sandstone_slab", type="bottom", waterlogged="false")
+    for (x, z) in ((D - 1, c), (N - D, c), (c, N - D)):
+        for y in (1, 2):
+            b.b.pop((x0 + x, y, z0 + z), None)
+    # the scriptorium (north range): desks with lecterns, bookshelves, candles
+    for x in range(2, N - 2, 3):
+        if abs(x - gate) <= 1:
+            continue
+        b.put(x0 + x, 1, z0 + 2, "lectern", facing="south", has_book="false", powered="false")
+        b.put(x0 + x, 1, z0 + 1, "bookshelf")
+        b.put(x0 + x, 2, z0 + 1, "bookshelf")
+        b.put(x0 + x, 2, z0 + 4, "candle", candles="2", lit="true", waterlogged="false")
+        b.put(x0 + x, 1, z0 + 4, f"{P['door']}_slab", type="top", waterlogged="false")
+    # the chapel (east range): altar at the east wall, benches, a bell tower over its north end
+    for z in range(D + 1, N - D - 1, 2):
+        for x in (N - D + 1, N - D + 2, N - 3):
+            b.put(x0 + x, 1, z0 + z, f"{P['door']}_stairs", facing="west", **ST)
+    b.put(x0 + N - 2, 1, z0 + c, "chiseled_stone_bricks" if style != "arid" else "chiseled_sandstone")
+    b.put(x0 + N - 2, 2, z0 + c, "candle", candles="3", lit="true", waterlogged="false")
+    tx, tz, T = N - 6, 0, 5
+    for x in range(tx, tx + T):
+        for z in range(tz, tz + T):
+            if x in (tx, tx + T - 1) or z in (tz, tz + T - 1):
+                corner = x in (tx, tx + T - 1) and z in (tz, tz + T - 1)
+                for y in range(H + 1, H + 10):
+                    if not corner and H + 6 <= y <= H + 8:
+                        b.put(x0 + x, y, z0 + z, "iron_bars" if style not in ("frozen", "wild") else f"{P['door']}_fence",
+                              north="false", south="false", east="false", west="false", waterlogged="false")
+                    else:
+                        b.put(x0 + x, y, z0 + z, wall(x, y, z))
+            else:                                  # solid up to just under the bell (no room nobody can reach)
+                b.put(x0 + x, H + 9, z0 + z, wall(x, H + 9, z))
+                for y in range(H + 1, H + 8):
+                    b.put(x0 + x, y, z0 + z, wall(x, y, z))
+    b.put(x0 + tx + 2, H + 8, z0 + tz + 2, "bell", attachment="ceiling", facing="south", powered="false")
+    if P["flat"]:
+        b.put(x0 + tx + 2, H + 10, z0 + tz + 2, "lantern", hanging="false", waterlogged="false")
+    else:
+        pyramid_roof(b, x0 + tx - 1, z0 + tz - 1, T + 2, H + 10, roof, rstair, 2 if style in ("temperate", "highland") else 1,
+                     style in ("wild", "frozen"), ("lightning_rod", dict(facing="up", powered="false", waterlogged="false")), solid=True)
+    # refectory (south): a long table; stores (west): barrels and a hearth
+    for x in range(D + 1, N - D - 1):
+        b.put(x0 + x, 1, z0 + N - 4, f"{P['door']}_slab", type="top", waterlogged="false")
+        if x % 2:
+            b.put(x0 + x, 1, z0 + N - 3, f"{P['door']}_stairs", facing="south", **ST)
+    for z in range(D + 1, N - D - 1, 2):
+        b.put(x0 + 1, 1, z0 + z, "barrel", facing="up", open="false")
+    for z in range(2, D - 1):
+        b.put(x0 + 1, 1, z0 + N - 1 - z, "barrel", facing="up", open="false")
+    for z in range(2, N - 2, 5):
+        b.put(x0 + c, H, z0 + z, "lantern", hanging="true", waterlogged="false") if False else None
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -5877,6 +6039,7 @@ def build_jobs(styles=None):
         jobs.append((style, "garden_1", garden(style, 1), 300, None, None))
         jobs.append((style, "markethall_1", markethall(style, 1), 420, None, None))
         jobs.append((style, "belfry_1", belfry(style, 1), 420, None, None))
+        jobs.append((style, "monastery_1", monastery(style, 1), 900, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
