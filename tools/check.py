@@ -329,7 +329,7 @@ def check_roads(world, out):
         for y in (-1, 0, 1):
             t = world.owner.get((x, y, z))
             b = world.blocks.get((x, y, z))
-            if t and t not in ("roads", "lamps") and b and short(b[0]) != "air" and not short(b[0]).endswith("_fence_gate") and not (y == -1 and world.by_track["roads"].get((x, y, z)) == b):
+            if t and t not in ("roads", "lamps", "tram") and b and short(b[0]) != "air" and not short(b[0]).endswith("_fence_gate") and not (y == -1 and world.by_track["roads"].get((x, y, z)) == b):
                 hit[t].append((x, y, z))
                 break
     for t, ps in sorted(hit.items()):

@@ -337,10 +337,20 @@ public final class Progression {
 			new Step(POSTERN, "postern_3", 3, "kingdomquest.postern.postern_3", 8, null, null,
 					List.of(tag(ItemTags.PLANKS, "planks", 48), item(Items.IRON_INGOT, 4), item(Items.EMERALD, 16))));
 
+	/** The tram (19.11): rails in the street between the gate, the square, the castle and the storehouse. */
+	public static final String TRAM = "tram";
+	public static final List<Step> TRAM_STEPS = List.of(
+			new Step(TRAM, "tram_1", 1, "kingdomquest.tram.tram_1", 9, null, null,
+					List.of(item(Items.RAIL, 64), item(Items.MINECART, 1), item(Items.EMERALD, 16))),
+			new Step(TRAM, "tram_2", 2, "kingdomquest.tram.tram_2", 9, null, null,
+					List.of(item(Items.POWERED_RAIL, 12), tag(ItemTags.LOGS, "logs", 16), item(Items.EMERALD, 24))),
+			new Step(TRAM, "tram_3", 3, "kingdomquest.tram.tram_3", 10, null, null,
+					List.of(tag(ItemTags.PLANKS, "planks", 96), item(Items.LANTERN, 8), item(Items.EMERALD, 32))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN);
+			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -365,6 +375,7 @@ public final class Progression {
 			case BELFRY -> BELFRY_STEPS;
 			case MONASTERY -> MONASTERY_STEPS;
 			case POSTERN -> POSTERN_STEPS;
+			case TRAM -> TRAM_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}

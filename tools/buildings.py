@@ -1418,7 +1418,7 @@ def plan_roads(style, jobs):
     for j in jobs:
         name, blocks = j[1], j[2]
         track, level = track_of(name), int(name.rsplit("_", 1)[1])
-        if name.startswith(("tent_", "road_", "lamp_", "dock_")):
+        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_")):
             continue
         if track == "main":
             level += {"hamlet": 3, "village": 6, "town": 7, "castle": 8, "citadel": 10}[name.rsplit("_", 1)[0]]
@@ -5723,6 +5723,89 @@ def postern(style, level):
     return b.b
 
 
+# Tram (19.11): rails laid in the street, from the gate up the main street to the square and the castle, with a
+# branch along the south cross street to the storehouse. The mod lays them on the street plan's heights and keeps only
+# the part it can reach from the gate (a step of more than one block or a half step ends the line); stops past the end
+# are left out. Kept in step with Tram.java (MAIN_X, MAIN_Z, BRANCH_Z, BRANCH_X, STOPS).
+TRAM_MAIN = [(9, z) for z in range(94, 16, -1)]          # gate end first
+TRAM_BRANCH = [(x, 58) for x in range(8, -23, -1)]      # from beside the junction (9, 58) westward
+TRAM_STOPS = (("gate", (9, 91)), ("square", (9, 32)), ("castle", (9, 20)), ("storehouse", (-19, 58)))
+
+
+def tram(style, level):
+    """Tram 1: rails in the street, simple stops (a lectern to pick the destination, a bench, a lantern post).
+    2: powered rails at the stops and a roof on posts over each. 3: covered station halls with benches and lanterns."""
+    wood = STYLES[style]["wood"]
+    log = MAT[style]["log"]
+    roof, roof_st, roof_slab = TOWNHALL[style]["roof"]
+    frame = TOWNHALL[style]["frame"]
+    b = B()
+    FOLLOW.add(id(b.b))
+    ANCHORS_OF[id(b.b)] = b.anchors
+    names = {(1, 0): "east", (-1, 0): "west", (0, 1): "south", (0, -1): "north"}
+    stop_cols = {}
+    for name, (cx, cz) in TRAM_STOPS:
+        u, v = ((0, 1), (1, 0)) if name != "storehouse" else ((1, 0), (0, 1))   # along the line, toward the platform
+        for k in (-1, 0, 1):
+            stop_cols[(cx + u[0] * k, cz + u[1] * k)] = "north_south" if u[1] else "east_west"
+    for line, shape in ((TRAM_MAIN, "north_south"), (TRAM_BRANCH, "east_west")):
+        for x, z in line:
+            b.anchor = (x, z)
+            if level >= 2 and (x, z) in stop_cols:
+                b.put(x, 0, z, "powered_rail", shape=shape, powered="false", waterlogged="false")
+            else:
+                b.put(x, 0, z, "rail", shape=shape, waterlogged="false")
+    for name, (cx, cz) in TRAM_STOPS:
+        u, v = ((0, 1), (1, 0)) if name != "storehouse" else ((1, 0), (0, 1))
+        b.anchor = (cx, cz)
+
+        def at(i, j, y, block, **props):        # i along the line, j toward the platform
+            b.put(cx + u[0] * i + v[0] * j, y, cz + u[1] * i + v[1] * j, block, **props)
+
+        at(0, 2, 0, "lectern", facing=names[(-v[0], -v[1])], has_book="false", powered="false")
+        for i in (-2, 2):
+            at(i, 2, 0, f"{wood}_stairs", facing=names[v], half="bottom", shape="straight", waterlogged="false")
+        if level == 1:
+            at(3, 2, 0, f"{wood}_fence")
+            at(3, 2, 1, f"{wood}_fence")
+            at(3, 2, 2, "lantern", hanging="false", waterlogged="false")
+        elif level == 2:
+            for i in (-3, 3):
+                for j in (-1, 2):
+                    for y in range(0, 4):
+                        at(i, j, y, frame, axis="y")
+            for i in range(-4, 5):
+                for j in range(-2, 4):
+                    at(i, j, 4, roof_slab, type="bottom", waterlogged="false")
+            at(0, 2, 3, "lantern", hanging="true", waterlogged="false")
+        else:
+            for i in (-4, 0, 4):
+                for j in (-2, 3):
+                    for y in range(0, 5):
+                        at(i, j, y, frame, axis="y")
+            for i in (-3, -1, 1, 3):             # a half wall at the back of the platform, open toward the street
+                at(i, 3, 0, f"{wood}_planks")
+                at(i, 3, 1, f"{wood}_fence")
+            for i in range(-5, 6):
+                for j in range(-3, 5):
+                    edge = j in (-3, 4)
+                    if edge:
+                        at(i, j, 4, roof_st, facing=names[(-v[0] * (1 if j > 0 else -1), -v[1] * (1 if j > 0 else -1))], half="bottom", shape="straight", waterlogged="false")
+                    elif j in (-2, 3):
+                        at(i, j, 5, roof_slab, type="bottom", waterlogged="false")
+                    else:
+                        at(i, j, 5, roof, **({} if "planks" in roof or roof in ("terracotta", "deepslate_tiles") else {}))
+                        if j in (0, 1) and abs(i) <= 4:
+                            at(i, j, 6, roof_slab, type="bottom", waterlogged="false")
+            for i in (-2, 2):
+                at(i, 0, 4, "iron_chain", axis="y", waterlogged="false")
+                at(i, 0, 3, "lantern", hanging="true", waterlogged="false")
+            at(4, 2, 0, f"{wood}_stairs", facing=names[v], half="bottom", shape="straight", waterlogged="false")
+            at(-4, 2, 0, "barrel", facing="up", open="false")
+    b.anchor = None
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -6142,6 +6225,8 @@ def build_jobs(styles=None):
         jobs.append((style, "monastery_1", monastery(style, 1), 900, None, None))
         for level in (1, 2, 3):
             jobs.append((style, f"postern_{level}", postern(style, level), 120, None, None))
+        for level in (1, 2, 3):
+            jobs.append((style, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
@@ -6166,7 +6251,7 @@ if __name__ == "__main__":
     jobs = build_jobs()
     # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
     # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
-    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern")
+    NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern", "tram")
     plots = {}
     for style, name, blocks, *_ in jobs:
         if name.startswith("tent_") or track_of(name) in NO_PLOT:

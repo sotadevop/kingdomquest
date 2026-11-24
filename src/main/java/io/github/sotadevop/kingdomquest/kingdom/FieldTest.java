@@ -1270,7 +1270,7 @@ public final class FieldTest {
 				for (int dy = -4; dy <= 2 && !high; dy++) {
 					BlockPos q = new BlockPos(x + d[0], e.getValue() + dy, z + d[1]);
 					String tr = owner.get(q.asLong());
-					if (tr == null || Progression.ROADS.equals(tr) || Progression.LAMPS.equals(tr)) {
+					if (tr == null || Progression.ROADS.equals(tr) || Progression.LAMPS.equals(tr) || Progression.TRAM.equals(tr)) {
 						continue;
 					}
 					BlockState qs = level.getBlockState(q);
@@ -1847,7 +1847,7 @@ public final class FieldTest {
 		for (long p : owner.keySet()) {
 			BlockPos b = BlockPos.of(p);
 			String tr = owner.get(p);
-			if (Progression.ROADS.equals(tr) || Progression.LAMPS.equals(tr) || level.getBlockState(b).isAir()) {
+			if (Progression.ROADS.equals(tr) || Progression.LAMPS.equals(tr) || Progression.TRAM.equals(tr) || level.getBlockState(b).isAir()) {
 				continue;
 			}
 			builtTop.merge(BlockPos.asLong(b.getX(), 0, b.getZ()), b, (a, c) -> a.getY() >= c.getY() ? a : c);

@@ -26,6 +26,8 @@ public class KingdomQuestClient implements ClientModInitializer {
 				(payload, context) -> io.github.sotadevop.kingdomquest.client.StorehouseScreen.open(payload));
 		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.FealtyPayload.TYPE,
 				(payload, context) -> io.github.sotadevop.kingdomquest.client.FealtyScreen.open(payload));
+		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.TramPayload.TYPE,
+				(payload, context) -> context.client().setScreenAndShow(new io.github.sotadevop.kingdomquest.client.TramScreen(payload)));
 		ClientTickEvents.END_CLIENT_TICK.register(PlacementPreview::tick);
 	}
 }

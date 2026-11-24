@@ -118,6 +118,7 @@ public final class Settlements {
 		ServerPlayNetworking.registerGlobalReceiver(NamePayload.TYPE, (payload, context) -> rename(context.player(), payload));
 		ServerTickEvents.END_SERVER_TICK.register(Traps::tick);
 		Storehouse.register();
+		Tram.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
@@ -446,7 +447,7 @@ public final class Settlements {
 
 	static int trackLift(Settlement s, String track) {
 		return switch (track) {
-			case Settlement.MAIN, Progression.ROADS, Progression.LAMPS, Progression.WALLS, Progression.DOCK, Progression.POSTERN -> 0;
+			case Settlement.MAIN, Progression.ROADS, Progression.LAMPS, Progression.WALLS, Progression.DOCK, Progression.POSTERN, Progression.TRAM -> 0;
 			default -> s.level("lift_" + track);
 		};
 	}
@@ -1528,7 +1529,7 @@ public final class Settlements {
 			Set<Long> placed = new HashSet<>();
 			// roads take their height from the street plan (worked out once, never changed by later builds); without one
 			// (site not loaded yet) the old per-column evening is the fallback
-			StreetPlan streets = track.equals(Progression.ROADS) && server != null ? StreetPlan.of(server, s) : null;
+			StreetPlan streets = (track.equals(Progression.ROADS) || track.equals(Progression.TRAM)) && server != null ? StreetPlan.of(server, s) : null;
 			if (streets != null && !streets.columns().isEmpty()) {
 				for (Template.Placement p : base) {
 					BlockPos col = s.heart().offset(p.anchor());
@@ -1629,6 +1630,13 @@ public final class Settlements {
 				Template.Placement at = new Template.Placement(p.offset().above(off), p.state(), p.segment(), p.anchor());
 				out.add(at);
 				placed.add(at.offset().asLong());
+			}
+			if (track.equals(Progression.TRAM)) {
+				if (streets == null) {
+					out.clear(); // laid once the street plan is known
+				} else {
+					Tram.trim(s, streets, out);
+				}
 			}
 			if (track.equals(Progression.ROADS)) {
 				// a paved road that climbs gets a slab on the lower block of every step: you walk up, you don't jump
