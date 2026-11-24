@@ -329,6 +329,7 @@ public final class FieldTest {
 		roadIntact(level, s, problems);
 		gateReport(level, s, base);
 		problems.addAll(Storehouse.fieldTest(level, Settlements.byHeart(server, heart), REPORT));
+		problems.addAll(Tram.fieldTest(level, Settlements.byHeart(server, heart), REPORT));
 		signalReport(level, s, problems);
 		StringBuilder levels = new StringBuilder();
 		for (String track : Progression.ORDER) {

@@ -243,6 +243,47 @@ public final class Tram {
 		return dx > 0 ? RailShape.ASCENDING_EAST : dx < 0 ? RailShape.ASCENDING_WEST : dz > 0 ? RailShape.ASCENDING_SOUTH : RailShape.ASCENDING_NORTH;
 	}
 
+	/** Field test: which stops the line reaches, and whether every rail of it stands in the world. */
+	static List<String> fieldTest(ServerLevel level, Settlement s, StringBuilder report) {
+		List<String> problems = new ArrayList<>();
+		if (s == null || s.level(Progression.TRAM) <= 0) {
+			return problems;
+		}
+		Line l = Line.of(level.getServer(), s);
+		if (l == null) {
+			problems.add("tram: no street plan");
+			return problems;
+		}
+		List<String> stops = new ArrayList<>();
+		for (int i = 0; i < STOPS.length; i++) {
+			if (l.stop(i) != null) {
+				stops.add(STOPS[i]);
+			}
+		}
+		int rails = 0;
+		List<String> missing = new ArrayList<>();
+		for (BlockPos[] line : new BlockPos[][] {l.main, l.branch}) {
+			for (BlockPos p : line) {
+				if (p == null) {
+					break;
+				}
+				rails++;
+				if (!(level.getBlockState(p).getBlock() instanceof BaseRailBlock) && missing.size() < 4) {
+					missing.add(p.subtract(s.heart()).toShortString());
+				}
+			}
+		}
+		report.append("\nTram: ").append(rails).append(" rails, stops ").append(stops).append('\n');
+		if (!missing.isEmpty()) {
+			problems.add("tram: rails missing at " + missing);
+		}
+		if (stops.size() >= 2 && net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getValue(
+				net.minecraft.resources.Identifier.withDefaultNamespace("minecart")) == null) {
+			problems.add("tram: no minecart entity type");
+		}
+		return problems;
+	}
+
 	// ---- the menu and the ride ----
 
 	private static void open(ServerPlayer player, Settlement s, Line l, int here) {
