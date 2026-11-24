@@ -162,7 +162,7 @@ final class Tournament {
 		Mob[] horses = here.stream().filter(e -> e instanceof Mob && !(e instanceof KingdomNpc) && !e.getPassengers().isEmpty()).map(e -> (Mob) e)
 				.toArray(Mob[]::new);
 		for (Mob horse : horses) {
-			int lane = TILT_Z + (horse.getTags().contains("kq_lane_s") ? 2 : -2);
+			int lane = TILT_Z + (horse.entityTags().contains("kq_lane_s") ? 2 : -2);
 			BlockPos west = at(s, WEST, lane);
 			BlockPos east = at(s, EAST, lane);
 			double dw = horse.distanceToSqr(west.getX() + 0.5, horse.getY(), west.getZ() + 0.5);
