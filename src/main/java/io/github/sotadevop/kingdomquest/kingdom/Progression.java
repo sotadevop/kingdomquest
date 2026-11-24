@@ -303,10 +303,16 @@ public final class Progression {
 			new Step(TOWNHALL, "townhall_1", 1, "kingdomquest.townhall.townhall_1", 8, adv("adventure/trade"), "kingdomquest.req.trade",
 					List.of(item(Items.STONE_BRICKS, 192), tag(ItemTags.LOGS, "logs", 64), item(Items.BELL, 1), item(Items.EMERALD, 24))));
 
+	/** The palace garden (Castle) beside the lord's house: hedges, flower beds, a fountain. */
+	public static final String GARDEN = "garden";
+	public static final List<Step> GARDEN_STEPS = List.of(
+			new Step(GARDEN, "garden_1", 1, "kingdomquest.garden.garden_1", 9, adv("husbandry/plant_seed"), "kingdomquest.req.plant_seed",
+					List.of(item(Items.STONE_BRICKS, 96), tag(ItemTags.LEAVES, "leaves", 64), item(Items.POPPY, 16), item(Items.DANDELION, 16), item(Items.EMERALD, 16))));
+
 	/** Order the tracks appear in the menu. */
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
-			STOREHOUSE, CHURCH, TOWNHALL);
+			STOREHOUSE, CHURCH, TOWNHALL, GARDEN);
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);
@@ -326,6 +332,7 @@ public final class Progression {
 			case STOREHOUSE -> STOREHOUSE_STEPS;
 			case CHURCH -> CHURCH_STEPS;
 			case TOWNHALL -> TOWNHALL_STEPS;
+			case GARDEN -> GARDEN_STEPS;
 			default -> ADDONS_2.containsKey(track) ? ADDONS_2.get(track) : ADDONS_3.containsKey(track) ? ADDONS_3.get(track) : TRADES.get(track);
 		};
 	}

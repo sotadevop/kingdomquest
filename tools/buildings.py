@@ -1225,7 +1225,7 @@ WIDE_STREETS = {t[0] for t in ROAD_TRUNKS if not t[0].startswith(("castle_", "pl
 ROAD_GOALS = {
     "smith": [(1, (-12, 10))], "wood": [(1, (-31, 20))], "farm": [(1, (26, 11)), (1, (20, 5)), (2, (39, 10))],
     "stables": [(1, (47, 25))], "apiary": [(1, (52, 11))], "kennel": [(1, (52, 22))], "lair": [(1, (9, -23))],
-    "cellar": [(1, (3, 11))],
+    "cellar": [(1, (3, 11))], "garden": [(1, (79, -75))],
 }
 # Where each track's plot lies in the big site: a move of the whole track (all levels) from where its templates draw
 # it (after the spacing moves of build_jobs). The one source of truth for the layout: written to
@@ -5210,6 +5210,111 @@ def townhall(style, level):
     return out.b
 
 
+# ---- the palace garden (Castle), beside the lord's house ----
+# A formal garden in each region's own tradition: a parterre with box hedges and a fountain (temperate), a walled rose
+# garden (highland), a winter garden of spruce and berries (frozen), a Moorish four-part garden with water channels
+# (arid), a pond garden with bamboo and stepping stones (wild).
+GARDEN_AT = (66, -94, 92, -77)     # x0, z0, x1, z1 in the site, east of the lord's house
+GARDEN = {
+    "temperate": dict(hedge="oak_leaves", path="gravel", edge="stone_brick_wall", basin="stone_bricks", trim="polished_andesite",
+                      flowers=("red_tulip", "white_tulip", "allium", "cornflower", "oxeye_daisy"), tall=("rose_bush", "peony", "lilac"), bench="spruce"),
+    "highland": dict(hedge="spruce_leaves", path="gravel", edge="cobblestone_wall", basin="cobblestone", trim="stone_bricks",
+                     flowers=("poppy", "azure_bluet", "blue_orchid"), tall=("rose_bush", "rose_bush", "peony"), bench="spruce"),
+    "frozen": dict(hedge="spruce_leaves", path="packed_ice", edge="spruce_fence", basin="cobblestone", trim="stripped_spruce_log",
+                   flowers=("lily_of_the_valley", "white_tulip"), tall=("sweet_berry_bush",), bench="spruce"),
+    "arid": dict(hedge="acacia_leaves", path="smooth_sandstone", edge="sandstone_wall", basin="cut_sandstone", trim="chiseled_sandstone",
+                 flowers=("orange_tulip", "red_tulip", "dandelion"), tall=("rose_bush",), bench="acacia"),
+    "wild": dict(hedge="jungle_leaves", path="mossy_cobblestone", edge="bamboo_fence", basin="mossy_stone_bricks", trim="mossy_stone_bricks",
+                 flowers=("pink_tulip", "blue_orchid", "allium"), tall=("large_fern", "large_fern", "peony"), bench="bamboo"),
+}
+
+
+def wall_props(name, ns, ew):
+    if name.endswith("_wall"):
+        return dict(up="true", north="low" if ns else "none", south="low" if ns else "none", east="low" if ew else "none",
+                    west="low" if ew else "none", waterlogged="false")
+    return dict(north=str(ns).lower(), south=str(ns).lower(), east=str(ew).lower(), west=str(ew).lower(), waterlogged="false")
+
+
+def garden(style, level):
+    P = GARDEN[style]
+    b = B()
+    x0, z0, x1, z1 = GARDEN_AT
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
+    gate_x = cx
+    # border: a low wall or fence all round, a gate in the south side
+    for x in range(x0, x1 + 1):
+        for z in (z0, z1):
+            if z == z1 and abs(x - gate_x) <= 1:
+                continue
+            b.put(x, 0, z, P["edge"], **wall_props(P["edge"], False, True))
+    for z in range(z0, z1 + 1):
+        for x in (x0, x1):
+            b.put(x, 0, z, P["edge"], **wall_props(P["edge"], True, False))
+    for x in (gate_x - 1, gate_x + 1):
+        b.put(x, 0, z1, P["trim"])
+        b.put(x, 1, z1, "lantern", hanging="false", waterlogged="false")
+    # paths: a cross through the middle and a ring inside the border
+    path = set()
+    for x in range(x0 + 1, x1):
+        for z in range(z0 + 1, z1):
+            if x in (x0 + 2, x1 - 2) or z in (z0 + 2, z1 - 2) or abs(x - cx) <= 1 or abs(z - cz) <= 1:
+                path.add((x, z))
+    for x in range(gate_x - 1, gate_x + 2):
+        for z in range(z1 - 2, z1 + 1):
+            path.add((x, z))
+    for (x, z) in path:
+        b.put(x, -1, z, P["path"] if style != "frozen" else pick(("packed_ice", "snow_block", "packed_ice"), x, 0, z))
+    # the beds between the paths: a hedge rim, flowers inside, a topiary at the inner corner
+    for qx in ((x0 + 3, cx - 2), (cx + 2, x1 - 3)):
+        for qz in ((z0 + 3, cz - 2), (cz + 2, z1 - 3)):
+            for x in range(qx[0], qx[1] + 1):
+                for z in range(qz[0], qz[1] + 1):
+                    rim = x in qx or z in qz
+                    b.put(x, -1, z, "grass_block" if style != "arid" else "coarse_dirt", snowy="false") if style != "arid" else b.put(x, -1, z, "coarse_dirt")
+                    if style == "arid" and (x == (qx[0] + qx[1]) // 2 or z == (qz[0] + qz[1]) // 2):
+                        b.put(x, -1, z, "water", level="0")         # the four-part garden's channels
+                        b.put(x, -2, z, P["basin"])
+                        continue
+                    if rim:
+                        b.put(x, 0, z, P["hedge"], distance="7", persistent="true", waterlogged="false")
+                    else:
+                        f = pick(P["flowers"] + P["tall"], x, 0, z)
+                        if f in ("rose_bush", "peony", "lilac", "large_fern"):
+                            b.put(x, 0, z, f, half="lower")
+                            b.put(x, 1, z, f, half="upper")
+                        elif f == "sweet_berry_bush":
+                            b.put(x, 0, z, f, age="3")
+                        else:
+                            b.put(x, 0, z, f)
+            tx = qx[1] if qx[0] < cx else qx[0]
+            tz = qz[1] if qz[0] < cz else qz[0]
+            for y in (0, 1, 2):
+                b.put(tx, y, tz, P["hedge"], distance="7", persistent="true", waterlogged="false")
+    # the fountain in the middle: a basin, a column with water falling from it
+    for x in range(cx - 3, cx + 4):
+        for z in range(cz - 3, cz + 4):
+            d = max(abs(x - cx), abs(z - cz))
+            for y in (0, 1, 2):
+                b.b.pop((x, y, z), None)         # (the beds' corners give way to the fountain)
+            if d == 3:
+                b.put(x, 0, z, P["basin"] if style != "wild" else "mossy_stone_brick_slab", **({} if style != "wild" else {"type": "bottom", "waterlogged": "false"}))
+                b.put(x, -1, z, P["basin"])
+            elif d <= 2:
+                b.put(x, -1, z, "water", level="0")
+                b.put(x, -2, z, P["basin"])
+    for y in range(-2, 3):                    # the column stands on the basin's floor
+        b.put(cx, y, cz, P["trim"])
+    b.put(cx, 3, cz, "water", level="0") if style != "frozen" else b.put(cx, 3, cz, "lantern", hanging="false", waterlogged="false")
+    # benches facing the fountain, lanterns on posts at the path crossings
+    for (x, z, f) in ((cx - 5, cz, "east"), (cx + 5, cz, "west"), (cx, cz - 5, "south")):
+        b.put(x, 0, z, f"{P['bench']}_stairs", facing={"east": "west", "west": "east", "south": "north"}[f], **ST)
+    for (x, z) in ((x0 + 2, z0 + 2), (x1 - 2, z0 + 2), (x0 + 2, z1 - 2), (x1 - 2, z1 - 2)):
+        b.put(x, 0, z, P["edge"] if P["edge"].endswith("_wall") else f"{P['bench']}_fence", **wall_props(P["edge"] if P["edge"].endswith("_wall") else "x_fence", False, False))
+        b.put(x, 1, z, "lantern", hanging="false", waterlogged="false")
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -5623,6 +5728,7 @@ def build_jobs(styles=None):
         for level, secs in ((1, 600), (2, 900)):
             jobs.append((style, f"church_{level}", church(style, level), secs, None, None))
         jobs.append((style, "townhall_1", townhall(style, 1), 600, None, None))
+        jobs.append((style, "garden_1", garden(style, 1), 300, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:
