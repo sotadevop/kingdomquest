@@ -152,6 +152,10 @@ public class KingdomScreen extends Screen {
 			this.tabButtons.add(this.addRenderableWidget(action(this.info.bridge() == 1 ? "kingdomquest.bridge.lower" : "kingdomquest.bridge.raise",
 					"bridge", fx, 100)));
 		}
+		if (tabKey.equals("kingdomquest.tab.farming")) {
+			// stable breeding: a horse from the kingdom's stables (the server checks the stables and the price)
+			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.animal.buy_horse", "buy_horse", fx, 100)));
+		}
 		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.damaged() > 0) {
 			Button repair = Button.builder(Component.translatable("kingdomquest.menu.repair", this.info.damaged()), b -> {
 				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "repair"));

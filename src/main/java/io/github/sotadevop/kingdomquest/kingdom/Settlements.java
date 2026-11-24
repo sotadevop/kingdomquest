@@ -122,6 +122,7 @@ public final class Settlements {
 		Chronicle.register();
 		MarketDay.register();
 		Realm.registerMapTable();
+		Animals.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
@@ -642,6 +643,7 @@ public final class Settlements {
 			case "link_kingdom" -> RoadLink.connect(player, s, false);
 			case "link_village" -> RoadLink.connect(player, s, true);
 			case "repair" -> startRepair(player, s);
+			case "buy_horse" -> Animals.buyHorse(player, s);
 			case "undo_changes" -> undoChanges(player, s);
 			case "rebuild" -> startRebuild(player, s);
 			default -> {
