@@ -296,7 +296,7 @@ public final class Production {
 		if (server.getTickCount() % 6000 < INTERVAL) {
 			Progression.Step gate = Progression.current(s, Progression.GATE);
 			if (gate != null && gate.level() >= 4 && !Progression.GATE.equals(s.jobTrack())) {
-				Template t = Template.get(s.style() + "/" + gate.building());
+				Template t = Template.get(Settlements.template(s, gate.building()));
 				if (t != null) {
 					armTraps(level, s, t.placements(Settlements.dye(s.color()), Rotation.values()[s.rotation()]));
 				}
@@ -437,7 +437,7 @@ public final class Production {
 	/** The barrel of the host building's current level (before there is a storehouse), or null. */
 	private static Container barrel(ServerLevel level, Settlement s, String host) {
 		Progression.Step step = Progression.current(s, host);
-		return step == null || host.equals(s.jobTrack()) ? null : storage(level, s, s.style() + "/" + step.building());
+		return step == null || host.equals(s.jobTrack()) ? null : storage(level, s, Settlements.template(s, step.building()));
 	}
 
 	/** Puts up to n of the item into a container (only what fits); returns how many went in. */
@@ -467,7 +467,7 @@ public final class Production {
 			if (step == null || track.equals(Progression.CELLAR) || track.equals(Progression.STOREHOUSE) || track.equals(s.jobTrack())) {
 				continue; // the cellar is the lord's own store, the storehouse has its ledger
 			}
-			Container box = storage(level, s, s.style() + "/" + step.building());
+			Container box = storage(level, s, Settlements.template(s, step.building()));
 			if (box == null) {
 				continue;
 			}

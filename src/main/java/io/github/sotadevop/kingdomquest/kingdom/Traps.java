@@ -23,7 +23,10 @@ import java.util.Map;
  */
 final class Traps {
 	private static final int GX = io.github.sotadevop.kingdomquest.building.Layout.gateX();
-	private static final int GZ = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
+	/** The gate's z in the base frame: the round castle's gate lies further south. */
+	private static int gz(Settlement s) {
+		return io.github.sotadevop.kingdomquest.building.Layout.gateZ(Settlements.round(s));
+	}
 	private record Timer(long until, List<BlockPos> blocks, BlockState restore) {
 	}
 
@@ -70,11 +73,11 @@ final class Traps {
 	}
 
 	static BlockPos lavaLever(Settlement s) {
-		return gateAt(s, GX, 8, GZ - 1);
+		return gateAt(s, GX, 8, gz(s) - 1);
 	}
 
 	static BlockPos arrowLever(Settlement s) {
-		return gateAt(s, GX - 2, 8, GZ);
+		return gateAt(s, GX - 2, 8, gz(s));
 	}
 
 	private static boolean on(ServerLevel level, BlockPos lever) {
@@ -92,7 +95,7 @@ final class Traps {
 			if (s.level(Progression.GATE) >= 5) {
 				boolean lava = on(level, lavaLever(s));
 				for (int x = GX - 1; x <= GX + 1; x++) {
-					BlockPos p = gateAt(s, x, 8, GZ + 1);
+					BlockPos p = gateAt(s, x, 8, gz(s) + 1);
 					BlockState now = level.getBlockState(p);
 					if (lava && now.isAir()) {
 						level.setBlock(p, Blocks.LAVA.defaultBlockState(), Block.UPDATE_ALL);
@@ -109,8 +112,8 @@ final class Traps {
 			}
 			if (on(level, arrowLever(s))) {
 				for (int x : new int[] {GX - 3, GX - 1, GX + 1, GX + 3}) {
-					BlockPos d = gateAt(s, x, 5, GZ + 1);
-					BlockPos out = gateAt(s, x, 5, GZ + 3);
+					BlockPos d = gateAt(s, x, 5, gz(s) + 1);
+					BlockPos out = gateAt(s, x, 5, gz(s) + 3);
 					net.minecraft.world.phys.Vec3 dir = net.minecraft.world.phys.Vec3.atCenterOf(out).subtract(net.minecraft.world.phys.Vec3.atCenterOf(d));
 					net.minecraft.world.entity.projectile.arrow.Arrow arrow = new net.minecraft.world.entity.projectile.arrow.Arrow(level,
 							d.getX() + 0.5 + dir.x * 0.35, d.getY() + 0.5, d.getZ() + 0.5 + dir.z * 0.35,
@@ -119,7 +122,7 @@ final class Traps {
 					arrow.pickup = net.minecraft.world.entity.projectile.arrow.AbstractArrow.Pickup.DISALLOWED;
 					level.addFreshEntity(arrow);
 				}
-				level.playSound(null, gateAt(s, GX, 5, GZ + 1), SoundEvents.DISPENSER_LAUNCH, SoundSource.BLOCKS, 1f, 1f);
+				level.playSound(null, gateAt(s, GX, 5, gz(s) + 1), SoundEvents.DISPENSER_LAUNCH, SoundSource.BLOCKS, 1f, 1f);
 			}
 		}
 	}

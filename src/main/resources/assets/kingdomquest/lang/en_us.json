@@ -31,7 +31,7 @@
 	"kingdomquest.founding.shape": "Castle: %s",
 	"kingdomquest.founding.shape.0": "Square",
 	"kingdomquest.founding.shape.1": "Round",
-	"kingdomquest.founding.shape.tip": "The shape of the castle walls. The round castle (ring castle) comes in a later update: for now every castle is square.",
+	"kingdomquest.founding.shape.tip": "The shape of the castle walls. Round: a ring wall around the same town, a little wider, with the gate further out.",
 	"kingdomquest.site.started": "The builders begin to shape the land for your kingdom: one level plateau inside the walls, natural slopes around it. They work where you are; the rest of the site follows when you come closer.",
 	"kingdomquest.site.shaping": "%s: shaping the land, %s%% done (the rest follows when you come closer)",
 	"kingdomquest.menu.site_short": "Shaping the land %s%%",

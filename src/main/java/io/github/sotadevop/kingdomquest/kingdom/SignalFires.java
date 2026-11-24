@@ -76,7 +76,7 @@ final class SignalFires {
 		Rotation rot = Rotation.values()[s.rotation()];
 		for (String track : Progression.ORDER) {
 			Progression.Step step = Progression.current(s, track);
-			Template t = step == null ? null : Template.get(s.style() + "/" + step.building());
+			Template t = step == null ? null : Template.get(Settlements.template(s, step.building()));
 			if (t == null) {
 				continue;
 			}

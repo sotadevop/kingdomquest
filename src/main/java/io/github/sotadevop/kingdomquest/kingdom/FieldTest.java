@@ -48,6 +48,9 @@ import java.util.UUID;
  * after every tier. Writes fieldtest/report.md and a before/after map per site into the server folder.
  */
 public final class FieldTest {
+	/** The castle shape asked for per site (founding menu): 0 square, 1 round. */
+	private static final Map<String, Integer> SHAPES = new HashMap<>();
+
 	private FieldTest() {
 	}
 
@@ -141,6 +144,8 @@ public final class FieldTest {
 		for (String o : only) {
 			String[] p = o.split("@");
 			looks.put(p[0], p.length < 2 ? Grade.FLAT : p[1].startsWith("town") ? Grade.HILL_TOWN : p[1].startsWith("hill") ? Grade.HILL_CASTLE : Grade.FLAT);
+			// and the castle's shape: "plains@round", "knoll@hill_round"
+			SHAPES.put(p[0], p.length > 1 && p[1].contains("round") ? 1 : 0);
 		}
 		for (Scenario sc : SCENARIOS) {
 			if (!only.isEmpty() && !looks.containsKey(sc.name())) {
@@ -203,7 +208,7 @@ public final class FieldTest {
 		used.add(heart);
 		// the inspected square, and the grading plan's reach with a chunk to spare (its sections are shaped when their
 		// neighbouring chunks are loaded)
-		int load = Math.max(R, Grade.PAD + Grade.MARGIN + Math.max(Math.max(-Layout.ring()[0], Layout.ring()[2]), Math.max(-Layout.ring()[1], Layout.ring()[3]))) + 32;
+		int load = Math.max(R, Grade.PAD + Grade.MARGIN + Math.max(Math.max(-Layout.ring(true)[0], Layout.ring(true)[2]), Math.max(-Layout.ring(true)[1], Layout.ring(true)[3]))) + 32;
 		int cx0 = (heart.getX() - load) >> 4, cx1 = (heart.getX() + load) >> 4;
 		int cz0 = (heart.getZ() - load) >> 4, cz1 = (heart.getZ() + load) >> 4;
 		for (int cx = cx0; cx <= cx1; cx++) {
@@ -249,7 +254,11 @@ public final class FieldTest {
 				Style.forBiome(biome), heart, rot.ordinal(), Map.of(Settlement.MAIN, 1), Style.forBiome(biome) + "/tent_1", Settlement.MAIN, 0, Map.of(),
 				Map.of());
 		long tf = System.nanoTime();
-		s = Settlements.found(level, s, look, 0, true);
+		int shape = SHAPES.getOrDefault(sc.name(), 0);
+		s = Settlements.found(level, s, look, shape, true);
+		if (shape == 1) {
+			REPORT.append("Round castle. ");
+		}
 		heart = s.heart();
 		REPORT.append("Founded as ").append(new String[] {"flat castle", "hill castle", "hill town"}[look]).append(": plateau at ")
 				.append(Grade.of(server, s).plateau - heart.getY() + 1).append(" (relative to the heart), site shaped in ")
@@ -272,7 +281,7 @@ public final class FieldTest {
 					continue;
 				}
 				Progression.Step step = Progression.next(s, track);
-				if (step == null || Template.get(s.style() + "/" + step.building()) == null) {
+				if (step == null || Template.get(Settlements.template(s, step.building())) == null) {
 					continue;
 				}
 				int before = s.level(track);
@@ -427,7 +436,7 @@ public final class FieldTest {
 				continue;
 			}
 			Set<Long> mine = new HashSet<>(s.built().getOrDefault(track, List.of()));
-			for (Template.Placement p : Settlements.placements(s, s.style() + "/" + step.building())) {
+			for (Template.Placement p : Settlements.placements(s, Settlements.template(s, step.building()))) {
 				if (p.state().isAir() || p.state().getBlock() instanceof CropBlock || !p.state().getFluidState().isEmpty()) {
 					continue;
 				}
@@ -495,7 +504,7 @@ public final class FieldTest {
 	 */
 	private static long[] lordChange(ServerLevel level, Settlement s, Progression.Step next) {
 		Map<Long, BlockState> nextPlan = new HashMap<>();
-		for (Template.Placement p : Settlements.placements(s, s.style() + "/" + next.building())) {
+		for (Template.Placement p : Settlements.placements(s, Settlements.template(s, next.building()))) {
 			nextPlan.put(s.heart().offset(p.offset()).asLong(), p.state());
 		}
 		long kept = -1, replaced = -1;
@@ -1056,7 +1065,7 @@ public final class FieldTest {
 			BlockState st = level.getBlockState(b);
 			BlockState below = level.getBlockState(b.below());
 			String tr = owner.get(b.asLong());
-			int baseY = h.getY() + Settlements.lift(s, s.style() + "/" + tr + "_1");
+			int baseY = h.getY() + Settlements.lift(s, Settlements.template(s, tr + "_1"));
 			if (b.getY() > baseY || !st.isCollisionShapeFullBlock(level, b)) {
 				continue; // eaves, porches and roofs overhang by design; only the ground course must stand on something
 			}
@@ -1075,7 +1084,7 @@ public final class FieldTest {
 			if (step == null) {
 				continue;
 			}
-			for (Template.Placement p : Settlements.placements(s, s.style() + "/" + step.building())) {
+			for (Template.Placement p : Settlements.placements(s, Settlements.template(s, step.building()))) {
 				if (!p.state().isAir()) {
 					continue;
 				}
@@ -1103,8 +1112,8 @@ public final class FieldTest {
 		// 4 water
 		Rotation r = Rotation.values()[s.rotation()];
 		// the wall ring relative to the heart (tools/buildings.py WALL, layout.json)
-		BlockPos ra = h.offset(Template.rotate(new BlockPos(Layout.ring()[0], 0, Layout.ring()[1]), r));
-		BlockPos rb = h.offset(Template.rotate(new BlockPos(Layout.ring()[2], 0, Layout.ring()[3]), r));
+		BlockPos ra = h.offset(Template.rotate(new BlockPos(Layout.ring(Settlements.round(s))[0], 0, Layout.ring(Settlements.round(s))[1]), r));
+		BlockPos rb = h.offset(Template.rotate(new BlockPos(Layout.ring(Settlements.round(s))[2], 0, Layout.ring(Settlements.round(s))[3]), r));
 		int wet = 0;
 		int wetMoat = 0;
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
@@ -1749,7 +1758,7 @@ public final class FieldTest {
 		BlockPos h = s.heart();
 		Rotation r = Rotation.values()[s.rotation()];
 		Map<String, BlockPos> centres = new LinkedHashMap<>();
-		int[] ring = Layout.ring();
+		int[] ring = Layout.ring(Settlements.round(s));
 		centres.put("gate", h.offset(Template.rotate(new BlockPos(0, 0, ring[3]), r)));
 		centres.put("corner", h.offset(Template.rotate(new BlockPos(ring[0] + 4, 0, ring[1] + 4), r)));
 		centres.put("square", h);

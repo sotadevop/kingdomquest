@@ -23,7 +23,10 @@ import java.util.UUID;
 final class Drawbridge {
 	/** The gate opening in the base frame (heart at 7,0,10): x 6..8 at the wall's south side, z = 40. */
 	private static final int GX = io.github.sotadevop.kingdomquest.building.Layout.gateX();
-	private static final int GZ = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
+	/** The gate's z in the base frame: the round castle's gate lies further south. */
+	private static int gz(Settlement s) {
+		return io.github.sotadevop.kingdomquest.building.Layout.gateZ(Settlements.round(s));
+	}
 	static final String STATE = "drawbridge";
 	private static final Map<UUID, int[]> MOVING = new HashMap<>(); // settlement -> {step, raising}
 
@@ -37,7 +40,7 @@ final class Drawbridge {
 	}
 
 	static BlockPos lever(Settlement s) {
-		return at(s, GX + 2, 1, GZ - 2);
+		return at(s, GX + 2, 1, gz(s) - 2);
 	}
 
 	/** The lever was used. Returns true if it belongs to a drawbridge. */
@@ -58,7 +61,7 @@ final class Drawbridge {
 		}
 		for (int x = GX - 2; x <= GX + 2; x++) {
 			for (int k = 0; k < 4; k++) {
-				if (pos.equals(at(s, x, -1, GZ + 3 + k))) {
+				if (pos.equals(at(s, x, -1, gz(s) + 3 + k))) {
 					return s.level(STATE) == 1 || MOVING.containsKey(s.id());
 				}
 			}
@@ -79,15 +82,15 @@ final class Drawbridge {
 			BlockState plank = Blocks.CRIMSON_PLANKS.defaultBlockState();
 			BlockState air = Blocks.AIR.defaultBlockState();
 			boolean raising = m[1] == 1;
-			// row k (k = 0 near the gate .. 3 far out) lies over the moat at z = GZ+3+k and stands up at height k
+			// row k (k = 0 near the gate .. 3 far out) lies over the moat at z = gz(s)+3+k and stands up at height k
 			int k = raising ? m[0] : 3 - m[0];
 			for (int x = GX - 2; x <= GX + 2; x++) {
-				BlockPos flat = at(s, x, -1, GZ + 3 + k);
-				BlockPos up = at(s, x, k, GZ + 2);
+				BlockPos flat = at(s, x, -1, gz(s) + 3 + k);
+				BlockPos up = at(s, x, k, gz(s) + 2);
 				level.setBlock(raising ? flat : up, air, Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS);
 				level.setBlock(raising ? up : flat, plank, Block.UPDATE_ALL);
 			}
-			BlockPos sound = at(s, GX, 0, GZ + 2);
+			BlockPos sound = at(s, GX, 0, gz(s) + 2);
 			level.playSound(null, sound, raising ? SoundEvents.PISTON_CONTRACT : SoundEvents.PISTON_EXTEND, SoundSource.BLOCKS, 0.8f, 0.6f);
 			level.playSound(null, sound, SoundEvents.IRON_DOOR_CLOSE, SoundSource.BLOCKS, 0.6f, 0.5f);
 			if (++m[0] >= 4) {

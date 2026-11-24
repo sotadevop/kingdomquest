@@ -92,7 +92,7 @@ final class Defense {
 	static List<Post> posts(ServerLevel level, Settlement s) {
 		List<Post> out = new ArrayList<>();
 		int y = s.heart().getY();
-		int gz = io.github.sotadevop.kingdomquest.building.Layout.gateZ();
+		int gz = io.github.sotadevop.kingdomquest.building.Layout.gateZ(Settlements.round(s));
 		for (int[] p : new int[][] {{4, gz - 4}, {10, gz - 4}, {4, 7}, {10, 7}}) {
 			BlockPos at = at(s, p[0], p[1]);
 			BlockPos stand = level.isLoaded(at) ? standAt(level, at.getX(), at.getZ(), y) : null;
@@ -103,9 +103,9 @@ final class Defense {
 		int walls = s.level(Progression.WALLS);
 		if (walls >= 2 && !Progression.WALLS.equals(s.jobTrack())) {
 			java.util.Set<Long> built = new java.util.HashSet<>(s.built().getOrDefault(Progression.WALLS, List.of()));
-			int[] ring = io.github.sotadevop.kingdomquest.building.Layout.wall(); // the wall ring and towers of tools/buildings.py (WALL, tower_spots)
+			int[] ring = io.github.sotadevop.kingdomquest.building.Layout.wall(Settlements.round(s)); // the wall ring and towers of tools/buildings.py (WALL, tower_spots)
 			int x0 = ring[0], x1 = ring[1], z0 = ring[2], z1 = ring[3];
-			List<int[]> spots = io.github.sotadevop.kingdomquest.building.Layout.towers(walls);
+			List<int[]> spots = io.github.sotadevop.kingdomquest.building.Layout.towers(walls, Settlements.round(s));
 			BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 			for (int[] spot : spots) {
 				// stone towers stand one block inside the ring line, wooden ones on it
@@ -253,7 +253,7 @@ final class Defense {
 			int castle = Math.max(1, s.level(Settlement.MAIN) - 8);
 			int size = 4 + 3 * castle;
 			for (int i = 0; i < size; i++) {
-				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, io.github.sotadevop.kingdomquest.building.Layout.gateZ() + 44 + i / 7 * 2));
+				spawn(level, s, i % 3 == 2 ? "vindicator" : "pillager", RAIDER, at(s, 1 + i % 7 * 2, io.github.sotadevop.kingdomquest.building.Layout.gateZ(Settlements.round(s)) + 44 + i / 7 * 2));
 			}
 			if (owner != null) {
 				People.say(owner, "Warchief", "They're here! " + size + " raiders at the gate. Man the walls!");
@@ -267,7 +267,7 @@ final class Defense {
 			}
 			return;
 		}
-		BlockPos gate = at(s, io.github.sotadevop.kingdomquest.building.Layout.gateX(), io.github.sotadevop.kingdomquest.building.Layout.gateZ() + 6);
+		BlockPos gate = at(s, io.github.sotadevop.kingdomquest.building.Layout.gateX(), io.github.sotadevop.kingdomquest.building.Layout.gateZ(Settlements.round(s)) + 6);
 		Set<Long> built = new java.util.HashSet<>();
 		s.built().values().forEach(built::addAll);
 		for (Mob m : raiders) {

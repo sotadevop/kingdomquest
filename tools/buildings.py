@@ -1069,11 +1069,127 @@ def woodcutter(style, level):
 # x0, x1, z0, z1 of the wall ring: about 260 x 200 (user, 2026-11-23: the whole site twice as big, with room for
 # big plots, a big town square, gardens and small squares). The gate is in the middle of the south side (z1).
 WALL = (-123, 137, -100, 100)
+WALL_SQUARE = WALL
+# The round castle (19.11, founding menu): a ring wall, an ellipse around the same town (centre x, z, half axes),
+# sized so every building stays 9+ blocks inside it; its bottom (z1) is the gate. Round templates are written to
+# <style>_round/ and only for what the shape changes (walls, gate, posterns, roads, lamps); the mod takes a round one
+# where it exists, else the square one (Settlements.template).
+ROUND = (7, 0, 154, 128)
+SHAPE = ["square"]
+_RING = {}
+
+
+def set_shape(shape):
+    global WALL
+    SHAPE[0] = shape
+    cx, cz, a, bb = ROUND
+    WALL = WALL_SQUARE if shape == "square" else (cx - a, cx + a, cz - bb, cz + bb)
+    # the main street runs on to the gate; the lanes to the side gates start three in from their doors
+    for i, t in enumerate(ROAD_TRUNKS):
+        if t[0] == "gate":
+            ROAD_TRUNKS[i] = (t[0], t[1], (t[2][0], WALL[3]), *t[3:])
+    k = 3 if shape == "square" else 4      # past the round wall's two-wide walkway
+    ROAD_GOALS["postern"] = [(n, (c[0] - POSTERN_DIRS[n][0][0] * k, c[1] - POSTERN_DIRS[n][0][1] * k))
+                             for n, c in sorted(postern_cells().items())]
+
+
+def round_shape():
+    return SHAPE[0] == "round"
+
+
+def ring_info():
+    """The ring of the current shape: (ordered closed path of wall cells, set of them, set of the cells inside)."""
+    key = (SHAPE[0], WALL)
+    if key in _RING:
+        return _RING[key]
+    import math
+    x0, x1, z0, z1 = WALL
+    if not round_shape():
+        path = [(x, z0) for x in range(x0, x1 + 1)] + [(x1, z) for z in range(z0 + 1, z1 + 1)]
+        path += [(x, z1) for x in range(x1 - 1, x0 - 1, -1)] + [(x0, z) for z in range(z1 - 1, z0, -1)]
+    else:
+        cx, cz, a, bb = ROUND
+        f = lambda x, z: ((x - cx) / a) ** 2 + ((z - cz) / bb) ** 2
+        path = []
+        n = 8000
+        for i in range(n):
+            t = 2 * math.pi * i / n
+            c = (round(cx + a * math.cos(t)), round(cz + bb * math.sin(t)))
+            if path and c == path[-1]:
+                continue
+            if path:
+                px, pz = path[-1]
+                if c[0] != px and c[1] != pz:     # keep it closed for mobs: a step, never only a corner touch
+                    m1, m2 = (c[0], pz), (px, c[1])
+                    path.append(m1 if abs(f(*m1) - 1) <= abs(f(*m2) - 1) else m2)
+            if c not in path[-3:]:
+                path.append(c)
+        if path[-1] == path[0]:
+            path.pop()
+        px, pz = path[-1]
+        c = path[0]
+        if c[0] != px and c[1] != pz:
+            m1, m2 = (c[0], pz), (px, c[1])
+            path.append(m1 if abs(f(*m1) - 1) <= abs(f(*m2) - 1) else m2)
+        # a single cell sticking out (path goes there and straight back) is cut off
+        seen, out = set(), []
+        for c in path:
+            if c in seen:
+                while out and out[-1] != c:
+                    seen.discard(out.pop())
+                continue
+            out.append(c)
+            seen.add(c)
+        path = out
+    ring = set(path)
+    inside, todo = set(), [(HEART[0], 0)]
+    while todo:
+        c = todo.pop()
+        if c in inside or c in ring or not (x0 < c[0] < x1 and z0 < c[1] < z1):
+            continue
+        inside.add(c)
+        todo += [(c[0] + 1, c[1]), (c[0] - 1, c[1]), (c[0], c[1] + 1), (c[0], c[1] - 1)]
+    _RING[key] = (path, ring, inside)
+    return _RING[key]
+
+
+def ring_normal(x, z):
+    """Outward direction of the wall at ring cell (x, z): one of the four, or both set at a corner / diagonal."""
+    x0, x1, z0, z1 = WALL
+    if not round_shape():
+        return (-1 if x == x0 else 1 if x == x1 else 0, -1 if z == z0 else 1 if z == z1 else 0)
+    cx, cz, a, bb = ROUND
+    u, v = (x - cx) / a, (z - cz) / bb
+    return ((1 if u > 0 else -1) if abs(u) > 0.38 else 0, (1 if v > 0 else -1) if abs(v) > 0.38 else 0)
+
+
+def ring_inner():
+    """The walkway's cells inside the ring: the cells beside the wall and the next ones in (on the round wall's
+    diagonal steps a single row would only touch at its corners, so it is two wide)."""
+    path, ring, inside = ring_info()
+    one = {(x + dx, z + dz) for x, z in path for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1))} & inside
+    if not round_shape():
+        return one
+    return one | ({(x + dx, z + dz) for x, z in one for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1))} & inside)
+
+
+def ring_section(x, z):
+    """Anchor column of the 4-cell wall section that the ring cell (x, z) belongs to."""
+    path, _, _ = ring_info()
+    idx = RING_INDEX.setdefault((SHAPE[0], WALL), {c: i for i, c in enumerate(path)})
+    i = idx[(x, z)]
+    return path[min(len(path) - 1, i // 4 * 4 + 2)]
+
+
+RING_INDEX = {}
 
 
 def inward(cx, cz):
     """Direction from a wall tower at (cx, cz) on the ring into the settlement: (dx, dz), both set for a corner."""
     x0, x1, z0, z1 = WALL
+    if round_shape():
+        nx, nz = ring_normal(cx, cz)
+        return (-nx, -nz)
     return (1 if cx == x0 else -1 if cx == x1 else 0, 1 if cz == z0 else -1 if cz == z1 else 0)
 
 
@@ -1095,6 +1211,17 @@ def tower_spots(level):
     last level adds towers along the long sides."""
     x0, x1, z0, z1 = WALL
     gx = HEART[0]
+    if round_shape():
+        import math
+        cx, cz, a, bb = ROUND
+        path, _, _ = ring_info()
+        spots = [(gx - GATE_TOWER, z1), (gx + GATE_TOWER, z1)]
+        angles = (0, 180, 240, 300) if level < 4 else (0, 30, 150, 180, 210, 240, 270, 300, 330)
+        for deg in angles:
+            t = math.radians(deg)
+            px, pz = cx + a * math.cos(t), cz + bb * math.sin(t)
+            spots.append(min(path, key=lambda c: (c[0] - px) ** 2 + (c[1] - pz) ** 2))
+        return spots
     spots = [(x0, z0), (x1, z0), (x0, z1), (x1, z1), (gx - GATE_TOWER, z1), (gx + GATE_TOWER, z1)]
     if level >= 4:
         # along the sides about every 50 blocks, none crowding the gate's own towers
@@ -1118,6 +1245,12 @@ POSTERNS = ((1, "w"), (2, "e"), (3, "n"))
 def postern_cells():
     # each on the anchor column of its wall section (palisade and stone wall stand on the same ground there)
     x0, x1, z0, z1 = WALL
+    if round_shape():
+        # on the round wall: the section anchor nearest the square castle's spots (west and east at z 26, north at x -45)
+        path, _, _ = ring_info()
+        anchors = {ring_section(*c) for c in path}
+        pick = lambda tx, tz: min(anchors, key=lambda c: (c[0] - tx) ** 2 + (c[1] - tz) ** 2)
+        return {1: pick(x0, 26), 2: pick(x1, 26), 3: pick(-45, z0)}
     return {1: (x0, 26), 2: (x1, 26), 3: (-45, z0)}
 
 
@@ -1168,6 +1301,8 @@ def walls(style, level):
     gx = HEART[0]
     ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
     ring += [(x0, z) for z in range(z0 + 1, z1)] + [(x1, z) for z in range(z0 + 1, z1)]
+    if round_shape():
+        ring = ring_info()[0]
     ring_set = set(ring)
     for x, z in ring:
         if z == z1 and abs(x - gx) <= 2:
@@ -1183,13 +1318,17 @@ def walls(style, level):
         # walkway on the inside at y=2, reached from the towers
         inner = {(x, z0 + 1) for x in range(x0 + 1, x1)} | {(x, z1 - 1) for x in range(x0 + 1, x1) if abs(x - gx) > 2}
         inner |= {(x0 + 1, z) for z in range(z0 + 1, z1)} | {(x1 - 1, z) for z in range(z0 + 1, z1)}
-        for x, z in inner:
+        if round_shape():
+            inner = {(x, z) for x, z in ring_inner() if not (z >= z1 - 2 and abs(x - gx) <= 2)}
+        for x, z in (sorted(inner) if round_shape() else inner):
             b.put(x, 2, z, w + "_slab", type="top", waterlogged="false")
         for cx, cz in tower_spots(level):
             # 5x5 watchtower straddling the wall, which runs on through it: corner posts, a platform at 6 with
             # rails and a roof, and a ladder on the inside of the wall
             tx = max(x0 - 2, min(x1 - 2, cx - 2))
             tz = max(z0 - 2, min(z1 - 2, cz - 2))
+            if round_shape():
+                tx, tz = cx - 2, cz - 2
             ccx, ccz = tx + 2, tz + 2
             b.anchor = (ccx, ccz)
             for x in range(tx, tx + 5):
@@ -1442,6 +1581,14 @@ def plan_roads(style, jobs):
     hard.discard((HEART[0], HEART[2]))
     hard.add((HEART[0], HEART[2]))
     lo_x, hi_x, lo_z, hi_z = x0 + 3, x1 - 3, z0 + 3, z1 - 3
+    deep = None
+    if round_shape():
+        # three in from the round wall (past the walkway): the cells inside it, less the wall and the two next to it
+        _, wall_cells, inside = ring_info()
+        band = set(wall_cells)
+        for _ in range(2):
+            band |= {(x + dx, z + dz) for x, z in band for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1))}
+        deep = inside - band
     near = {(x + dx, z + dz) for (x, z) in hard for dx in (-1, 0, 1) for dz in (-1, 0, 1)} - hard
 
     cells = {}   # (x, z) -> [kind, [segments]]
@@ -1513,7 +1660,7 @@ def plan_roads(style, jobs):
                 break
             for ddx, ddz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 n = (x + ddx, z + ddz)
-                if n in hard or not (lo_x <= n[0] <= hi_x and lo_z <= n[1] <= hi_z):
+                if n in hard or not (lo_x <= n[0] <= hi_x and lo_z <= n[1] <= hi_z and (deep is None or n in deep)):
                     continue
                 step = 0.55 if n in lanes or n in trunk else 1.0
                 step += 1.5 if n in near else 0.0
@@ -1546,7 +1693,7 @@ def plan_roads(style, jobs):
         # a lane is 3 wide: its centre line and a cell on each side, wherever no building stands
         for c in path:
             for n in ((c[0] + 1, c[1]), (c[0] - 1, c[1]), (c[0], c[1] + 1), (c[0], c[1] - 1)):
-                if n in hard or n in trunk or not (lo_x <= n[0] <= hi_x and lo_z <= n[1] <= hi_z):
+                if n in hard or n in trunk or not (lo_x <= n[0] <= hi_x and lo_z <= n[1] <= hi_z and (deep is None or n in deep)):
                     continue
                 if n in cells:
                     if seg not in cells[n][1]:
@@ -1630,7 +1777,7 @@ def plan_roads(style, jobs):
                 d = (-sgn, 0) if axis == "x" else (0, -sgn)
                 ok = c not in hard and c not in eaves and c not in goal_cells and (c[0] + d[0], c[1] + d[1]) in cells and \
                     all((c[0] + ex, c[1] + ez) not in taken and (c[0] + ex, c[1] + ez) not in goal_cells for ex in (-1, 0, 1) for ez in (-1, 0, 1)) and \
-                    lo_x <= c[0] <= hi_x and lo_z <= c[1] <= hi_z and \
+                    lo_x <= c[0] <= hi_x and lo_z <= c[1] <= hi_z and (deep is None or c in deep) and \
                     not any((c[0] + ex, c[1] + ez) in hard for ex, ez in ((1, 0), (-1, 0), (0, 1), (0, -1)))
                 if ok:
                     lamps.append((c[0], c[1], d[0], d[1], name))
@@ -1664,11 +1811,11 @@ ROAD_STYLE = {
 }
 
 
-def roads(style, level):
+def roads(style, level, key=None):
     """Roads track: 1 trodden path (centre line only), 2 full dirt roads, 3 cobblestone and gravel,
     4 stone brick with polished andesite borders."""
     b = B()
-    plan = ROAD_PLAN[style]
+    plan = ROAD_PLAN[key or style]
     cells = plan["cells"]
     seg = {name: i for i, (name, _) in enumerate(plan["segments"])}
     m = ROAD_STYLE[style].get(level, ROAD_MATS[level])
@@ -1698,12 +1845,12 @@ def seg_trunks():
     return {t[0] for t in ROAD_TRUNKS}
 
 
-def lamps(style, level):
+def lamps(style, level, key=None):
     """Lamps track: 1 torches on posts, 2 lanterns on posts, 3 stone-footed posts with a hanging lantern on an arm."""
     s = STYLES[style]
     b = B()
     fence = s["wood"] + "_fence"
-    plan = ROAD_PLAN[style]
+    plan = ROAD_PLAN[key or style]
     seg = {name: i for i, (name, _) in enumerate(plan["segments"])}
     segs = {}
     for x, z, dx, dz, name in plan["lamps"]:
@@ -1771,12 +1918,17 @@ def stone_walls(style, level):
 
     def section(x, z):
         """Anchor column of the wall section that the ring cell (x, z) belongs to."""
+        if round_shape():
+            return ring_section(x, z)
         if z in (z0, z1):
             return (min(x1, x0 + (x - x0) // 4 * 4 + 2), z)
         return (x, min(z1, z0 + (z - z0) // 4 * 4 + 2))
 
     ring = [(x, z0) for x in range(x0, x1 + 1)] + [(x, z1) for x in range(x0, x1 + 1)]
     ring += [(x0, z) for z in range(z0 + 1, z1)] + [(x1, z) for z in range(z0 + 1, z1)]
+    if round_shape():
+        ring = ring_info()[0]
+    ring_set = set(ring)
     for x, z in ring:
         passage = z == z1 and abs(x - gx) <= 1
         house = z == z1 and abs(x - gx) <= 3  # where the gatehouse stands: plain stone, so both fit together
@@ -1792,6 +1944,10 @@ def stone_walls(style, level):
             post, roof_st, roof_slab, _ = gal
             out = "north" if z == z0 else "south" if z == z1 else "west" if x == x0 else "east"
             along = "x" if z in (z0, z1) else "z"
+            if round_shape():
+                nx, nz = ring_normal(x, z)
+                out = ("south" if nz > 0 else "north") if nz and not nx else ("east" if nx > 0 else "west") if nx else "south"
+                along = "x" if nz and not nx else "z"
             if (x + z) % 3 == 0:
                 b.put(x, H + 1, z, post, axis="y")
             b.put(x, H + 2, z, post, axis=along)
@@ -1808,9 +1964,14 @@ def stone_walls(style, level):
     # walkway behind the battlements
     inner = {(x, z0 + 1) for x in range(x0 + 1, x1)} | {(x, z1 - 1) for x in range(x0 + 1, x1) if abs(x - gx) > 3}
     inner |= {(x0 + 1, z) for z in range(z0 + 1, z1)} | {(x1 - 1, z) for z in range(z0 + 1, z1)}
-    for x, z in inner:
+    if round_shape():
+        inner = {(x, z) for x, z in ring_inner() if not (z >= z1 - 2 and abs(x - gx) <= 3)}
+    for x, z in (sorted(inner) if round_shape() else inner):
         ox = x0 if x == x0 + 1 else x1 if x == x1 - 1 else x
         oz = z0 if z == z0 + 1 else z1 if z == z1 - 1 else z
+        if round_shape():
+            ox, oz = next((x + dx, z + dz) for k in (1, 2) for dx, dz in ((0, k), (0, -k), (k, 0), (-k, 0), (k - 1, k - 1), (1 - k, k - 1))
+                          if (x + dx, z + dz) in ring_set)
         b.anchor = section(ox, oz)
         b.put(x, H - 1, z, slab, type="top", waterlogged="false")
         if gal and not (oz == z1 and abs(ox - gx) <= 3):
@@ -1829,6 +1990,8 @@ def stone_walls(style, level):
             tz0 = max(z0 - 1, min(z1 - 3, cz - 2))
             if cz == z1:
                 tz0 = z1 - 2
+            if round_shape():
+                tx0, tz0 = cx - 2, cz - 2
             b.anchor = (tx0 + 2, tz0 + 2)
             dx, dz = inward(cx, cz)
             mx, mz = tx0 + 2, tz0 + 2
@@ -1901,6 +2064,17 @@ def stone_walls(style, level):
                 if (fx + fz) % 2:
                     fx += 1 if fx == tx0 else -1
                 b.put(fx, 11, fz, SIGNAL_FIRE[0], **SIGNAL_FIRE[1])
+    if round_shape() and level >= 4:
+        # on the round wall the gallery and the battlements stop two short of each tower (its steps would leave closed
+        # pockets against the tower)
+        for cx, cz in tower_spots(level):
+            for x in range(cx - 4, cx + 5):
+                for z in range(cz - 4, cz + 5):
+                    if abs(x - cx) <= 2 and abs(z - cz) <= 2:
+                        continue
+                    if (x, z) in ring_set or (x, z) in inner:
+                        for y in range(H + 1, H + 4):
+                            b.b.pop((x, y, z), None)
     b.anchor = None
     mark_plugs(b, plugs, 1)
     return b.b
@@ -2796,7 +2970,36 @@ def gate(style, level):
         # bottom five deep, and on the far side a bank that rises one block per block like a natural hollow.
         # In front of the gate it keeps its full depth right up to the landing: only the drawbridge crosses it.
         ring = {}
+        source = {}
+        if round_shape():
+            # around the round wall: cells by their distance out from it (steps in all eight directions, as the
+            # square's rings), each remembering the wall cell it was reached from
+            path, wall_cells, inside = ring_info()
+            dist = {c: 0 for c in path}
+            source = {c: c for c in path}
+            frontier = list(path)
+            for o in range(1, max(MOAT_PROFILE) + 1):
+                nxt = []
+                for c in frontier:
+                    for dx in (-1, 0, 1):
+                        for dz in (-1, 0, 1):
+                            q = (c[0] + dx, c[1] + dz)
+                            if q in dist or q in inside:
+                                continue
+                            dist[q] = o
+                            source[q] = source[c]
+                            nxt.append(q)
+                frontier = nxt
+            for (x, z), o in dist.items():
+                if o not in MOAT_PROFILE:
+                    continue
+                front = z > z1 and abs(x - gx) <= 4
+                if front and o > 6:
+                    continue
+                ring[(x, z)] = 5 if front else MOAT_PROFILE[o]
         for o, depth in MOAT_PROFILE.items():
+            if round_shape():
+                break
             cells = set()
             for x in range(x0 - o, x1 + o + 1):
                 cells |= {(x, z0 - o), (x, z1 + o)}
@@ -2815,6 +3018,13 @@ def gate(style, level):
         for (x, z), depth in sorted(ring.items()):
             if z > z1 and abs(x - gx) <= 6:
                 b.anchor = (HEART[0], HEART[2])
+            elif round_shape():
+                import math
+                sx, sz = source[(x, z)]
+                cx, cz, a, bb = ROUND
+                gx_, gz_ = (sx - cx) / a ** 2, (sz - cz) / bb ** 2
+                n = math.hypot(gx_, gz_) or 1
+                b.anchor = (round(sx + gx_ / n * far), round(sz + gz_ / n * far))
             else:
                 b.anchor = (x0 - far if x < x0 else x1 + far if x > x1 else x, z0 - far if z < z0 else z1 + far if z > z1 else z)
             for y in range(-depth, 0):
@@ -6069,6 +6279,16 @@ def write_layout(jobs, plots):
          # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
          "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS
                      if name != "plaza" and not name.startswith("place_")]}
+    # the round castle's ring: its box, the ellipse (centre x, z, half axes), the towers and the streets (the main
+    # street runs on to its gate)
+    set_shape("round")
+    try:
+        j["round"] = {"wall": list(WALL), "ellipse": list(ROUND), "gate": [HEART[0], WALL[3]],
+                      "towers": {str(lv): [list(t) for t in tower_spots(lv)] for lv in (2, 4)},
+                      "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own
+                                  in ROAD_TRUNKS if name != "plaza" and not name.startswith("place_")]}
+    finally:
+        set_shape("square")
     with open(os.path.join(OUT, "..", "layout.json"), "w") as f:
         json.dump(j, f, indent=1)
 
@@ -6140,6 +6360,23 @@ def to_json(blocks, seconds, storage=None, animals=None, pads=None):
 
 SECONDS = {1: 60, 2: 90, 3: 150}
 
+# what the castle's shape changes: these get round templates (<style>_round/); the rest is shared
+SHAPED_TRACKS = ("walls", "gate", "postern", "roads", "lamps")
+
+
+def shaped_jobs(style, key):
+    """The shape's own templates of a style (walls, gate, posterns) for the current shape, filed under key."""
+    out = []
+    for level, secs in ((1, 300), (2, 300), (3, 420), (4, 480)):
+        out.append((key, f"wall_{level}", walls(style, level), secs, None, None))
+    for level in (1, 2, 3, 4):
+        out.append((key, f"gate_{level}", gate(style, level), 120 + 60 * level, None, None, 3))
+    out.append((key, "gate_5", lava_trap(style, 5), 240, None, None))
+    for level in (1, 2, 3):
+        out.append((key, f"postern_{level}", postern(style, level), 120, None, None))
+    return out
+
+
 def build_jobs(styles=None):
     """Every template of every style: (style, id, blocks, seconds, storage, animals, apron), spacing moves applied."""
     jobs = []
@@ -6163,7 +6400,10 @@ def build_jobs(styles=None):
         an = None if animals is None else [[a[0], a[1] + d[0], a[2], a[3] + d[1]] for a in animals]
         return (style, name, nb, seconds, st, an) + tuple(j[6:])
     STORE = (FARM[0] - 2, 0, FARM[1] + FARM[3] // 2 - 1)
-    for style in (styles or STYLES):
+    want = list(styles or (list(STYLES) + [st + "_round" for st in STYLES]))
+    bases = [st for st in want if not st.endswith("_round")]
+    bases += [st[:-6] for st in want if st.endswith("_round") and st[:-6] not in bases]
+    for style in bases:
         first = len(jobs)
         for level in (1, 2, 3):
             jobs.append((style, f"tent_{level}", tent(style, level), SECONDS[level], None, None))
@@ -6233,12 +6473,30 @@ def build_jobs(styles=None):
             hang_lanterns(j[2])
         mine = [moved(j) for j in mine]
         add_town_houses(style, mine)
+        pre = list(mine)
         plan_roads(style, mine)
         for level in (1, 2, 3, 4):
             mine.append((style, f"road_{level}", roads(style, level), 90 + 30 * level, None, None))
         for level in (1, 2, 3):
             mine.append((style, f"lamp_{level}", lamps(style, level), 60 + 30 * level, None, None))
-        jobs[first:] = mine
+        jobs[first:] = mine if style in want else []
+        if style + "_round" in want:
+            # the round castle: its own walls, gate, posterns and the roads laid around them; everything else as square
+            rs = style + "_round"
+            set_shape("round")
+            try:
+                shaped = shaped_jobs(style, rs)
+                for j in shaped:
+                    hang_lanterns(j[2])
+                rmine = [(rs,) + j[1:] for j in pre if track_of(j[1]) not in SHAPED_TRACKS] + [moved(j) for j in shaped]
+                plan_roads(rs, rmine)
+                for level in (1, 2, 3, 4):
+                    rmine.append((rs, f"road_{level}", roads(style, level, rs), 90 + 30 * level, None, None))
+                for level in (1, 2, 3):
+                    rmine.append((rs, f"lamp_{level}", lamps(style, level, rs), 60 + 30 * level, None, None))
+            finally:
+                set_shape("square")
+            jobs += rmine
 
     def apron(name):
         # the land is shaped by the site's grading plan at the founding (Grade.java): a building only clears a flat margin
@@ -6249,6 +6507,9 @@ def build_jobs(styles=None):
 
 if __name__ == "__main__":
     jobs = build_jobs()
+    # round castles: only the templates the shape changes are written (the mod falls back to the square ones)
+    round_jobs = [j for j in jobs if j[0].endswith("_round") and track_of(j[1]) in SHAPED_TRACKS]
+    jobs = [j for j in jobs if not j[0].endswith("_round")]
     # The plot of a track: the footprints of all its levels. Every level levels the whole plot, so the land is
     # shaped once, for the biggest version, and an upgrade never has to cut into what was built around it.
     NO_PLOT = ("walls", "roads", "lamps", "gate", "dock", "cellar", "postern", "tram")
@@ -6266,7 +6527,7 @@ if __name__ == "__main__":
             rects = plots.setdefault((style, track_of(name)), [])
             if rect not in rects:
                 rects.append(rect)
-    for style, name, blocks, seconds, storage, animals, apron in jobs:
+    for style, name, blocks, seconds, storage, animals, apron in jobs + round_jobs:
         os.makedirs(os.path.join(OUT, style), exist_ok=True)
         with open(os.path.join(OUT, style, f"{name}.json"), "w") as f:
             j = to_json(blocks, seconds, storage, animals, None if name.startswith("tent_") else plots.get((style, track_of(name))))

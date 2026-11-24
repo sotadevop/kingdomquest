@@ -507,8 +507,12 @@ def check_roadside(styles):
 
 
 def run(style, mains, quiet=False):
+    global BOX
     if style not in JOBS:
         JOBS[style] = bld.build_jobs([style])
+    # a round castle (<style>_round): its ring and box
+    bld.set_shape("round" if style.endswith("_round") else "square")
+    BOX = (bld.WALL[0] - 14, bld.WALL[1] + 14, -30, 50, bld.WALL[2] - 14, bld.WALL[3] + 16)
     found = {}
     for main in mains:
         world = World(style, levels_at(main))
@@ -529,7 +533,7 @@ if __name__ == "__main__":
     if "--main" in sys.argv:
         args = [a for a in args if a != str(mains[0])]
     total = 0
-    for style in args or list(bld.STYLES):
+    for style in args or list(bld.STYLES) + [st + "_round" for st in bld.STYLES]:
         found = run(style, mains)
         print(f"== {style}: {len(found)} problems")
         for (kind, text), ms in sorted(found.items()):
