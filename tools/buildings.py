@@ -1565,7 +1565,7 @@ def plan_roads(style, jobs):
     for j in jobs:
         name, blocks = j[1], j[2]
         track, level = track_of(name), int(name.rsplit("_", 1)[1])
-        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_")):
+        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_", "tourney_")):
             continue
         if track == "main":
             level += {"hamlet": 3, "village": 6, "town": 7, "castle": 8, "citadel": 10}[name.rsplit("_", 1)[0]]
@@ -6236,6 +6236,76 @@ def tram(style, level):
     return b.b
 
 
+# Tournaments (19.11, visual only): the tournament field north of the castle, beyond the moat (the north side gate
+# leads out to it). The grading plan levels it with the plateau (layout.json "outside"); Tournament.java brings the
+# jousting knights, the archers and the crowd. Kept in step with Tournament.java (FIELD, TILT_Z, LANES, RANGE).
+TOURNEY = (-22, -170, 32, -145)
+
+
+def tourney(style, level):
+    """The lists: a tilt barrier down the middle with a lane on each side, a stand for the spectators along the south,
+    the judges' box in the middle of it, two tents at the west end, an archery range with three targets at the east
+    end, banners on poles at the corners."""
+    wood = STYLES[style]["wood"]
+    log = MAT[style]["log"]
+    b = B()
+    x0, z0, x1, z1 = TOURNEY
+    tz = -157
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            b.put(x, -1, z, "grass_block", snowy="false")
+    for x in range(-12, 21):                                     # the lanes and the tilt
+        for z in (tz - 2, tz - 1, tz + 1, tz + 2):
+            b.put(x, -1, z, "coarse_dirt")
+        b.put(x, -1, tz, "coarse_dirt")
+        b.put(x, 0, tz, f"{wood}_fence")
+        b.put(x, 1, tz, f"{wood}_fence") if x % 4 == 0 else None
+    for x in range(-12, 21):                                     # the lists' outer fence, gaps at the ends
+        for z in (tz - 4, tz + 4):
+            if x not in (-12, 20):
+                b.put(x, 0, z, f"{wood}_fence")
+    # the stand: three steps of seats facing north, the judges' box raised in the middle under a canopy
+    for i, z in enumerate((tz + 7, tz + 8, tz + 9)):
+        for x in range(-10, 19):
+            for y in range(0, i):
+                b.put(x, y, z, f"{wood}_planks")
+            b.put(x, i, z, f"{wood}_stairs", facing="south", half="bottom", shape="straight", waterlogged="false")
+    for x in range(2, 7):                                         # the judges' canopy over the middle of the stand
+        for z in range(tz + 7, tz + 10):
+            b.put(x, 5, z, "{color}_wool" if x % 2 else "white_wool")
+    for x in (2, 6):
+        for y in range(3, 5):
+            b.put(x, y, tz + 9, log, axis="y")
+    # tents at the west end: a pole and a wool roof falling to all sides, the door toward the lists
+    for cx, cz, col in ((-18, tz - 6, "{color}"), (-18, tz + 6, "white")):
+        for y in range(0, 5):
+            b.put(cx, y, cz, log, axis="y")
+        for k in range(3):
+            for x in range(cx - 2 + k, cx + 3 - k):
+                for z in range(cz - 2 + k, cz + 3 - k):
+                    if x in (cx - 2 + k, cx + 2 - k) or z in (cz - 2 + k, cz + 2 - k):
+                        b.put(x, 2 + k, z, f"{col}_wool")
+        for x in range(cx - 2, cx + 3):
+            for z in range(cz - 2, cz + 3):
+                if (x in (cx - 2, cx + 2) or z in (cz - 2, cz + 2)) and not (x == cx + 2 and z == cz):
+                    b.put(x, 0, z, f"{col}_wool")
+                    b.put(x, 1, z, f"{col}_wool")
+        b.put(cx, 5, cz, "{color}_banner", rotation="12")
+    # the archery range: a shooting line at the south, three targets on straw at the north
+    for x in (24, 27, 30):
+        b.put(x, 0, tz - 9, "hay_block", axis="y")
+        b.put(x, 1, tz - 9, "target", power="0")
+        b.put(x, -1, tz + 5, "dirt_path")
+    for x in range(23, 32):
+        b.put(x, 0, tz + 6, f"{wood}_fence")
+    # banners on poles at the corners of the lists
+    for x, z in ((-12, tz - 4), (20, tz - 4), (-12, tz + 4), (20, tz + 4)):
+        for y in range(0, 4):
+            b.put(x, y, z, log, axis="y")
+        b.put(x, 4, z, "{color}_banner", rotation="0")
+    return b.b
+
+
 def storehouse(style, level):
     """The kingdom's storehouse, a tithe barn in the region's style: one tall hall with a clerk's corner by the door
     (the ledger on a lectern, a desk with a candle), the real chests along the back wall and two bays left and right
@@ -6494,6 +6564,8 @@ def write_layout(jobs, plots):
          "plots": {k: v for k, v in sorted(union.items())}, "keep": keep,
          "square": [plaza[1][0], plaza[2][0], plaza[1][1], plaza[2][1]],
          "reserved": {k: list(v) for k, v in RESERVED.items()},
+         # levelled with the plateau outside the walls: the tournament field
+         "outside": {"tourney": list(TOURNEY)},
          # the town houses of the main track per style: x0, z0, x1, z1 (each set on the graded land, only where it is flat)
          "houses": {st: [list(r) for r in rs] for st, rs in sorted(HOUSE_RECTS.items())},
          # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
@@ -6687,6 +6759,7 @@ def build_jobs(styles=None):
             jobs.append((style, f"postern_{level}", postern(style, level), 120, None, None))
         for level in (1, 2, 3):
             jobs.append((style, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
+        jobs.append((style, "tourney_1", tourney(style, 1), 600, None, None))
         # the style's buildings are done: light them, apply the spacing moves, then lay the roads around them
         mine = jobs[first:]
         for j in mine:

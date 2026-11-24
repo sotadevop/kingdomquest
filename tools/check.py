@@ -444,6 +444,8 @@ def check_walk(world, out, quiet=False, start=None):
             for c in comp:
                 tr[world.owner.get((c[0] >> 1, (c[1] - 1) >> 1, c[2] >> 1))] += 1
             who = max(tr, key=tr.get)
+            if who == "tourney":
+                continue  # the tournament field lies outside the walls: the walk from the town doesn't go there
             out.append(("walk", f"{who}: closed-off space of {len(comp) // 4} blocks at x {min(xs)}..{max(xs)}, y {min(ys)}..{max(ys)}, "
                                 f"z {min(zs)}..{max(zs)}"))
     return grid, easy

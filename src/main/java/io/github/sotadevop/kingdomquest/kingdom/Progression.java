@@ -279,6 +279,9 @@ public final class Progression {
 				Map.entry("herbs", List.of(
 					new Step("herbs", "herbs_1", 1, "kingdomquest.trade.herbs_1", 4, null, null, List.of(item(Items.BREWING_STAND, 1), item(Items.COMPOSTER, 1), tag(ItemTags.PLANKS, "planks", 32))),
 					new Step("herbs", "herbs_2", 2, "kingdomquest.trade.herbs_2", 6, null, null, List.of(item(Items.FLOWER_POT, 4), item(Items.EMERALD, 8))))),
+				Map.entry("tourney", List.of(
+					new Step("tourney", "tourney_1", 1, "kingdomquest.trade.tourney_1", 9, null, null,
+							List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.WOOL, "wool", 32), item(Items.TARGET, 3), item(Items.EMERALD, 24))))),
 				Map.entry("archaeology", List.of(
 					new Step("archaeology", "archaeology_1", 1, "kingdomquest.trade.archaeology_1", 7, adv("adventure/salvage_sherd"), "kingdomquest.req.sherd", List.of(item(Items.BRUSH, 1), item(Items.DECORATED_POT, 2), item(Items.SANDSTONE, 32))),
 					new Step("archaeology", "archaeology_2", 2, "kingdomquest.trade.archaeology_2", 8, adv("adventure/craft_decorated_pot_using_only_sherds"), "kingdomquest.req.pot", List.of(item(Items.CHISELED_BOOKSHELF, 2), item(Items.BRUSH, 1))))),
@@ -378,7 +381,7 @@ public final class Progression {
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
 			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM,
-			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler");
+			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney");
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

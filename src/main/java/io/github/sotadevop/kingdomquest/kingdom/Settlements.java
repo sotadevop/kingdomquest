@@ -123,6 +123,7 @@ public final class Settlements {
 		MarketDay.register();
 		Realm.registerMapTable();
 		Animals.register();
+		Tournament.register();
 		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) ->
 				!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer sp) || allowBreak(server, sp, pos));
 		UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
