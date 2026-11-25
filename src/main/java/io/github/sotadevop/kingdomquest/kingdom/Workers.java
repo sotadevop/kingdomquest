@@ -82,7 +82,7 @@ final class Workers {
 			return Storehouse.keeperPost(s);
 		}
 		return io.github.sotadevop.kingdomquest.building.Layout.at(s.heart(), Rotation.values()[s.rotation()], spec.track(), spec.x(),
-				Settlements.liftAt(s, spec.track(), spec.x(), spec.z()), spec.z());
+				Settlements.liftAt(s, spec.track(), spec.x(), spec.z()), spec.z()).offset(Settlements.outpostShift(s, spec.track()));
 	}
 
 	/** Every 10 seconds: workers appear at their buildings, wanderers go back, workers of removed buildings leave. */

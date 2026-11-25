@@ -2393,7 +2393,7 @@ ZELLIGE = ("cyan_glazed_terracotta", "light_blue_glazed_terracotta", "white_glaz
 QUOIN = ("stone_bricks", "polished_andesite")
 
 
-def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=None, chimney=None, windows_back=True, sign=False):
+def hall(b, style, x0, z0, x1, z1, h, door, kind="timber", floor=None, base_h=None, chimney=None, windows_back=True, sign=True):
     """A building of the village in its region's style, used for every workshop, shop and hall. Same footprint, door,
     storeys and tie beams in every region; the shell follows the region's tradition:
     - temperate: German half-timbering (dark frame, white infill, 'Mann' braces at the corners, window boxes, framed
@@ -3691,6 +3691,82 @@ def trophy_hall(style, level):
         for x in (x0 + 2, x1 - 2):
             b.put(x, 4, z0 + 1, "{color}_wall_banner", facing="south")
             b.put(x, 3, z1 - 1, "lantern", hanging="true", waterlogged="false")
+    return b.b
+
+
+JAIL = (27, 76, 37, 84)  # door north (user, 2026-11-25: there should be a jail)
+
+
+def jail(style, level):
+    """The jail: a stone hall by the barracks with a guard room at the door (a desk, the keys on a chain, a barrel)
+    and three cells behind iron bars, each with a bunk of hay and a bucket. Level 2: stocks in front of the door."""
+    b = B()
+    x0, z0, x1, z1 = JAIL
+    w = STYLES[style]["wood"]
+    hall(b, style, x0, z0, x1, z1, 5, "n", kind="stone", floor="polished_andesite", sign=True)
+    wall = WALLMAT[style]["main"]
+    zb = z1 - 4                                   # the cells' fronts
+    for x in range(x0 + 1, x1):
+        for y in (1, 2):
+            if x in (x0 + 4, x0 + 7):             # the walls between the cells
+                for z in range(zb, z1):
+                    b.put(x, y, z, wall)
+            elif x in (x0 + 2, x0 + 5, x0 + 9) and y <= 2:
+                b.put(x, y, zb, f"{w}_door", facing="north", half="lower" if y == 1 else "upper", hinge="left", open="false", powered="false")
+            else:
+                b.put(x, y, zb, "iron_bars", north="false", south="false", east="true", west="true", waterlogged="false")
+    for cx in (x0 + 2, x0 + 5, x0 + 8):
+        b.put(cx, 1, z1 - 1, "hay_block", axis="x")
+        if cx + 1 not in (x0 + 4, x0 + 7):
+            b.put(cx + 1, 1, z1 - 1, "cauldron")
+    # the guard room
+    b.put(x0 + 2, 1, z0 + 2, f"{w}_fence")
+    b.put(x0 + 2, 2, z0 + 2, f"{w}_pressure_plate", powered="false")
+    b.put(x0 + 3, 1, z0 + 2, f"{w}_stairs", facing="east", half="bottom", shape="straight", waterlogged="false")
+    b.put(x1 - 1, 1, z0 + 1, "barrel", facing="up", open="false")
+    b.put(x1 - 1, 2, z0 + 1, "lantern", hanging="false", waterlogged="false")
+    b.put(x1 - 2, 3, z0 + 1, "iron_chain", axis="y", waterlogged="false")
+    b.put((x0 + x1) // 2, 4, (z0 + zb) // 2, "lantern", hanging="true", waterlogged="false")
+    if level >= 2:                                # the stocks by the door
+        for x in (x0 - 3, x0 - 1):
+            b.put(x, 0, z0 - 3, f"{w}_fence")
+        b.put(x0 - 2, 0, z0 - 3, f"{w}_trapdoor", facing="north", half="top", open="false", powered="false", waterlogged="false")
+        b.put(x0 - 3, 1, z0 - 3, f"{w}_slab", type="bottom", waterlogged="false")
+        b.put(x0 - 2, 1, z0 - 3, f"{w}_slab", type="bottom", waterlogged="false")
+        b.put(x0 - 1, 1, z0 - 3, f"{w}_slab", type="bottom", waterlogged="false")
+    return b.b
+
+
+# The tilting yard inside the walls (user, 2026-11-25: tournaments also inside the castle): a smaller list north of
+# the keep, a tilt with a lane each side, a low fence round it, a stand on the south side and banners at the ends.
+LISTS = (-30, -38, 3, -27)
+
+
+def lists_yard(style, level):
+    b = B()
+    x0, z0, x1, z1 = LISTS
+    w = STYLES[style]["wood"]
+    log = MAT[style]["log"]
+    tz = (z0 + z1) // 2 - 1
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            b.put(x, -1, z, "coarse_dirt" if abs(z - tz) <= 2 and x0 + 3 <= x <= x1 - 3 else "grass_block", snowy="false")
+    for x in range(x0 + 4, x1 - 3):               # the tilt
+        b.put(x, 0, tz, f"{w}_fence")
+        if x % 4 == 0:
+            b.put(x, 1, tz, f"{w}_fence")
+    for x in range(x0 + 1, x1):                   # the fence round the lists, open at the ends
+        for z in (z0 + 1, z1 - 3):
+            if x not in (x0 + 1, x1 - 1):
+                b.put(x, 0, z, f"{w}_fence")
+    for x in range(x0 + 8, x1 - 7):               # the stand: two steps of benches facing the tilt
+        b.put(x, 0, z1 - 1, f"{w}_stairs", facing="north", half="bottom", shape="straight", waterlogged="false")
+        b.put(x, 0, z1, f"{w}_planks")
+        b.put(x, 1, z1, f"{w}_stairs", facing="north", half="bottom", shape="straight", waterlogged="false")
+    for x, z in ((x0 + 1, z0 + 1), (x1 - 1, z0 + 1), (x0 + 1, z1 - 3), (x1 - 1, z1 - 3)):
+        for y in range(0, 4):
+            b.put(x, y, z, log, axis="y")
+        b.put(x, 4, z, "{color}_banner", rotation="0")
     return b.b
 
 
@@ -6158,9 +6234,75 @@ def postern(style, level):
 # branch along the south cross street to the storehouse. The mod lays them on the street plan's heights and keeps only
 # the part it can reach from the gate (a step of more than one block or a half step ends the line); stops past the end
 # are left out. Kept in step with Tram.java (MAIN_X, MAIN_Z, BRANCH_Z, BRANCH_X, STOPS).
-TRAM_MAIN = [(9, z) for z in range(94, 16, -1)]          # gate end first
-TRAM_BRANCH = [(x, 58) for x in range(8, -23, -1)]      # from beside the junction (9, 58) westward
-TRAM_STOPS = (("gate", (9, 91)), ("square", (9, 32)), ("castle", (9, 20)), ("storehouse", (-19, 58)))
+# The tram runs around the town just inside the wall (user, 2026-11-25: the line straight up the main street through
+# the city looked bad): a closed loop TRAM_INSET in from the wall, with stops by the gate and in the middle of the
+# west, north and east sides. The loop lies on the plateau's flat band along the wall (hills never climb there).
+TRAM_INSET = {"square": 5, "round": 7}
+TRAM_STOP_NAMES = ("gate", "west", "north", "east")
+
+
+def tram_loop():
+    """(ordered closed loop of cells, [(stop name, index in the loop, along (dx, dz), inward (dx, dz))])."""
+    import math
+    x0, x1, z0, z1 = WALL
+    k = TRAM_INSET[SHAPE[0]]
+    if not round_shape():
+        a0, a1, b0, b1 = x0 + k, x1 - k, z0 + k, z1 - k
+        path = [(x, b0) for x in range(a0, a1 + 1)] + [(a1, z) for z in range(b0 + 1, b1 + 1)]
+        path += [(x, b1) for x in range(a1 - 1, a0 - 1, -1)] + [(a0, z) for z in range(b1 - 1, b0, -1)]
+    else:
+        cx, cz, a, bb = ROUND
+        a, bb = a - k, bb - k
+        path = []
+        for i in range(12000):
+            t = 2 * math.pi * i / 12000
+            c = (round(cx + a * math.cos(t)), round(cz + bb * math.sin(t)))
+            if path and c == path[-1]:
+                continue
+            if path and c[0] != path[-1][0] and c[1] != path[-1][1]:
+                path.append((c[0], path[-1][1]))     # rails join only side by side: a step, never a corner touch
+            if not path or c != path[0]:
+                path.append(c)
+        if path[-1][0] != path[0][0] and path[-1][1] != path[0][1]:
+            path.append((path[0][0], path[-1][1]))
+        seen, out = set(), []
+        for c in path:
+            if c in seen:
+                while out and out[-1] != c:
+                    seen.discard(out.pop())
+                continue
+            out.append(c)
+            seen.add(c)
+        path = out
+    n = len(path)
+    targets = {"gate": (HEART[0] + 16, z1), "west": (x0, 38), "north": (HEART[0] + 30, z0), "east": (x1, 38)}
+    towers = tower_spots(4)
+    stops = []
+    for name in TRAM_STOP_NAMES:
+        tx, tz = targets[name]
+        best = None
+        for i, (x, z) in enumerate(path):
+            # a stop needs a straight stretch of 9 rails (its platform and powered rails)
+            half = 3 if round_shape() else 4
+            run = [path[(i + d) % n] for d in range(-half, half + 1)]
+            if not (all(c[0] == x for c in run) or all(c[1] == z for c in run)):
+                continue
+            along_x = run[0][1] == z
+            near = 6 if round_shape() else 8           # the station's roof reaches five along the line
+            if any((abs(x - tx_) <= near and abs(z - tz_) <= 14) if along_x else (abs(z - tz_) <= near and abs(x - tx_) <= 14) for tx_, tz_ in towers):
+                continue                               # clear of the wall's towers
+            dd = (x - tx) ** 2 + (z - tz) ** 2
+            if best is None or dd < best[0]:
+                best = (dd, i)
+        i = best[1]
+        x, z = path[i]
+        nx, nz = path[(i + 1) % n]
+        u = (nx - x, nz - z)
+        v = (-u[1], u[0])
+        if (HEART[0] - x) * v[0] + (0 - z) * v[1] < 0:
+            v = (-v[0], -v[1])                         # the platform lies on the town's side
+        stops.append((name, i, u, v))
+    return path, stops
 
 
 def tram(style, level):
@@ -6174,20 +6316,24 @@ def tram(style, level):
     FOLLOW.add(id(b.b))
     ANCHORS_OF[id(b.b)] = b.anchors
     names = {(1, 0): "east", (-1, 0): "west", (0, 1): "south", (0, -1): "north"}
-    stop_cols = {}
-    for name, (cx, cz) in TRAM_STOPS:
-        u, v = ((0, 1), (1, 0)) if name != "storehouse" else ((1, 0), (0, 1))   # along the line, toward the platform
-        for k in (-1, 0, 1):
-            stop_cols[(cx + u[0] * k, cz + u[1] * k)] = "north_south" if u[1] else "east_west"
-    for line, shape in ((TRAM_MAIN, "north_south"), (TRAM_BRANCH, "east_west")):
-        for x, z in line:
-            b.anchor = (x, z)
-            if level >= 2 and (x, z) in stop_cols:
-                b.put(x, 0, z, "powered_rail", shape=shape, powered="false", waterlogged="false")
-            else:
-                b.put(x, 0, z, "rail", shape=shape, waterlogged="false")
-    for name, (cx, cz) in TRAM_STOPS:
-        u, v = ((0, 1), (1, 0)) if name != "storehouse" else ((1, 0), (0, 1))
+    path, stops = tram_loop()
+    n = len(path)
+    stop_cols = set()
+    for name, i, u, v in stops:
+        for d in (-1, 0, 1):
+            stop_cols.add(path[(i + d) % n])
+    for i, (x, z) in enumerate(path):
+        px, pz = path[i - 1]
+        nx, nz = path[(i + 1) % n]
+        straight = px == nx or pz == nz
+        shape = "north_south" if px == x == nx or (straight and px == nx) else "east_west"
+        b.anchor = (x, z)
+        if level >= 2 and (x, z) in stop_cols and straight:
+            b.put(x, 0, z, "powered_rail", shape=shape, powered="false", waterlogged="false")
+        else:
+            b.put(x, 0, z, "rail", shape=shape, waterlogged="false")   # the mod turns curves and slopes (Tram.java)
+    for name, i, u, v in stops:
+        cx, cz = path[i]
         b.anchor = (cx, cz)
 
         def at(i, j, y, block, **props):        # i along the line, j toward the platform
@@ -6656,7 +6802,57 @@ def lair(style, level):
     return b.b
 
 
-def write_layout(jobs, plots):
+def tram_json():
+    """The tram loop for layout.json: its cells in order and its stops (name, index in the loop)."""
+    path, stops = tram_loop()
+    return {"loop": [list(c) for c in path], "stops": [[name, i] for name, i, u, v in stops]}
+
+
+def greenery(jobs, shape):
+    """Spots for the town's own greenery (user, 2026-11-25: the empty grass inside the castle should get trees, flowers
+    and bushes): cells inside the walls that no building, street or lane of any style ever takes, with room around.
+    [[x, z, kind]] with kind 0 a tree, 1 a patch of flowers, 2 a bush."""
+    from collections import deque
+    set_shape(shape)
+    try:
+        path, ring, inside = ring_info()
+        taken = set(ring) | set(tram_loop()[0])
+        for style, name, blocks, *_ in jobs:
+            if name.startswith("tent_") or track_of(name) == "tram":
+                continue
+            for (x, y, z), v in blocks.items():
+                if -1 <= y <= 4 and v[0] != "minecraft:air" or y == -1:
+                    taken.add((x, z))
+        dist = {c: 0 for c in taken}
+        q = deque(taken)
+        while q:
+            c = q.popleft()
+            d = dist[c]
+            if d >= 9:
+                continue
+            for n in ((c[0] + 1, c[1]), (c[0] - 1, c[1]), (c[0], c[1] + 1), (c[0], c[1] - 1)):
+                if n not in dist:
+                    dist[n] = d + 1
+                    q.append(n)
+        x0, x1, z0, z1 = WALL
+        free = [c for c in inside if dist.get(c, 99) >= 2 and x0 + 9 <= c[0] <= x1 - 9 and z0 + 9 <= c[1] <= z1 - 9]
+        h = lambda c: (c[0] * 73856093 ^ c[1] * 19349663) % 1000003
+        free.sort(key=h)
+        out, trees, small = [], [], []
+        for c in free:
+            if dist.get(c, 99) >= 5 and all(abs(c[0] - t[0]) + abs(c[1] - t[1]) >= 14 for t in trees):
+                trees.append(c)
+                out.append([c[0], c[1], 0])
+        for c in free:
+            if all(abs(c[0] - t[0]) + abs(c[1] - t[1]) >= 5 for t in trees) and all(abs(c[0] - t[0]) + abs(c[1] - t[1]) >= 7 for t in small):
+                small.append(c)
+                out.append([c[0], c[1], 2 if h(c) % 3 == 0 else 1])
+        return out
+    finally:
+        set_shape("square")
+
+
+def write_layout(jobs, plots, round_jobs=()):
     """kingdomquest/layout.json: the site plan the mod reads (Layout.java), in the frame of tools/buildings.py (the heart
     at HEART): the wall ring, the gate, the towers, every track's plot and move, the square, the keep's plot and
     reserved plots."""
@@ -6684,7 +6880,9 @@ def write_layout(jobs, plots):
          "houses": {st: [list(r) for r in rs] for st, rs in sorted(HOUSE_RECTS.items())},
          # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
          "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own in ROAD_TRUNKS
-                     if name != "plaza" and not name.startswith("place_")]}
+                     if name != "plaza" and not name.startswith("place_")],
+         "tram": tram_json(),
+         "green": greenery(jobs, "square")}
     # the round castle's ring: its box, the ellipse (centre x, z, half axes), the towers and the streets (the main
     # street runs on to its gate)
     set_shape("round")
@@ -6692,7 +6890,9 @@ def write_layout(jobs, plots):
         j["round"] = {"wall": list(WALL), "ellipse": list(ROUND), "gate": [HEART[0], WALL[3]],
                       "towers": {str(lv): [list(t) for t in tower_spots(lv)] for lv in (2, 4)},
                       "streets": [[xa, za, xb, zb, 0 if axis == "x" else 1] for name, (xa, xb), (za, zb), (axis, line), par, own
-                                  in ROAD_TRUNKS if name != "plaza" and not name.startswith("place_")]}
+                                  in ROAD_TRUNKS if name != "plaza" and not name.startswith("place_")],
+                      "tram": tram_json(),
+                      "green": greenery([j for j in jobs if track_of(j[1]) not in SHAPED_TRACKS] + list(round_jobs), "round")}
     finally:
         set_shape("square")
     with open(os.path.join(OUT, "..", "layout.json"), "w") as f:
@@ -6767,7 +6967,7 @@ def to_json(blocks, seconds, storage=None, animals=None, pads=None):
 SECONDS = {1: 60, 2: 90, 3: 150}
 
 # what the castle's shape changes: these get round templates (<style>_round/); the rest is shared
-SHAPED_TRACKS = ("walls", "gate", "postern", "roads", "lamps")
+SHAPED_TRACKS = ("walls", "gate", "postern", "roads", "lamps", "tram")
 
 
 def shaped_jobs(style, key):
@@ -6780,6 +6980,8 @@ def shaped_jobs(style, key):
     out.append((key, "gate_5", lava_trap(style, 5), 240, None, None))
     for level in (1, 2, 3):
         out.append((key, f"postern_{level}", postern(style, level), 120, None, None))
+    for level in (1, 2, 3):
+        out.append((key, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
     return out
 
 
@@ -6874,6 +7076,9 @@ def build_jobs(styles=None):
         for level in (1, 2, 3):
             jobs.append((style, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
         jobs.append((style, "tourney_1", tourney(style, 1), 600, None, None))
+        jobs.append((style, "lists_1", lists_yard(style, 1), 300, None, None))
+        for level in (1, 2):
+            jobs.append((style, f"jail_{level}", jail(style, level), 300, None, None))
         for name in OUTPOSTS:
             for level in (1, 2):
                 jobs.append((style, f"{name}_{level}", outpost(style, name, level), 300 + 120 * level, None, None))
@@ -6955,7 +7160,7 @@ if __name__ == "__main__":
                     g[p] = v
             os.makedirs("build/previews", exist_ok=True)
             render(g, size, 0, 3, bg=(170, 200, 230, 255)).save(f"build/previews/{style}_{name}.png")
-    write_layout(jobs, plots)
+    write_layout(jobs, plots, round_jobs)
     for style, level in DOCK_JOBS:
         blocks = dock(style, level)
         nb, heart, size, _ = normalize(blocks)

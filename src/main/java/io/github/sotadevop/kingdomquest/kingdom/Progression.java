@@ -295,6 +295,14 @@ public final class Progression {
 				Map.entry("tourney", List.of(
 					new Step("tourney", "tourney_1", 1, "kingdomquest.trade.tourney_1", 9, null, null,
 							List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.WOOL, "wool", 32), item(Items.TARGET, 3), item(Items.EMERALD, 24))))),
+				Map.entry("lists", List.of(
+					new Step("lists", "lists_1", 1, "kingdomquest.trade.lists_1", 9, null, null,
+							List.of(tag(ItemTags.LOGS, "logs", 32), tag(ItemTags.WOOL, "wool", 8), item(Items.EMERALD, 12))))),
+				Map.entry("jail", List.of(
+					new Step("jail", "jail_1", 1, "kingdomquest.trade.jail_1", 8, null, null,
+							List.of(item(Items.IRON_BARS, 24), item(Items.STONE_BRICKS, 64), item(Items.IRON_INGOT, 8))),
+					new Step("jail", "jail_2", 2, "kingdomquest.trade.jail_2", 9, null, null,
+							List.of(tag(ItemTags.PLANKS, "planks", 16), item(Items.EMERALD, 8))))),
 				Map.entry("archaeology", List.of(
 					new Step("archaeology", "archaeology_1", 1, "kingdomquest.trade.archaeology_1", 7, adv("adventure/salvage_sherd"), "kingdomquest.req.sherd", List.of(item(Items.BRUSH, 1), item(Items.DECORATED_POT, 2), item(Items.SANDSTONE, 32))),
 					new Step("archaeology", "archaeology_2", 2, "kingdomquest.trade.archaeology_2", 8, adv("adventure/craft_decorated_pot_using_only_sherds"), "kingdomquest.req.pot", List.of(item(Items.CHISELED_BOOKSHELF, 2), item(Items.BRUSH, 1))))),
@@ -394,7 +402,7 @@ public final class Progression {
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
 			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM,
-			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney", "quarry", "lumbercamp", "minecamp");
+			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney", "lists", "jail", "quarry", "lumbercamp", "minecamp");
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

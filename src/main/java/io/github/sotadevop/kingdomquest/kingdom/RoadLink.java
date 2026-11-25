@@ -89,7 +89,21 @@ final class RoadLink {
 		if (JOBS.containsKey(id)) {
 			return;
 		}
-		BlockPos start = gateExit(from);
+		// from the way out that gives the shortest road: the gate or a side gate
+		List<BlockPos[]> route = null;
+		double shortest = Double.MAX_VALUE;
+		for (BlockPos[] exit : Settlements.exits(from)) {
+			List<BlockPos[]> legs = legs(from, exit[0], exit[1], end);
+			double len = 0;
+			for (BlockPos[] leg : legs) {
+				len += Math.sqrt(leg[0].distSqr(leg[1]));
+			}
+			if (len < shortest - 8) { // the gate unless a side gate is clearly shorter
+				shortest = len;
+				route = legs;
+			}
+		}
+		BlockPos start = route.get(0)[0];
 		if (Math.sqrt(end.distSqr(start)) > MAX_LENGTH) {
 			if (player != null) {
 				player.sendOverlayMessage(Component.translatable("kingdomquest.link.too_far"));
@@ -98,7 +112,7 @@ final class RoadLink {
 		}
 		Settlements.putState(server, from.withName(PREFIX + key, end.getX() + "," + end.getY() + "," + end.getZ()));
 		List<BlockPos> line = new ArrayList<>();
-		for (BlockPos[] leg : legs(from, start, end)) {
+		for (BlockPos[] leg : route) {
 			int dx = leg[1].getX() - leg[0].getX();
 			int dz = leg[1].getZ() - leg[0].getZ();
 			int n = Math.max(1, Math.max(Math.abs(dx), Math.abs(dz)));
@@ -120,9 +134,8 @@ final class RoadLink {
 	 * end, around the castle (its ring and moat with 10 to spare) by one or two of its corners if the straight way
 	 * would cross it. Legs as {from, to}.
 	 */
-	static List<BlockPos[]> legs(Settlement s, BlockPos start, BlockPos end) {
+	static List<BlockPos[]> legs(Settlement s, BlockPos start, BlockPos out, BlockPos end) {
 		Rotation turn = Rotation.values()[s.rotation()];
-		BlockPos out = Template.rotate(new BlockPos(0, 0, 1), turn);
 		BlockPos first = start.offset(out.getX() * 12, 0, out.getZ() * 12);
 		BlockPos a = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[0] - 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[1] - 22), turn));
 		BlockPos b = s.heart().offset(Template.rotate(new BlockPos(io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[2] + 22, 0, io.github.sotadevop.kingdomquest.building.Layout.ring(Settlements.round(s))[3] + 22), turn));
@@ -202,7 +215,11 @@ final class RoadLink {
 
 	// ---- building ----
 
-	/** The top block of a column and whether it is water (or lava): the road's ground. */
+	/**
+	 * The top block of a column and whether it is water (or lava): the road's ground. Trees, plants and ice spikes are
+	 * looked through (user, 2026-11-25: between packed ice spikes the road "bridged" over dry land, the spike tops
+	 * taken for banks); ice lying on water counts as the water.
+	 */
 	private static int[] surfaceAt(ServerLevel level, int x, int z) {
 		int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, top, z);
@@ -211,6 +228,16 @@ final class RoadLink {
 			if (st.getBlock() instanceof LiquidBlock) {
 				return new int[] {pos.getY(), 1};
 			}
+			if (st.is(Blocks.ICE) || st.is(Blocks.FROSTED_ICE)) {
+				BlockState under = level.getBlockState(pos.below());
+				if (under.getBlock() instanceof LiquidBlock || under.is(Blocks.ICE)) {
+					return new int[] {pos.getY() - 1, 1};
+				}
+			}
+			if (iceSpike(level, pos, st)) {
+				pos.move(0, -1, 0);
+				continue;
+			}
 			if (!st.isAir() && !st.canBeReplaced() && !st.is(BlockTags.LEAVES) && !st.is(BlockTags.LOGS) && st.isSolid()) {
 				return new int[] {pos.getY(), 0};
 			}
@@ -218,6 +245,16 @@ final class RoadLink {
 		}
 		return new int[] {pos.getY(), 0};
 	}
+
+	/**
+	 * Packed or blue ice: ice spikes and glaciers, never ground a road or a site stands on (user, 2026-11-25: the road and
+	 * the walls were built up and over ice spikes). Under it lies the land (snow, dirt, stone); the builders clear it.
+	 */
+	static boolean iceSpike(ServerLevel level, BlockPos pos, BlockState st) {
+		// only the spikes of the ice spikes biome: icebergs and glaciers elsewhere stay what they are
+		return (st.is(Blocks.PACKED_ICE) || st.is(Blocks.BLUE_ICE)) && level.getBiome(pos).getRegisteredName().contains("ice_spikes");
+	}
+
 
 	/**
 	 * Water is crossed straight, at a right angle like a real bridge (user, 2026-11-18: a diagonal bridge had zigzag
@@ -246,35 +283,56 @@ final class RoadLink {
 				if (j >= n) {
 					break; // the end lies in water: nothing to join
 				}
-				BlockPos a = out.get(i - 1);
 				boolean straight = true;
 				for (int k = i; k <= j; k++) {
-					straight &= out.get(k).getX() == a.getX() || out.get(k).getZ() == a.getZ();
+					straight &= out.get(k).getX() == out.get(i - 1).getX() || out.get(k).getZ() == out.get(i - 1).getZ();
 				}
-				if (straight) {
-					continue;
-				}
+				// the narrowest straight crossing near here (user, 2026-11-25: fix the bridges reliably): from a bank cell up
+				// to 12 back along the road, east, west, north or south, a few dry blocks up to the water, across, and land
 				Direction best = null;
-				int bestLen = Integer.MAX_VALUE;
-				for (Direction d : new Direction[] {Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH}) {
-					// it must lead on: towards the far bank of the old crossing and the road's end
-					int toward = (out.get(j).getX() - a.getX()) * d.getStepX() + (out.get(j).getZ() - a.getZ()) * d.getStepZ();
-					int onward = (end.getX() - a.getX()) * d.getStepX() + (end.getZ() - a.getZ()) * d.getStepZ();
-					if (toward <= 0 || onward <= 0) {
-						continue;
-					}
-					int len = 1;
-					while (len < 96 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 1) {
-						len++;
-					}
-					if (len < 96 && len < bestLen) {
-						bestLen = len;
-						best = d;
+				int bestLen = 0, bestFrom = i - 1;
+				double bestCost = Double.MAX_VALUE;
+				int wetHere = j - i;
+				for (int ia = i - 1; ia >= Math.max(0, i - 13); ia--) {
+					BlockPos a = out.get(ia);
+					for (Direction d : new Direction[] {Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH}) {
+						// it must lead on: towards the far bank of the old crossing and the road's end
+						int toward = (out.get(j).getX() - a.getX()) * d.getStepX() + (out.get(j).getZ() - a.getZ()) * d.getStepZ();
+						int onward = (end.getX() - a.getX()) * d.getStepX() + (end.getZ() - a.getZ()) * d.getStepZ();
+						if (toward <= 0 || onward <= 0) {
+							continue;
+						}
+						int len = 1, dry = 0, water = 0;
+						while (len < 96 && water == 0 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 0) {
+							dry++;
+							len++;
+							if (dry > 6) {
+								break;
+							}
+						}
+						if (dry > 6) {
+							continue; // no water ahead this way
+						}
+						while (len < 96 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 1) {
+							water++;
+							len++;
+						}
+						if (len >= 96 || water == 0) {
+							continue;
+						}
+						double cost = 2.0 * water + dry + 0.5 * (i - 1 - ia);
+						if (cost < bestCost && (straight ? water < wetHere : true)) {
+							bestCost = cost;
+							bestLen = len;
+							best = d;
+							bestFrom = ia;
+						}
 					}
 				}
-				if (best == null) {
+				if (best == null || straight && 2.0 * wetHere <= bestCost) {
 					continue;
 				}
+				BlockPos a = out.get(bestFrom);
 				BlockPos land = new BlockPos(a.getX() + best.getStepX() * bestLen, a.getY(), a.getZ() + best.getStepZ() * bestLen);
 				int m = j; // where the old line goes on, nearest the landing
 				for (int k = j; k < n; k++) {
@@ -282,7 +340,7 @@ final class RoadLink {
 						m = k;
 					}
 				}
-				List<BlockPos> next = new ArrayList<>(out.subList(0, i));
+				List<BlockPos> next = new ArrayList<>(out.subList(0, bestFrom + 1));
 				for (int k = 1; k <= bestLen; k++) {
 					next.add(new BlockPos(a.getX() + best.getStepX() * k, a.getY(), a.getZ() + best.getStepZ() * k));
 				}
@@ -303,6 +361,59 @@ final class RoadLink {
 		return out;
 	}
 
+	/**
+	 * The road's height over land, in half blocks, from the ground's: no single-block bumps (a boulder, a stump), and
+	 * at most half a block up or down per block where the land allows it, so the road climbs on slabs instead of steps
+	 * (user, 2026-11-25: a hillside road went up in full-block steps); never more than 4 blocks off the ground, and
+	 * never a full block per block more. Crossings ({@code w}) are left out: the bridges set their own heights.
+	 */
+	static int[] smooth(int[] g, boolean[] w) {
+		int n = g.length;
+		int[] t = new int[n];
+		for (int i = 0; i < n; i++) {
+			t[i] = 2 * g[i] + 2;
+		}
+		for (int i = 0; i < n; ) {
+			if (w[i]) {
+				i++;
+				continue;
+			}
+			int j = i;
+			while (j < n && !w[j]) {
+				j++;
+			}
+			int len = j - i;
+			int[] s = new int[len];
+			for (int k = 0; k < len; k++) { // the middle of five: a bump of one or two blocks is gone
+				int[] win = new int[5];
+				for (int d = -2; d <= 2; d++) {
+					win[d + 2] = t[i + Math.max(0, Math.min(len - 1, k + d))];
+				}
+				java.util.Arrays.sort(win);
+				s[k] = win[2];
+			}
+			int[] lo = s.clone(), hi = s.clone();
+			for (int k = 1; k < len; k++) {
+				lo[k] = Math.min(lo[k], lo[k - 1] + 1);
+				hi[k] = Math.max(hi[k], hi[k - 1] - 1);
+			}
+			for (int k = len - 2; k >= 0; k--) {
+				lo[k] = Math.min(lo[k], lo[k + 1] + 1);
+				hi[k] = Math.max(hi[k], hi[k + 1] - 1);
+			}
+			for (int k = 0; k < len; k++) {
+				int m = Math.floorDiv(lo[k] + hi[k], 2);
+				int ground = t[i + k];
+				t[i + k] = Math.max(ground - 8, Math.min(ground + 8, m));
+			}
+			for (int k = 1; k < len; k++) {
+				t[i + k] = Math.max(t[i + k - 1] - 2, Math.min(t[i + k - 1] + 2, t[i + k]));
+			}
+			i = j;
+		}
+		return t;
+	}
+
 	/** Water a boat passes under a bridge's arches: the deck lies this many blocks above the water's top block. */
 	private static final int DECK_ABOVE_WATER = 4;
 
@@ -314,6 +425,30 @@ final class RoadLink {
 	private static void profile(ServerLevel level, Job job) {
 		// through its waystations (chosen now on a new road, kept on one laid again), then straight over the water
 		List<BlockPos> line = straighten(level, Roadside.route(level, job.settlement(), job.key(), job.line()));
+		// where the road runs over the site's plan, that land gets its planned height first (the staged shaping may
+		// not have reached it yet): the road isn't cut into land that is about to be levelled around it
+		for (Settlement o : Settlements.all(level.getServer())) {
+			if (o.id().toString().equals(job.settlement())) {
+				Grade plan = Grade.of(level.getServer(), o);
+				if (plan != null) {
+					List<Long> cols = new ArrayList<>();
+					int bx0 = Integer.MAX_VALUE, bz0 = Integer.MAX_VALUE, bx1 = Integer.MIN_VALUE, bz1 = Integer.MIN_VALUE;
+					for (BlockPos p : line) {
+						if (plan.topAt(p.getX(), p.getZ()) != Integer.MIN_VALUE) {
+							cols.add(BlockPos.asLong(p.getX(), 0, p.getZ()));
+							bx0 = Math.min(bx0, p.getX());
+							bz0 = Math.min(bz0, p.getZ());
+							bx1 = Math.max(bx1, p.getX());
+							bz1 = Math.max(bz1, p.getZ());
+						}
+					}
+					if (!cols.isEmpty()) {
+						plan.claim(cols, 4);
+						plan.ready(level, o, bx0 - 8, bz0 - 8, bx1 + 8, bz1 + 8, Integer.MAX_VALUE);
+					}
+				}
+			}
+		}
 		int n = line.size();
 		int[] g = new int[n];
 		boolean[] w = new boolean[n];
@@ -324,28 +459,76 @@ final class RoadLink {
 			w[i] = liquid[i] = sa[1] == 1;
 		}
 		int[] deckOf = new int[n];
-		// a hole in the ground (a cave mouth, a ravine): where the land drops 4 or more in one step and comes back up
-		// within 48 blocks, the road keeps its height and crosses on a bridge, the same as over water
+		// a hole in the ground (a ravine, a cave mouth): where the land drops 5 or more in one step and comes back up
+		// within 32 blocks, after 3 or more, the road keeps its height and crosses on a bridge, the same as over water
 		for (int i = 1; i < n; i++) {
-			if (w[i] || w[i - 1] || g[i - 1] - g[i] < 4) {
+			if (w[i] || w[i - 1] || g[i - 1] - g[i] < 5) {
 				continue;
 			}
 			int j = i;
-			while (j < n && j < i + 48 && !w[j] && g[j] < g[i - 1] - 2) {
+			while (j < n && j < i + 32 && !w[j] && g[j] < g[i - 1] - 2) {
 				j++;
 			}
-			if (j >= n || j >= i + 48 || w[j]) {
-				continue; // no far side: a slope, not a hole
+			if (j >= n || j >= i + 32 || w[j] || j - i < 3) {
+				continue; // no far side, or a mere step: a slope, not a hole
 			}
 			for (int k = i; k < j; k++) {
 				w[k] = true;
 			}
 			i = j;
 		}
-		int[] t = new int[n];
-		for (int i = 0; i < n; i++) {
-			t[i] = 2 * g[i] + 2;
+		// one bridge for one river (user, 2026-11-25: a road by the river crossed on many short bridges, arches sunk into
+		// the banks between): water a few blocks apart, with only low land between (a sandbar, a bank's edge), is one crossing
+		for (int i = 1; i < n; i++) {
+			if (w[i] || !w[i - 1]) {
+				continue;
+			}
+			int j = i;
+			while (j < n && !w[j] && j - i < 4) {
+				j++;
+			}
+			if (j < n && w[j] && j - i <= 3) {
+				int water = Integer.MIN_VALUE;
+				for (int k = Math.max(0, i - 3); k < Math.min(n, j + 3); k++) {
+					if (liquid[k]) {
+						water = Math.max(water, g[k]);
+					}
+				}
+				boolean low = true;
+				for (int k = i; k < j; k++) {
+					low &= g[k] <= water + 2;
+				}
+				if (low) {
+					for (int k = i; k < j; k++) {
+						w[k] = true;
+					}
+				}
+			}
+			i = j - 1;
 		}
+		// a stream one or two blocks wide gets no bridge (the same complaint: a bridge with ramps over a trickle): the
+		// road goes on at the banks' height on stone laid down into the water
+		for (int i = 0; i < n; ) {
+			if (!w[i]) {
+				i++;
+				continue;
+			}
+			int j = i;
+			boolean allWater = true;
+			while (j < n && w[j]) {
+				allWater &= liquid[j];
+				j++;
+			}
+			if (j - i <= 2 && allWater && i > 0 && j < n) {
+				int bank = Math.max(g[i - 1], g[j]);
+				for (int k = i; k < j; k++) {
+					w[k] = false;
+					g[k] = Math.max(g[k] + 1, bank);
+				}
+			}
+			i = j;
+		}
+		int[] t = smooth(g, w);
 		// the road starts level with the gate's landing (the heart's level) and meets the land on a ramp of half a
 		// block per block, cut into a rise or built up over a dip: the landing built later lies flush with it (user,
 		// 2026-11-18: a road laid on the hill in front of a young castle was left far above or below its gate)
@@ -366,8 +549,11 @@ final class RoadLink {
 			int j = i;
 			int deck = Integer.MIN_VALUE;
 			while (j < n && w[j]) {
-				deck = Math.max(deck, liquid[j] ? g[j] + DECK_ABOVE_WATER : g[j]);
 				j++;
+			}
+			int above = j - i <= 6 ? 2 : DECK_ABOVE_WATER; // a short bridge lies low: short ramps
+			for (int k = i; k < j; k++) {
+				deck = Math.max(deck, liquid[k] ? g[k] + above : g[k]);
 			}
 			if (i > 0) {
 				deck = Math.max(deck, g[i - 1]); // level with the banks: never a step up off the bridge
@@ -495,10 +681,18 @@ final class RoadLink {
 							set(level, at.above(), Blocks.STONE_BRICK_SLAB.defaultBlockState());
 						}
 					} else {
-						pave(level, new BlockPos(cell.getX(), groundAt(level, cell), cell.getZ()), w, job.tier(), false);
+						int gy = groundAt(level, cell);
+						BlockPos at = new BlockPos(cell.getX(), gy, cell.getZ());
+						if (level.getBlockState(at).getBlock() instanceof LiquidBlock) { // the river's edge under a lane: stone up from the bed
+							pave(level, new BlockPos(cell.getX(), Math.max(gy, y), cell.getZ()), w, job.tier(), true);
+						} else {
+							pave(level, at, w, job.tier(), false);
+						}
 					}
 				}
-				if (raised) { // a ramp up to a bridge: an embankment with a parapet
+				// an embankment two blocks or more above the land gets a parapet; a low fill doesn't (user, 2026-11-25:
+				// railings along a road on solid ground)
+				if (raised && t >= 2 * ground + 6) { // a ramp up to a bridge: an embankment with a parapet
 					for (int w : new int[] {-2, 2}) {
 						BlockPos rail = new BlockPos(p.getX(), half ? y + 1 : y, p.getZ()).relative(side, w);
 						support(level, rail);
@@ -562,8 +756,8 @@ final class RoadLink {
 					set(level, cell.above(2), Blocks.LANTERN.defaultBlockState());
 				}
 			}
-			if (pier) {
-				support(level, cell); // a pier down to the riverbed
+			if (pier || bankUnder(level, cell)) {
+				support(level, cell); // a pier down to the riverbed; over the bank, stone down to it (no arch sunk in the bank)
 			} else if (dist == 1) { // the arch springs from the pier: two steps of upside-down stairs
 				BlockState arch = Blocks.STONE_BRICK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, toSupport).setValue(StairBlock.HALF, Half.TOP);
 				set(level, cell.below(), arch);
@@ -577,6 +771,20 @@ final class RoadLink {
 		if (job.tier() >= 2 && len <= 40 && (Style.FROZEN.equals(style) || Style.HIGHLAND.equals(style)) && Roadside.regular(job.key())) {
 			cover(level, p, forward, side, deck, pos, len, style);
 		}
+	}
+
+	/** Land (not water, not air) within two blocks under a bridge's deck: the bank, where the bridge rests on stone. */
+	private static boolean bankUnder(ServerLevel level, BlockPos deck) {
+		for (int d = 1; d <= 2; d++) {
+			BlockState st = level.getBlockState(deck.below(d));
+			if (st.getBlock() instanceof LiquidBlock) {
+				return false;
+			}
+			if (!st.isAir() && !st.canBeReplaced() && st.isSolid()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

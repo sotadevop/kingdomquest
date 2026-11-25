@@ -938,7 +938,7 @@ final class Roadside {
 	}
 
 	/** Sign wood per region (tools/roadside.py RS sign). */
-	private static Block wallSign(String style) {
+	static Block wallSign(String style) {
 		return switch (style) {
 			case Style.ARID -> Blocks.ACACIA_WALL_SIGN;
 			case Style.HIGHLAND -> Blocks.DARK_OAK_WALL_SIGN;
@@ -947,7 +947,7 @@ final class Roadside {
 		};
 	}
 
-	private static Block postWood(String style) {
+	static Block postWood(String style) {
 		return switch (style) {
 			case Style.ARID -> Blocks.ACACIA_FENCE;
 			case Style.WILD -> Blocks.BAMBOO_FENCE;
@@ -957,7 +957,7 @@ final class Roadside {
 	}
 
 	/** A free spot on natural ground beside the road, {@code off} blocks to one side of {@code cell}, or null. */
-	private static BlockPos besideRoad(ServerLevel level, BlockPos cell, Direction side, int height) {
+	static BlockPos besideRoad(ServerLevel level, BlockPos cell, Direction side, int height) {
 		for (int off : new int[] {3, -3, 4, -4}) {
 			BlockPos col = cell.relative(side, off);
 			int[] g = ground(level, col.getX(), col.getZ());

@@ -76,8 +76,8 @@ public class RealmScreen extends Screen {
 	private int tab = lastTab;
 	/** First row (or row of cards) shown in the people and animal lists; the mouse wheel moves it. */
 	private int scroll;
-	/** People as cards with their 3D figure instead of rows (user, 2026-11-18); remembered while the game runs. */
-	private static boolean cards;
+	/** People as cards with their 3D figure instead of rows (user, 2026-11-18; the default since 2026-11-25); remembered while the game runs. */
+	private static boolean cards = true;
 	/** The person whose look is being chosen (the skin picker is shown over the list), or null. */
 	private String picking;
 	private int pickScroll;
@@ -294,7 +294,7 @@ public class RealmScreen extends Screen {
 						.bounds(this.left + 162, fy, 20, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(
 								Component.translatable("kingdomquest.realm.add_skins"))).build()));
 			}
-		} else if (this.tab == 2) {
+		} else if (this.tab == 2 || this.tab == 3) {
 			this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable(cards ? "kingdomquest.realm.as_list" : "kingdomquest.realm.as_cards"), b -> {
 				cards = !cards;
 				this.scroll = 0;
@@ -358,6 +358,23 @@ public class RealmScreen extends Screen {
 		int nameW = rest * 11 / 20;
 		int x = mapX0() + 3;
 		return new int[] {x, x + nameW + 4, mapX0() + mapW() - lookW - whereW, mapX0() + mapW() - lookW, mapX0() + mapW()};
+	}
+
+	private final java.util.Map<String, net.minecraft.world.entity.LivingEntity> animals = new java.util.HashMap<>();
+
+	/** An animal's figure for its card (user, 2026-11-25: the animals as cards like the people). */
+	private net.minecraft.world.entity.LivingEntity animal(String type) {
+		return this.animals.computeIfAbsent(type, k -> {
+			Minecraft mc = Minecraft.getInstance();
+			net.minecraft.world.entity.EntityType<?> et = mc.level == null ? null
+					: net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace(k));
+			net.minecraft.world.entity.Entity e = et == null ? null : et.create(mc.level, net.minecraft.world.entity.EntitySpawnReason.LOAD);
+			if (e instanceof net.minecraft.world.entity.LivingEntity le) {
+				le.setId(-2_000_000 - this.animals.size());
+				return le;
+			}
+			return null;
+		});
 	}
 
 	private KingdomNpc model(int skin) {
@@ -697,8 +714,13 @@ public class RealmScreen extends Screen {
 		}
 	}
 
+	/** The building under the mouse on the plan (a click without dragging visits it), and where the press began. */
+	private String hoverTrack;
+	private double pressX = -1, pressY = -1;
+
 	private void drawPlot(GuiGraphicsExtractor g, int mouseX, int mouseY, Theme t) {
 		double[] f = view(1);
+		this.hoverTrack = null;
 		JsonObject hover = null;
 		JsonObject latest = null;
 		for (JsonElement e : arr("buildings")) {
@@ -757,9 +779,11 @@ public class RealmScreen extends Screen {
 		}
 		label(g, Component.translatable("kingdomquest.realm.plan_hint").getString(), mapX0() + 3, mapY0() + mapH() - 11, 0xFFE0E0E0);
 		if (hover != null) {
+			this.hoverTrack = hover.get("track").getAsString();
 			List<Component> lines = new ArrayList<>();
 			lines.add(Component.translatable(hover.get("title").getAsString()));
 			lines.add(Component.translatable("kingdomquest.realm.at", where(hover)));
+			lines.add(Component.translatable("kingdomquest.realm.visit_hint").withStyle(net.minecraft.ChatFormatting.YELLOW));
 			g.setComponentTooltipForNextFrame(this.font, lines, mouseX, mouseY);
 		} else if (inMap(mouseX, mouseY) && mouseX < mapX0() + mapW() - 18) {
 			int wx = (int) Math.floor(f[1] + (mouseX - (mapX0() + mapW() / 2.0)) / f[0]);
@@ -810,8 +834,8 @@ public class RealmScreen extends Screen {
 					t.secondary(), false);
 			return;
 		}
-		if (people && cards) {
-			drawCards(g, list, t, mouseX, mouseY);
+		if (cards) {
+			drawCards(g, list, people, t, mouseX, mouseY);
 			return;
 		}
 		int[] c = columns(people);
@@ -865,7 +889,7 @@ public class RealmScreen extends Screen {
 	}
 
 	/** People as cards: their figure (turning to the mouse), name, work and the button for a new look. */
-	private void drawCards(GuiGraphicsExtractor g, JsonArray list, Theme t, int mouseX, int mouseY) {
+	private void drawCards(GuiGraphicsExtractor g, JsonArray list, boolean people, Theme t, int mouseX, int mouseY) {
 		int cols = cardCols(), rows = cardRows(), w = cardW();
 		int totalRows = (list.size() + cols - 1) / cols;
 		this.scroll = Math.max(0, Math.min(this.scroll, totalRows - rows));
@@ -880,13 +904,16 @@ public class RealmScreen extends Screen {
 				int y = mapY0() + r * (CARD_H + CARD_GAP);
 				boolean over = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + CARD_H;
 				Ui.roundedFill(g, x, y, w, CARD_H, 3, over ? 0x40FFFFFF : 0x22FFFFFF);
-				KingdomNpc m = model(o.get("skin").getAsInt());
+				net.minecraft.world.entity.LivingEntity m = people ? model(o.get("skin").getAsInt()) : animal(o.get("type").getAsString());
 				if (m != null) {
-					InventoryScreen.extractEntityInInventoryFollowsMouse(g, x + 2, y + 2, x + w - 2, y + 62, 28, 0.0625f, mouseX, mouseY, m);
+					// an animal's figure is scaled to fit the card (a horse is bigger than a cat)
+					int size = people ? 28 : (int) Math.max(8, Math.min(30, 44 / Math.max(m.getBbHeight(), m.getBbWidth() * 1.2f)));
+					InventoryScreen.extractEntityInInventoryFollowsMouse(g, x + 2, y + 2, x + w - 2, y + 62, size, 0.0625f, mouseX, mouseY, m);
 				}
 				g.text(this.font, Text.fit(this.font, o.get("name").getAsString(), w - 6), x + 3, y + 64, t.text(), false);
-				g.text(this.font, Text.fit(this.font, o.get("role").getAsString(), w - 6), x + 3, y + 74, t.secondary(), false);
-				if (canChange(o)) {
+				g.text(this.font, Text.fit(this.font, people ? o.get("role").getAsString() : direction(o.get("x").getAsInt(), o.get("z").getAsInt()), w - 6), x + 3,
+						y + 74, t.secondary(), false);
+				if (people && canChange(o)) {
 					boolean on = over && mouseY >= y + CARD_H - 14;
 					Ui.roundedFill(g, x + 2, y + CARD_H - 14, w - 4, 12, 2, on ? 0x70FFFFFF : 0x38FFFFFF);
 					g.text(this.font, Text.fit(this.font, Component.translatable("kingdomquest.realm.change_look").getString(), w - 10), x + 5, y + CARD_H - 12,
@@ -978,6 +1005,10 @@ public class RealmScreen extends Screen {
 				return true;
 			}
 		}
+		if (this.tab == 1 && inMap(event.x(), event.y())) {
+			this.pressX = event.x();
+			this.pressY = event.y();
+		}
 		if (this.tab == 0 && inMap(event.x(), event.y())) {
 			double[] f = view(0);
 			for (Node n : this.nodes) {
@@ -994,6 +1025,19 @@ public class RealmScreen extends Screen {
 			}
 		}
 		return super.mouseClicked(event, doubleClick);
+	}
+
+	@Override
+	public boolean mouseReleased(MouseButtonEvent event) {
+		// a click on a building of the plan (not the end of a drag): the lord goes there (user, 2026-11-25)
+		if (this.tab == 1 && this.pressX >= 0 && Math.abs(event.x() - this.pressX) < 3 && Math.abs(event.y() - this.pressY) < 3 && this.hoverTrack != null) {
+			send("realm_visit|" + this.hoverTrack);
+			this.pressX = -1;
+			this.onClose();
+			return true;
+		}
+		this.pressX = -1;
+		return super.mouseReleased(event);
 	}
 
 	@Override
@@ -1017,7 +1061,7 @@ public class RealmScreen extends Screen {
 			if (this.picking != null) {
 				this.pickScroll += scrollY > 0 ? -1 : 1;
 			} else {
-				this.scroll += (scrollY > 0 ? -1 : 1) * (cards && this.tab == 2 ? 1 : 3);
+				this.scroll += (scrollY > 0 ? -1 : 1) * (cards && (this.tab == 2 || this.tab == 3) ? 1 : 3);
 			}
 			this.scroll = Math.max(0, this.scroll);
 			this.pickScroll = Math.max(0, this.pickScroll);

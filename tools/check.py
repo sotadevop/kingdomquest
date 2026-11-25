@@ -520,7 +520,10 @@ def run(style, mains, quiet=False):
     BOX = (bld.WALL[0] - 14, bld.WALL[1] + 14, -30, 50, bld.WALL[2] - 14, bld.WALL[3] + 16)
     found = {}
     for main in mains:
-        world = World(style, levels_at(main))
+      lv = levels_at(main)
+      # also without the side gates: their plugs keep the wall closed (user, 2026-11-25: a plug blocked the walkway)
+      for levels in ([lv, dict(lv, postern=0)] if lv.get("postern") else [lv]):
+        world = World(style, levels)
         out = []
         check_overlap(world, out)
         check_support(world, out)
@@ -528,7 +531,7 @@ def run(style, mains, quiet=False):
         check_walk(world, out, quiet)
         check_floating(world, out)
         for kind, text in out:
-            found.setdefault((kind, text), []).append(main)
+            found.setdefault((kind, text + ("" if levels is lv else " [no side gates]")), []).append(main)
     return found
 
 

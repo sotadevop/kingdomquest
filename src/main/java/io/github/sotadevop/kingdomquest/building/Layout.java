@@ -25,6 +25,12 @@ import java.util.Map;
  * building was first drawn, and {@link #at(BlockPos, Rotation, String, int, int, int)} moves them with the track.
  */
 public final class Layout {
+	/** The tram loop (square, round): its cells in order, base frame. */
+	private static final int[][][] TRAM_LOOP = new int[2][][];
+	private static final String[][] TRAM_STOP_NAMES = new String[2][];
+	private static final int[][] TRAM_STOP_AT = new int[2][];
+	/** The greenery spots (square, round): x, z, kind (0 tree, 1 flowers, 2 bush), base frame. */
+	private static final int[][][] GREEN = new int[2][][];
 	public static final int HX;
 	public static final int HZ;
 	/** The wall ring in the base frame: x0, x1, z0, z1. */
@@ -71,6 +77,10 @@ public final class Layout {
 				ROUND_TOWERS.put(Integer.parseInt(e.getKey()), l);
 			}
 		}
+		readTram(j, 0);
+		readTram(round, 1);
+		GREEN[0] = readSpots(j.getAsJsonArray("green"));
+		GREEN[1] = readSpots(round.getAsJsonArray("green"));
 		if (round.has("streets")) {
 			round.getAsJsonArray("streets").forEach(t -> ROUND_STREETS.add(ints(t.getAsJsonArray(), new int[5])));
 		}
@@ -104,6 +114,56 @@ public final class Layout {
 	}
 
 	private Layout() {
+	}
+
+
+	private static void readTram(JsonObject o, int shape) {
+		if (!o.has("tram")) {
+			TRAM_LOOP[shape] = new int[0][];
+			TRAM_STOP_NAMES[shape] = new String[0];
+			TRAM_STOP_AT[shape] = new int[0];
+			return;
+		}
+		JsonObject t = o.getAsJsonObject("tram");
+		JsonArray loop = t.getAsJsonArray("loop");
+		TRAM_LOOP[shape] = new int[loop.size()][];
+		for (int i = 0; i < loop.size(); i++) {
+			TRAM_LOOP[shape][i] = ints(loop.get(i).getAsJsonArray(), null);
+		}
+		JsonArray stops = t.getAsJsonArray("stops");
+		TRAM_STOP_NAMES[shape] = new String[stops.size()];
+		TRAM_STOP_AT[shape] = new int[stops.size()];
+		for (int i = 0; i < stops.size(); i++) {
+			TRAM_STOP_NAMES[shape][i] = stops.get(i).getAsJsonArray().get(0).getAsString();
+			TRAM_STOP_AT[shape][i] = stops.get(i).getAsJsonArray().get(1).getAsInt();
+		}
+	}
+
+	private static int[][] readSpots(JsonArray a) {
+		if (a == null) {
+			return new int[0][];
+		}
+		int[][] out = new int[a.size()][];
+		for (int i = 0; i < out.length; i++) {
+			out[i] = ints(a.get(i).getAsJsonArray(), null);
+		}
+		return out;
+	}
+
+	public static int[][] green(boolean round) {
+		return GREEN[round ? 1 : 0];
+	}
+
+	public static int[][] tramLoop(boolean round) {
+		return TRAM_LOOP[round ? 1 : 0];
+	}
+
+	public static String[] tramStops(boolean round) {
+		return TRAM_STOP_NAMES[round ? 1 : 0];
+	}
+
+	public static int[] tramStopAt(boolean round) {
+		return TRAM_STOP_AT[round ? 1 : 0];
 	}
 
 	private static void readMap(JsonObject j, String key, Map<String, int[]> into) {

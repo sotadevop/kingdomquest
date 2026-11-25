@@ -40,7 +40,7 @@ public class KingdomScreen extends Screen {
 	private static final List<Tab> TABS = List.of(
 			new Tab("kingdomquest.tab.settlement", List.of("main", "cellar", "royal", "townhall")),
 			new Tab("kingdomquest.tab.defense", List.of("walls", "gate", "barracks", "belfry")),
-			new Tab("kingdomquest.tab.guild", List.of("guild", "tourney")),
+			new Tab("kingdomquest.tab.guild", List.of("guild", "tourney", "lists", "jail")),
 			new Tab("kingdomquest.tab.streets", List.of("roads", "lamps", "postern", "tram")),
 			new Tab("kingdomquest.tab.farming", List.of("farm", "stables", "apiary", "garden")),
 			new Tab("kingdomquest.tab.resources", List.of("wood", "mine", "dock", "smelter")),
@@ -75,10 +75,18 @@ public class KingdomScreen extends Screen {
 		return lastHeart;
 	}
 
+	private static KingdomScreen last;
+
+	/** The kingdom menu last opened: where the chronicle's "Back" leads. */
+	public static KingdomScreen last() {
+		return last;
+	}
+
 	public static void open(KingdomInfoPayload info) {
 		lastHeart = info.heart();
 		RealmScreen.forget();
-		Minecraft.getInstance().setScreenAndShow(new KingdomScreen(info));
+		last = new KingdomScreen(info);
+		Minecraft.getInstance().setScreenAndShow(last);
 	}
 
 	private boolean creative() {
@@ -140,6 +148,14 @@ public class KingdomScreen extends Screen {
 			build.active = o.ready() && (this.info.percent() < 0 || creative());
 			build.visible = !o.maxed() && !o.locked();
 			this.buildButtons.add(this.addRenderableWidget(build));
+			if (o.level() > 0 && !List.of("roads", "lamps", "walls", "gate", "postern", "tram", "cellar").contains(o.track())) {
+				// go to the building (user, 2026-11-25: teleport from the building menu, in survival too)
+				Button visit = Button.builder(Component.translatable("kingdomquest.realm.visit"), b -> {
+					ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "visit|" + o.track()));
+					this.onClose();
+				}).bounds(this.left + W - 8 - 6 - 56 - 4 - 40, cardY(i) + CARD_H - 6 - 18, 40, 18).build();
+				this.buildButtons.add(this.addRenderableWidget(visit));
+			}
 		}
 		Button color = Button.builder(Component.translatable("kingdomquest.menu.color"), b ->
 				this.minecraft.setScreenAndShow(new ColorScreen(this.info.heart(), this.info.color(), this))).bounds(this.left + 8, this.top + H - 24, 60, 18).build();

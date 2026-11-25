@@ -195,19 +195,37 @@ final class Animals {
 			knight.setNoAi(true);
 			knight.startRiding(horse);
 		}
-		// the ride: each horse heads for the far end of the street, then turns back
-		for (Entity e : riders) {
+		// the ride: each horse heads for the far end of the street, then turns back, in its own lane and at its own
+		// distance from the ends (user, 2026-11-25: the knights stood bunched in one spot, all riding to the same block)
+		for (int i = 0; i < riders.size(); i++) {
+			Entity e = riders.get(i);
 			if (!(e.getVehicle() instanceof Mob horse)) {
 				e.discard(); // a knight without his horse goes back to the barracks
 				continue;
 			}
-			BlockPos target = horse.distanceToSqr(Vec3.atCenterOf(gateEnd)) < 36 ? squareEnd
-					: horse.distanceToSqr(Vec3.atCenterOf(squareEnd)) < 36 ? gateEnd
-					: horse.getNavigation().isDone() ? (level.getRandom().nextBoolean() ? gateEnd : squareEnd) : null;
+			int lane = i % 2 == 0 ? -2 : 2;
+			BlockPos a = floorOr(level, at(s, Layout.gateX() + lane, gz - 12 - (i / 2) * 6), gateEnd);
+			BlockPos b = floorOr(level, at(s, Layout.gateX() + lane, 30 + (i / 2) * 6), squareEnd);
+			BlockPos target = horse.distanceToSqr(Vec3.atCenterOf(a)) < 9 ? b
+					: horse.distanceToSqr(Vec3.atCenterOf(b)) < 9 ? a
+					: horse.getNavigation().isDone() ? (horse.distanceToSqr(Vec3.atCenterOf(a)) < horse.distanceToSqr(Vec3.atCenterOf(b)) ? b : a) : null;
 			if (target != null) {
 				horse.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, 1.0);
 			}
 		}
+		// never two knights in one spot: one that stands on another rides on
+		for (int i = 0; i < riders.size(); i++) {
+			for (int j = i + 1; j < riders.size(); j++) {
+				if (riders.get(i).getVehicle() instanceof Mob h1 && riders.get(j).getVehicle() instanceof Mob h2 && h1.distanceToSqr(h2) < 4) {
+					h2.getNavigation().stop();
+				}
+			}
+		}
+	}
+
+	private static BlockPos floorOr(ServerLevel level, BlockPos p, BlockPos fallback) {
+		BlockPos f = floor(level, p, p.getY());
+		return f != null ? f : fallback;
 	}
 
 	/** The animals the buildings came with: whatever went missing comes back. */

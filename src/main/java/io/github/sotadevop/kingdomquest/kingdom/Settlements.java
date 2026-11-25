@@ -60,6 +60,8 @@ public final class Settlements {
 	private static final int CREATIVE_TICKS = 60;
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final Map<String, List<Template.Placement>> PLACEMENTS = new HashMap<>();
+	/** Jobs whose ground was claimed for the staged shaping (once per job and server run; claiming again changes nothing). */
+	private static final Set<String> CLAIMED = new HashSet<>();
 	/** Terrain-following placements, sampled from the world when a job starts (per settlement and job). */
 	private static final Map<String, List<Template.Placement>> FOLLOWED = new HashMap<>();
 	/** Settlement id -> the columns of its moat (x, 0, z): never filled, levelled or smoothed. */
@@ -310,6 +312,9 @@ public final class Settlements {
 			return false;
 		}
 		Settlement s = found(level, s0, data.look(), data.shape(), false);
+		if (all(server).stream().filter(o -> o.owner().equals(player.getUUID())).count() <= 1) {
+			KingdomMap.give(player); // the first kingdom: the map to carry around it
+		}
 		player.sendSystemMessage(Component.translatable("kingdomquest.site.started"));
 		level.getServer().getPlayerList().broadcastSystemMessage(Component.translatable("kingdomquest.found.done", player.getDisplayName(), data.name()), false);
 		KingdomQuest.LOG.info("Settlement {} founded at {} ({})", data.name(), heart, style);
@@ -333,6 +338,7 @@ public final class Settlements {
 			}
 		}
 		plan.grade().adopt(level.getServer(), s.id());
+		plan.grade().stage(s); // the tent's yard: the rest of the site is shaped as the settlement grows
 		Chronicle.founded(level.getServer(), s);
 		if (whole) {
 			plan.grade().shapeAll(level, s);
@@ -648,7 +654,9 @@ public final class Settlements {
 			case "undo_changes" -> undoChanges(player, s);
 			case "rebuild" -> startRebuild(player, s);
 			default -> {
-				if (action.equals("chronicle")) {
+				if (action.startsWith("visit|")) {
+					KingdomMap.visit(player, s, action.substring(6));
+				} else if (action.equals("chronicle")) {
 					Chronicle.send(player, s);
 				} else if (action.equals("realm")) {
 					Realm.send(player, s);
@@ -941,9 +949,20 @@ public final class Settlements {
 	/** Every track to its highest level. */
 	public static boolean testMax(ServerPlayer player) {
 		boolean ok = true;
+		// the whole site at once (user, 2026-11-25: max took too long: the jobs waited for the land, shaped a section at
+		// a time where the lord flew): its chunks loaded now, then shaped in one go, then every track built on it
+		Settlement s0 = testFinish(player);
+		MinecraftServer server = player.level().getServer();
+		Grade grade = s0 == null ? null : Grade.of(server, s0);
+		if (grade != null) {
+			grade.loadAll(server.overworld());
+			grade.claimAll();
+			grade.shapeAll(server.overworld(), s0);
+		}
 		for (String track : Progression.ORDER) {
 			ok &= testSet(player, track, Progression.steps(track).size());
 		}
+		RoadLink.runAll(server); // the roads out to the outposts and the places around
 		return ok;
 	}
 
@@ -1199,10 +1218,11 @@ public final class Settlements {
 		}
 		int dy = lift(s, job);
 		String track = builtTrack(job); // "wall_3" is the walls track, "road_2" the roads
+		BlockPos shift = outpostShift(s, track);
 		boolean red = (track.equals(Progression.ROADS) || track.equals(Progression.WALLS) || track.equals(Progression.GATE)) && redLand(s);
 		Map<Long, Integer> houseLift = Settlement.MAIN.equals(track) ? houseLifts(s) : Map.of();
 		String key = job + "|" + s.color() + "|" + s.rotation() + "|" + mask + "|" + dy + (red ? "|red" : "")
-				+ (houseLift.isEmpty() ? "" : "|" + s.id());
+				+ (houseLift.isEmpty() ? "" : "|" + s.id()) + (shift.equals(BlockPos.ZERO) ? "" : "|" + shift.asLong());
 		return PLACEMENTS.computeIfAbsent(key, k -> {
 			List<Template.Placement> all = new ArrayList<>();
 			for (Template.Placement p : t.placements(dye(s.color()), Rotation.values()[s.rotation()])) {
@@ -1216,6 +1236,9 @@ public final class Settlements {
 						}
 						extra = h;
 					}
+				}
+				if (!shift.equals(BlockPos.ZERO)) {
+					p = new Template.Placement(p.offset().offset(shift), p.state(), p.segment(), p.anchor().offset(shift));
 				}
 				all.add(dy + extra == 0 && !red ? p : new Template.Placement(p.offset().above(dy + extra), st, p.segment(), p.anchor()));
 			}
@@ -1238,13 +1261,91 @@ public final class Settlements {
 	private static final Map<String, int[]> ROAD_OUT = Map.of("quarry", new int[] {-195, 0}, "lumbercamp", new int[] {195, -18},
 			"minecamp", new int[] {195, 40}, "tourney", new int[] {5, -143});
 
+	/** The outposts' spots in the base frame (tools/buildings.py OUTPOSTS): where each is looked for first. */
+	private static final Map<String, int[]> OUTPOST_SPOTS = Map.of("quarry", new int[] {-205, 0}, "lumbercamp", new int[] {205, -18},
+			"minecamp", new int[] {205, 40});
+
+	/**
+	 * How far an outpost is moved from its spot (world blocks, decided once and kept): to the nearest dry, fairly level
+	 * ground (user, 2026-11-25: the lumber camp stood in the sea, its road a causeway out over the water). Looked for
+	 * on rings around the spot, up to 72 blocks off, never nearer the castle, never on another outpost.
+	 */
+	static BlockPos outpostShift(Settlement s, String track) {
+		int[] spot = OUTPOST_SPOTS.get(track);
+		if (spot == null) {
+			return BlockPos.ZERO;
+		}
+		if (s.level("op_" + track) == 1) {
+			return new BlockPos(s.level("opx_" + track), 0, s.level("opz_" + track));
+		}
+		if (server == null) {
+			return BlockPos.ZERO;
+		}
+		ServerLevel level = server.overworld();
+		BlockPos c = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], spot[0], 0, spot[1]));
+		double keep = Math.sqrt(c.distSqr(new BlockPos(s.heart().getX(), c.getY(), s.heart().getZ()))) - 12;
+		List<BlockPos> others = new ArrayList<>();
+		for (Map.Entry<String, int[]> e : OUTPOST_SPOTS.entrySet()) {
+			if (!e.getKey().equals(track) && s.level("op_" + e.getKey()) == 1) {
+				others.add(s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], e.getValue()[0], 0,
+						e.getValue()[1])).offset(s.level("opx_" + e.getKey()), 0, s.level("opz_" + e.getKey())));
+			}
+		}
+		BlockPos best = BlockPos.ZERO;
+		int bestScore = Integer.MAX_VALUE;
+		for (int r = 0; r <= 72 && bestScore == Integer.MAX_VALUE; r += 8) {
+			int steps = r == 0 ? 1 : Math.max(8, r / 3);
+			for (int a = 0; a < steps; a++) {
+				double ang = 2 * Math.PI * a / steps;
+				BlockPos d = new BlockPos((int) Math.round(r * Math.cos(ang)), 0, (int) Math.round(r * Math.sin(ang)));
+				BlockPos q = c.offset(d);
+				if (Math.sqrt(q.distSqr(new BlockPos(s.heart().getX(), q.getY(), s.heart().getZ()))) < keep) {
+					continue;
+				}
+				boolean clash = false;
+				for (BlockPos o : others) {
+					clash |= Math.abs(o.getX() - q.getX()) < 26 && Math.abs(o.getZ() - q.getZ()) < 26;
+				}
+				int score = clash ? Integer.MAX_VALUE : campLand(level, q);
+				if (score < bestScore) {
+					bestScore = score;
+					best = d;
+				}
+			}
+		}
+		Settlement fresh = byHeart(server, s.heart());
+		if (fresh != null) {
+			putState(server, fresh.withLevel("op_" + track, 1).withLevel("opx_" + track, best.getX()).withLevel("opz_" + track, best.getZ()));
+		}
+		return best;
+	}
+
+	/** How uneven the 17 x 17 ground around a column is (highest minus lowest top), or MAX_VALUE with water or ice in it. */
+	private static int campLand(ServerLevel level, BlockPos c) {
+		int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+		for (int dx = -8; dx <= 8; dx += 4) {
+			for (int dz = -8; dz <= 8; dz += 4) {
+				int x = c.getX() + dx, z = c.getZ() + dz;
+				int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+				BlockState st = level.getBlockState(new BlockPos(x, top, z));
+				if (!st.getFluidState().isEmpty() || st.is(Blocks.ICE) || st.is(Blocks.PACKED_ICE) || st.is(Blocks.BLUE_ICE)) {
+					return Integer.MAX_VALUE;
+				}
+				lo = Math.min(lo, top);
+				hi = Math.max(hi, top);
+			}
+		}
+		return hi - lo > 8 ? Integer.MAX_VALUE : hi - lo;
+	}
+
 	/** A place outside the walls is finished: a road leads to it from the gate (once; later tiers rebuild it). */
 	static void roadOut(MinecraftServer server, Settlement s, String track) {
 		int[] end = ROAD_OUT.get(track);
 		if (s == null || end == null || s.names().containsKey(RoadLink.PREFIX + "outpost:" + track)) {
 			return;
 		}
-		BlockPos p = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], end[0], 0, end[1]));
+		BlockPos p = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()], end[0], 0, end[1]))
+				.offset(outpostShift(s, track));
 		String name = switch (track) {
 			case "quarry" -> "the quarry";
 			case "lumbercamp" -> "the lumber camp";
@@ -1271,6 +1372,36 @@ public final class Settlements {
 			}
 		}
 		return s.style() + "/" + building;
+	}
+
+	/**
+	 * The ways out through the walls a road can start from, {exit point, one step outward}: the gate, and each side gate
+	 * that stands (user, 2026-11-25: a village near a side gate got its road from the main gate, all around the wall).
+	 */
+	static List<BlockPos[]> exits(Settlement s) {
+		List<BlockPos[]> out = new ArrayList<>();
+		Rotation r = Rotation.values()[s.rotation()];
+		out.add(new BlockPos[] {RoadLink.gateExit(s), Template.rotate(new BlockPos(0, 0, 1), r)});
+		Template t = Template.get(template(s, "postern_3"));
+		if (t == null) {
+			return out;
+		}
+		for (int n = 1; n <= 3; n++) {
+			if (!posternOn(s, n)) {
+				continue;
+			}
+			for (Template.Placement p : t.placements(dye(s.color()), r)) {
+				if (p.segment() != n - 1 || !(p.state().getBlock() instanceof net.minecraft.world.level.block.DoorBlock)
+						|| p.state().getValue(net.minecraft.world.level.block.DoorBlock.HALF) != net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER) {
+					continue;
+				}
+				net.minecraft.core.Direction away = p.state().getValue(net.minecraft.world.level.block.DoorBlock.FACING).getOpposite();
+				BlockPos door = s.heart().offset(p.offset());
+				out.add(new BlockPos[] {door.relative(away, 15), new BlockPos(away.getStepX(), 0, away.getStepZ())});
+				break;
+			}
+		}
+		return out;
 	}
 
 	private static final Map<String, Boolean> POSTERN_FITS = new HashMap<>();
@@ -2150,6 +2281,20 @@ public final class Settlements {
 		BlockPos base = s.heart().above(lift(s, s.job()));
 		// the land under the job must be shaped first (the grading plan): the builders work where the game runs
 		Grade grade = Grade.of(server, s);
+		if (grade != null && CLAIMED.add(s.id() + "|" + s.job())) {
+			// staged shaping: the ground of this job (and some room around it) gets its planned height now; the walls and
+			// the gate need the whole site
+			String jt = s.jobTrack();
+			if (jt.equals(Progression.WALLS) || jt.equals(Progression.GATE) || jt.equals(Progression.POSTERN)) {
+				grade.claimAll();
+			} else {
+				List<Long> claimCols = new ArrayList<>(columns.size());
+				for (SiteWork.Column c : columns) {
+					claimCols.add(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()));
+				}
+				grade.claim(claimCols, 3);
+			}
+		}
 		if (grade != null && !grade.complete()) {
 			int[] box = JOB_BOX.computeIfAbsent(s.id() + "|" + s.job(), k -> jobBox(s, list, columns));
 			if (!grade.ready(level, s, box[0], box[1], box[2], box[3], instant ? Integer.MAX_VALUE : 2)) {
@@ -2201,6 +2346,10 @@ public final class Settlements {
 					replaced.add(pos.asLong());
 				}
 				BlockState state = neighbourShaped(p.state(), level, pos);
+				if (!s.jobTrack().equals(Progression.TRAM) && level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BaseRailBlock
+						&& s.built().getOrDefault(Progression.TRAM, List.of()).contains(pos.asLong())) {
+					continue; // a lane that crosses the tram keeps its rails
+				}
 				if (t.follow) {
 					SiteWork.clearAbove(level, pos, allBuilt); // grass and flowers go, trees go whole
 				}
@@ -2353,6 +2502,7 @@ public final class Settlements {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
 			}
 			Chronicle.built(server, byHeart(server, s.heart()), s.jobTrack());
+			TownSigns.built(server, byHeart(server, s.heart()), s.jobTrack());
 			roadOut(server, byHeart(server, s.heart()), s.jobTrack());
 			Settlement latest = byHeart(server, s.heart());
 			if (latest != null) {
