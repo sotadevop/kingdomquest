@@ -3707,8 +3707,8 @@ def jail(style, level):
     wall = WALLMAT[style]["main"]
     zb = z1 - 4                                   # the cells' fronts
     for x in range(x0 + 1, x1):
-        for y in (1, 2, 3, 4):
-            if x in (x0 + 4, x0 + 7):             # the walls between the cells, up to the ceiling
+        for y in (1, 2):
+            if x in (x0 + 4, x0 + 7):             # the walls between the cells
                 for z in range(zb, z1):
                     b.put(x, y, z, wall)
             elif x in (x0 + 2, x0 + 5, x0 + 9) and y <= 2:
