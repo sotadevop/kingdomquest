@@ -6288,7 +6288,8 @@ def tram_loop():
             if not (all(c[0] == x for c in run) or all(c[1] == z for c in run)):
                 continue
             along_x = run[0][1] == z
-            if any((abs(x - tx_) <= 6 and abs(z - tz_) <= 14) if along_x else (abs(z - tz_) <= 6 and abs(x - tx_) <= 14) for tx_, tz_ in towers):
+            near = 6 if round_shape() else 8           # the station's roof reaches five along the line
+            if any((abs(x - tx_) <= near and abs(z - tz_) <= 14) if along_x else (abs(z - tz_) <= near and abs(x - tx_) <= 14) for tx_, tz_ in towers):
                 continue                               # clear of the wall's towers
             dd = (x - tx) ** 2 + (z - tz) ** 2
             if best is None or dd < best[0]:
