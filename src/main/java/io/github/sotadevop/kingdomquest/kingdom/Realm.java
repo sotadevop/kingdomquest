@@ -51,7 +51,7 @@ final class Realm {
 		j.addProperty("here", here.id().toString());
 		j.addProperty("lord", player.getUUID().equals(here.owner())); // only the lord changes how his people look
 		j.addProperty("solo", server.isSingleplayer()); // own skins from the skins folder: single player only
-		j.addProperty("globe", carriesGlobe(player));
+		j.addProperty("globe", true); // travel on the map needs no globe any more (user, 2026-11-25: teleport to the villages)
 		j.addProperty("hx", here.heart().getX());
 		j.addProperty("hz", here.heart().getZ());
 		j.addProperty("px", (int) player.getX());
@@ -280,7 +280,7 @@ final class Realm {
 
 	/** Travels to a place on the realm map: one of the lord's kingdoms (its heart) or a known village (its bell). */
 	private static void travel(ServerPlayer player, String key) {
-		if (!carriesGlobe(player) || player.level().dimension() != net.minecraft.world.level.Level.OVERWORLD) {
+		if (player.level().dimension() != net.minecraft.world.level.Level.OVERWORLD) {
 			return;
 		}
 		MinecraftServer server = player.level().getServer();

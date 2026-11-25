@@ -1259,7 +1259,7 @@ public final class Settlements {
 
 	/** Where the road from the gate ends for the places outside the walls (base frame): the outposts' edge, the lists. */
 	private static final Map<String, int[]> ROAD_OUT = Map.of("quarry", new int[] {-195, 0}, "lumbercamp", new int[] {195, -18},
-			"minecamp", new int[] {195, 40}, "tourney", new int[] {5, -143});
+			"minecamp", new int[] {195, 40});
 
 	/** The outposts' spots in the base frame (tools/buildings.py OUTPOSTS): where each is looked for first. */
 	private static final Map<String, int[]> OUTPOST_SPOTS = Map.of("quarry", new int[] {-205, 0}, "lumbercamp", new int[] {205, -18},
@@ -1350,7 +1350,7 @@ public final class Settlements {
 			case "quarry" -> "the quarry";
 			case "lumbercamp" -> "the lumber camp";
 			case "minecamp" -> "the mine camp";
-			default -> "the tournament field";
+			default -> "the place";
 		};
 		RoadLink.link(server, null, s, "outpost:" + track, p, name);
 	}
@@ -1594,7 +1594,9 @@ public final class Settlements {
 				}
 				boolean[] steep = new boolean[4];
 				for (int side = 0; side < 4; side++) {
-					steep[side] = side != SOUTH && count[side][1] * 5 > count[side][0];
+					// every side keeps its ditch (user, 2026-11-25: only the drawbridge side had one); only water right
+					// beside a column (the moat floods there) and a cliff drop leave it out
+					steep[side] = false;
 				}
 				for (Template.Placement p : base) {
 					boolean moat = p.offset().getY() < 0 && (p.state().isAir() || p.state().is(Blocks.COARSE_DIRT));

@@ -1565,7 +1565,7 @@ def plan_roads(style, jobs):
     for j in jobs:
         name, blocks = j[1], j[2]
         track, level = track_of(name), int(name.rsplit("_", 1)[1])
-        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_", "tourney_", "quarry_", "lumbercamp_", "minecamp_")):
+        if name.startswith(("tent_", "road_", "lamp_", "dock_", "tram_", "quarry_", "lumbercamp_", "minecamp_")):
             continue
         if track == "main":
             level += {"hamlet": 3, "village": 6, "town": 7, "castle": 8, "citadel": 10}[name.rsplit("_", 1)[0]]
@@ -6864,7 +6864,12 @@ def write_layout(jobs, plots, round_jobs=()):
     keep = None
     for style, name, blocks, *_ in jobs:
         if track_of(name) == "main" and not name.startswith("tent_"):
+            # the castle itself, not the town houses of the main track (user, 2026-11-25: the settlement's area on the
+            # realm map covered the whole town)
+            houses = HOUSE_RECTS.get(style, [])
             for (x, y, z), v in blocks.items():
+                if any(r[0] <= x <= r[2] and r[1] <= z <= r[3] for r in houses):
+                    continue
                 if z < HEART[2] - 2 and y >= -1 and v[0] != "minecraft:air":
                     keep = [x, z, x, z] if keep is None else [min(keep[0], x), min(keep[1], z), max(keep[2], x), max(keep[3], z)]
     plaza = next(t for t in ROAD_TRUNKS if t[0] == "plaza")
@@ -6875,7 +6880,7 @@ def write_layout(jobs, plots, round_jobs=()):
          "square": [plaza[1][0], plaza[2][0], plaza[1][1], plaza[2][1]],
          "reserved": {k: list(v) for k, v in RESERVED.items()},
          # levelled with the plateau outside the walls: the tournament field
-         "outside": {"tourney": list(TOURNEY)},
+         "outside": {},
          # the town houses of the main track per style: x0, z0, x1, z1 (each set on the graded land, only where it is flat)
          "houses": {st: [list(r) for r in rs] for st, rs in sorted(HOUSE_RECTS.items())},
          # the streets as rectangles: x0, z0, x1, z1 and 0 when they run along z (north-south), 1 along x
@@ -7075,8 +7080,8 @@ def build_jobs(styles=None):
             jobs.append((style, f"postern_{level}", postern(style, level), 120, None, None))
         for level in (1, 2, 3):
             jobs.append((style, f"tram_{level}", tram(style, level), 240 + 120 * level, None, None))
-        jobs.append((style, "tourney_1", tourney(style, 1), 600, None, None))
-        jobs.append((style, "lists_1", lists_yard(style, 1), 300, None, None))
+        # the tournament is held inside the walls (user, 2026-11-25: the field outside stood on an island of its own)
+        jobs.append((style, "tourney_1", lists_yard(style, 1), 300, None, None))
         for level in (1, 2):
             jobs.append((style, f"jail_{level}", jail(style, level), 300, None, None))
         for name in OUTPOSTS:

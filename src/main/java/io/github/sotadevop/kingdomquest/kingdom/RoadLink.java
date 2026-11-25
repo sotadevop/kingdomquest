@@ -103,6 +103,33 @@ final class RoadLink {
 				route = legs;
 			}
 		}
+		// a road whose end lies near a road already laid branches off that one where it comes nearest (user, 2026-11-25:
+		// the roads to the mine camp and the lumber camp crossed the same water on two bridges side by side)
+		BlockPos branch = null;
+		double branchD = Double.MAX_VALUE;
+		BlockPos gate = route.get(0)[0];
+		for (String other : from.names().keySet()) {
+			if (!other.startsWith(PREFIX) || other.equals(PREFIX + key)) {
+				continue;
+			}
+			List<BlockPos> path = new ArrayList<>(Roadside.path(from, other.substring(PREFIX.length())));
+			Job queued = JOBS.get(from.id() + "|" + other.substring(PREFIX.length()));
+			if (path.isEmpty() && queued != null) {
+				path.addAll(queued.line()); // laid in the same go (the test's "max"): its planned line
+			}
+			for (BlockPos c : path) {
+				double dd = Math.sqrt(c.distSqr(end.atY(c.getY())));
+				if (dd < branchD && Math.sqrt(c.distSqr(gate.atY(c.getY()))) > 24) {
+					branchD = dd;
+					branch = c;
+				}
+			}
+		}
+		if (branch != null && branchD < 0.6 * shortest && branchD < 90) {
+			List<BlockPos[]> legs = new ArrayList<>();
+			legs.add(new BlockPos[] {branch.atY(from.heart().getY()), end});
+			route = legs;
+		}
 		BlockPos start = route.get(0)[0];
 		if (Math.sqrt(end.distSqr(start)) > MAX_LENGTH) {
 			if (player != null) {
@@ -424,7 +451,26 @@ final class RoadLink {
 	 */
 	private static void profile(ServerLevel level, Job job) {
 		// through its waystations (chosen now on a new road, kept on one laid again), then straight over the water
-		List<BlockPos> line = straighten(level, Roadside.route(level, job.settlement(), job.key(), job.line()));
+		List<BlockPos> line = new ArrayList<>(straighten(level, Roadside.route(level, job.settlement(), job.key(), job.line())));
+		// near its end the road stops before anything built that stands in its way (user, 2026-11-25: the road to a
+		// village went right through one of its houses at the end)
+		BlockPos last = line.get(line.size() - 1);
+		for (int k = 1; k < line.size(); k++) {
+			BlockPos p = line.get(k);
+			if (Math.abs(p.getX() - last.getX()) + Math.abs(p.getZ() - last.getZ()) > 64) {
+				continue;
+			}
+			int gy = surfaceAt(level, p.getX(), p.getZ())[0];
+			boolean blocked = false;
+			for (int up = 1; up <= 2 && !blocked; up++) {
+				BlockState st = level.getBlockState(new BlockPos(p.getX(), gy + up, p.getZ()));
+				blocked = st.isSolid() && !st.canBeReplaced() && !SiteWork.natural(st) && !st.is(BlockTags.LOGS) && !st.is(BlockTags.LEAVES);
+			}
+			if (blocked) {
+				line = new ArrayList<>(line.subList(0, Math.max(2, k - 1)));
+				break;
+			}
+		}
 		// where the road runs over the site's plan, that land gets its planned height first (the staged shaping may
 		// not have reached it yet): the road isn't cut into land that is about to be levelled around it
 		for (Settlement o : Settlements.all(level.getServer())) {
@@ -532,8 +578,10 @@ final class RoadLink {
 		// the road starts level with the gate's landing (the heart's level) and meets the land on a ramp of half a
 		// block per block, cut into a rise or built up over a dip: the landing built later lies flush with it (user,
 		// 2026-11-18: a road laid on the hill in front of a young castle was left far above or below its gate)
+		BlockPos first0 = line.get(0);
 		for (Settlement o : Settlements.all(level.getServer())) {
-			if (o.id().toString().equals(job.settlement())) {
+			boolean atGate = Settlements.exits(o).stream().anyMatch(e -> Math.abs(e[0].getX() - first0.getX()) + Math.abs(e[0].getZ() - first0.getZ()) <= 8);
+			if (o.id().toString().equals(job.settlement()) && atGate) { // a branch off another road starts on that road, as it lies
 				int anchor = 2 * o.heart().getY();
 				for (int k = 0; k < n && k < 64; k++) {
 					int slope = (3 * k + 1) / 2; // three quarters of a block per block: slabs and full steps, never two

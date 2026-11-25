@@ -294,10 +294,7 @@ public final class Progression {
 							List.of(item(Items.DIAMOND_PICKAXE, 1), item(Items.EMERALD, 24))))),
 				Map.entry("tourney", List.of(
 					new Step("tourney", "tourney_1", 1, "kingdomquest.trade.tourney_1", 9, null, null,
-							List.of(tag(ItemTags.LOGS, "logs", 64), tag(ItemTags.WOOL, "wool", 32), item(Items.TARGET, 3), item(Items.EMERALD, 24))))),
-				Map.entry("lists", List.of(
-					new Step("lists", "lists_1", 1, "kingdomquest.trade.lists_1", 9, null, null,
-							List.of(tag(ItemTags.LOGS, "logs", 32), tag(ItemTags.WOOL, "wool", 8), item(Items.EMERALD, 12))))),
+							List.of(tag(ItemTags.LOGS, "logs", 32), tag(ItemTags.WOOL, "wool", 8), item(Items.EMERALD, 16))))),
 				Map.entry("jail", List.of(
 					new Step("jail", "jail_1", 1, "kingdomquest.trade.jail_1", 8, null, null,
 							List.of(item(Items.IRON_BARS, 24), item(Items.STONE_BRICKS, 64), item(Items.IRON_INGOT, 8))),
@@ -402,7 +399,7 @@ public final class Progression {
 	public static final List<String> ORDER = List.of(Settlement.MAIN, CELLAR, ROYAL, WALLS, GATE, BARRACKS, GUILD, APIARY, KENNEL, TROPHY, "tavern", "market", "cartographer", "music",
 			"workshop", "armorer", "tannery", "archaeology", "mine", DOCK, NETHER, LAIR, ROADS, LAMPS, FARM, STABLES, SMITH, WOOD, LIBRARY, BREWERY,
 			STOREHOUSE, CHURCH, TOWNHALL, GARDEN, MARKETHALL, BELFRY, MONASTERY, POSTERN, TRAM,
-			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney", "lists", "jail", "quarry", "lumbercamp", "minecamp");
+			"mill", "bakery", "herbs", "weaver", "dyehouse", "carpenter", "sawmill", "smelter", "saddler", "tourney", "jail", "quarry", "lumbercamp", "minecamp");
 
 	public static List<Step> steps(String track) {
 		List<Step> l = TRACKS.get(track);

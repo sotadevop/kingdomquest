@@ -186,7 +186,7 @@ class Grid:
 
 
 # outside the walls (the tournament field, the outposts): the walk from the town doesn't go there (no road yet)
-OUTSIDE_TRACKS = ("tourney", "quarry", "lumbercamp", "minecamp")
+OUTSIDE_TRACKS = ("quarry", "lumbercamp", "minecamp")
 
 # blocks: x0, x1, y0, y1, z0, z1: the wall ring with the moat and the landing beyond the gate
 BOX = (bld.WALL[0] - 14, bld.WALL[1] + 14, -30, 50, bld.WALL[2] - 14, bld.WALL[3] + 16)

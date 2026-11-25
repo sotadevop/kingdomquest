@@ -40,9 +40,7 @@ final class Tournament {
 			int crowd) {
 	}
 
-	private static final Field[] FIELDS = {
-			new Field("tourney", "tourney", -157, -10, 18, 5, new int[][] {{24, -151}, {27, -151}, {30, -151}}, -166, -8, -152, 8),
-			new Field("lists", "lists", -34, -24, -3, -13, new int[0][], 0, -21, -29, 6)};
+	private static final Field[] FIELDS = {new Field("tourney", "tourney", -34, -24, -3, -13, new int[0][], 0, -21, -29, 6)};
 
 	private Tournament() {
 	}
@@ -104,9 +102,7 @@ final class Tournament {
 				return;
 			}
 			start(level, s, f);
-			if (f.track().equals("tourney") || s.level("tourney") <= 0) {
-				owner.sendSystemMessage(Component.translatable("kingdomquest.tourney.start", s.name()));
-			}
+			owner.sendSystemMessage(Component.translatable("kingdomquest.tourney.start", s.name()));
 			return;
 		}
 		joust(level, s, f, here);
