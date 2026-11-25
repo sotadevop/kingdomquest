@@ -116,8 +116,10 @@ final class Grade {
 	 * job stands on. Around what is claimed the land eases back to the natural ground on a soft slope. Once the walls
 	 * come, everything is claimed. Plans saved before this have no natural heights: all claimed.
 	 */
-	/** The natural ground per column (the generator's guess, the real ground once a column is first worked); null: no staging. */
+	/** The natural ground per column as planned (the generator's guess where the chunk wasn't loaded); null: no staging. */
 	private final short[] orig;
+	/** The real natural ground, read when a column is first worked (origReal). */
+	private final short[] real;
 	private final BitSet origReal;
 	private final BitSet claimed;
 	private boolean all;
@@ -136,11 +138,11 @@ final class Grade {
 	private long savedAt;
 
 	private Grade(int x0, int z0, int w, int d, int plateau, int look, float trees, short[] top, byte[] kind, BitSet shaped, BitSet planted) {
-		this(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted, null, null, null, true, 0, null);
+		this(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted, null, null, null, null, true, 0, null);
 	}
 
 	private Grade(int x0, int z0, int w, int d, int plateau, int look, float trees, short[] top, byte[] kind, BitSet shaped, BitSet planted,
-			short[] orig, BitSet origReal, BitSet claimed, boolean all, int circle, int[] sig) {
+			short[] orig, short[] real, BitSet origReal, BitSet claimed, boolean all, int circle, int[] sig) {
 		this.x0 = x0;
 		this.z0 = z0;
 		this.w = w;
@@ -155,6 +157,7 @@ final class Grade {
 		this.sw = (w + SECTION - 1) / SECTION;
 		this.sd = (d + SECTION - 1) / SECTION;
 		this.orig = orig;
+		this.real = orig == null ? null : real != null && real.length == orig.length ? real : orig.clone();
 		this.origReal = origReal == null ? new BitSet() : origReal;
 		this.claimed = claimed == null ? new BitSet() : claimed;
 		this.all = all || orig == null;
@@ -223,17 +226,18 @@ final class Grade {
 		if (this.all || this.claimed.get(c)) {
 			return this.top[c];
 		}
-		int diff = this.top[c] - this.orig[c];
+		int nat = this.real[c];
+		int diff = this.top[c] - nat;
 		if (diff == 0) {
 			return this.top[c];
 		}
 		double band = Math.min(BLEND_MAX, 6 + 1.6 * Math.abs(diff)); // never steeper than a natural slope
 		double u = this.dist[c] / band;
 		if (u >= 1) {
-			return this.orig[c];
+			return nat;
 		}
 		double wgt = u * u * (3 - 2 * u);
-		return (int) Math.round(this.top[c] + (this.orig[c] - this.top[c]) * wgt);
+		return (int) Math.round(this.top[c] + (nat - this.top[c]) * wgt);
 	}
 
 	/** What kind of land a column is now: its plan's where claimed, else a slope where it moves, untouched where it doesn't. */
@@ -241,7 +245,7 @@ final class Grade {
 		if (this.all || this.claimed.get(c)) {
 			return this.kind[c];
 		}
-		return t == this.orig[c] ? UNTOUCHED : SLOPE;
+		return t == this.real[c] ? UNTOUCHED : SLOPE;
 	}
 
 	/** Chamfer distance of every column to the nearest claimed one (5 straight, 7 diagonal; in blocks, capped). */
@@ -443,6 +447,10 @@ final class Grade {
 							for (int i = 0; i < orig.length; i++) {
 								orig[i] = in.readShort();
 							}
+							short[] real = new short[w * d];
+							for (int i = 0; i < real.length; i++) {
+								real[i] = in.readShort();
+							}
 							BitSet origReal = BitSet.valueOf(in.readNBytes(in.readInt()));
 							BitSet claimed = BitSet.valueOf(in.readNBytes(in.readInt()));
 							boolean all = in.readBoolean();
@@ -451,7 +459,7 @@ final class Grade {
 							for (int i = 0; i < sig.length; i++) {
 								sig[i] = in.readInt();
 							}
-							g = new Grade(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted, orig, origReal, claimed, all, circle, sig);
+							g = new Grade(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted, orig, real, origReal, claimed, all, circle, sig);
 						} else {
 							g = new Grade(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted);
 						}
@@ -498,6 +506,9 @@ final class Grade {
 				out.writeBoolean(this.orig != null);
 				if (this.orig != null) {
 					for (short o : this.orig) {
+						out.writeShort(o);
+					}
+					for (short o : this.real) {
 						out.writeShort(o);
 					}
 					byte[] c = this.origReal.toByteArray();
@@ -819,7 +830,7 @@ final class Grade {
 		for (int c = 0; c < n; c++) {
 			orig[c] = (short) bed[c];
 		}
-		Grade grade = new Grade(x0, z0, w, d, p, look, trees, top, kind, new BitSet(), new BitSet(), orig, new BitSet(), new BitSet(), false, 0, null);
+		Grade grade = new Grade(x0, z0, w, d, p, look, trees, top, kind, new BitSet(), new BitSet(), orig, null, new BitSet(), new BitSet(), false, 0, null);
 		BlockPos heart = new BlockPos(clicked.getX(), p + heartLevel + 1, clicked.getZ());
 		return new Planned(grade, heart, lifts);
 	}
@@ -1187,10 +1198,18 @@ final class Grade {
 					continue;
 				}
 				if (this.orig != null && !this.origReal.get(c)) { // the real natural ground, before anything works it
-					this.orig[c] = (short) land(level, this.x0 + i, this.z0 + k)[0];
+					this.real[c] = (short) land(level, this.x0 + i, this.z0 + k)[0];
 					this.origReal.set(c);
 				}
 				int t = effTop(c);
+				if (this.orig != null && this.kind[c] == SLOPE) {
+					// where the plan guessed the land (the generator's heights, every 4 blocks), its slopes are moved by the
+					// guess's error toward the plan's edge, so they meet the real land there without a step (user,
+					// 2026-11-25: a savanna site ended in a straight cut of dirt 6 to 8 high)
+					int edge = Math.min(Math.min(i, k), Math.min(this.w - 1 - i, this.d - 1 - k));
+					double wgt = Math.max(0, 1 - edge / 24.0);
+					t += (int) Math.round((this.real[c] - this.orig[c]) * wgt);
+				}
 				byte kd = effKind(c, t);
 				if (kd != UNTOUCHED) {
 					int edge = Math.min(Math.min(i, k), Math.min(this.w - 1 - i, this.d - 1 - k));
@@ -1234,11 +1253,7 @@ final class Grade {
 		int[] l = land(level, x, z);
 		int g = l[0], water = l[1];
 		boolean wet = water > g;
-		if (kd == SLOPE) {
-			// near the plan's edge the slope meets the land as it really is (user, 2026-11-25: a savanna site ended in a
-			// straight cut of dirt 6 to 8 high where the generator's guess of the land was off)
-			t = Math.max(g - edge, Math.min(g + edge, t));
-		}
+
 		// made ground where there was water: inside the walls the site's own ground (a filled lake is no beach), outside
 		// the layers of the nearest dry land
 		List<BlockState> stack = wet ? kd == SLOPE ? nearby.computeIfAbsent(BlockPos.asLong(x >> 3, 0, z >> 3), c -> reference(level, x, z, fallback)) : fallback

@@ -370,6 +370,14 @@ public final class FieldTest {
 			Settlements.step(server, s, true);
 			s = Settlements.byHeart(server, s.heart());
 		}
+		if (s != null) {
+			// the staged shaping: what the builders shape over time where the lord goes (Grade.work), done at once
+			Grade g = Grade.of(server, s);
+			if (g != null) {
+				g.stage(s);
+				g.shapeAll(server.overworld(), s);
+			}
+		}
 		return s;
 	}
 
