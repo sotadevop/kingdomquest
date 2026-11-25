@@ -1191,6 +1191,7 @@ final class Grade {
 		Map<Long, List<BlockState>> nearby = new HashMap<>(); // layers of the nearest dry land, per 8 x 8 cell
 		Rotation turn = Rotation.values()[s.rotation()];
 		boolean round = Settlements.round(s);
+		int changed = 0;
 		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
 			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
 				int c = i * this.d + k;
@@ -1208,11 +1209,19 @@ final class Grade {
 					boolean outside = inside(s.heart(), turn, round, this.x0 + i, this.z0 + k) < -(PAD - 2);
 					if (column(level, this.x0 + i, this.z0 + k, t, kd, edge, outside, built, fallback, nearby)) {
 						this.fresh.set(c);
+						changed++;
 					}
 				}
 			}
 		}
 		this.sig[sec] = signature(sec);
+		if (changed == 0 && this.orig != null) {
+			// nothing moved here yet (the staged shaping hasn't reached it): the land is left exactly as it is
+			this.sig[sec] = signature(sec);
+			this.shaped.set(sec);
+			this.dirty = true;
+			return;
+		}
 		SiteWork.dropFloating(level, ax - 4, az - 4, ax + SECTION + 3, az + SECTION + 3, built);
 		SiteWork.stumps(level, ax, az, ax + SECTION - 1, az + SECTION - 1, built, surface);
 		// nobody is left inside new ground; whoever stands where the land was cut away floats down
