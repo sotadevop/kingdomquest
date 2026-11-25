@@ -1,3 +1,7 @@
-com.mojang.blaze3d.Blaze3D
-net.minecraft.client.gui.screens.Screen
+net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer
 net.minecraft.client.model.geom.ModelLayers
+net.minecraft.client.renderer.entity.AbstractZombieRenderer
+net.minecraft.client.renderer.entity.ArmorModelSet
+net.minecraft.client.model.geom.ArmorModelSet
+net.minecraft.client.renderer.entity.EntityRendererProvider$Context
+net.minecraft.client.Minecraft
