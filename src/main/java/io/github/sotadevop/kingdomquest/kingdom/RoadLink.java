@@ -436,6 +436,30 @@ final class RoadLink {
 	private static void profile(ServerLevel level, Job job) {
 		// through its waystations (chosen now on a new road, kept on one laid again), then straight over the water
 		List<BlockPos> line = straighten(level, Roadside.route(level, job.settlement(), job.key(), job.line()));
+		// where the road runs over the site's plan, that land gets its planned height first (the staged shaping may
+		// not have reached it yet): the road isn't cut into land that is about to be levelled around it
+		for (Settlement o : Settlements.all(level.getServer())) {
+			if (o.id().toString().equals(job.settlement())) {
+				Grade plan = Grade.of(level.getServer(), o);
+				if (plan != null) {
+					List<Long> cols = new ArrayList<>();
+					int bx0 = Integer.MAX_VALUE, bz0 = Integer.MAX_VALUE, bx1 = Integer.MIN_VALUE, bz1 = Integer.MIN_VALUE;
+					for (BlockPos p : line) {
+						if (plan.topAt(p.getX(), p.getZ()) != Integer.MIN_VALUE) {
+							cols.add(BlockPos.asLong(p.getX(), 0, p.getZ()));
+							bx0 = Math.min(bx0, p.getX());
+							bz0 = Math.min(bz0, p.getZ());
+							bx1 = Math.max(bx1, p.getX());
+							bz1 = Math.max(bz1, p.getZ());
+						}
+					}
+					if (!cols.isEmpty()) {
+						plan.claim(cols, 4);
+						plan.ready(level, o, bx0 - 8, bz0 - 8, bx1 + 8, bz1 + 8, Integer.MAX_VALUE);
+					}
+				}
+			}
+		}
 		int n = line.size();
 		int[] g = new int[n];
 		boolean[] w = new boolean[n];
