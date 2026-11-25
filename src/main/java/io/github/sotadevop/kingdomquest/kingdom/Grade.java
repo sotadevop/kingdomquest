@@ -1202,14 +1202,6 @@ final class Grade {
 					this.origReal.set(c);
 				}
 				int t = effTop(c);
-				if (this.orig != null && this.kind[c] == SLOPE) {
-					// where the plan guessed the land (the generator's heights, every 4 blocks), its slopes are moved by the
-					// guess's error toward the plan's edge, so they meet the real land there without a step (user,
-					// 2026-11-25: a savanna site ended in a straight cut of dirt 6 to 8 high)
-					int edge = Math.min(Math.min(i, k), Math.min(this.w - 1 - i, this.d - 1 - k));
-					double wgt = Math.max(0, 1 - edge / 24.0);
-					t += (int) Math.round((this.real[c] - this.orig[c]) * wgt);
-				}
 				byte kd = effKind(c, t);
 				if (kd != UNTOUCHED) {
 					int edge = Math.min(Math.min(i, k), Math.min(this.w - 1 - i, this.d - 1 - k));

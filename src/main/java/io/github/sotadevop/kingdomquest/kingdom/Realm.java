@@ -121,8 +121,20 @@ final class Realm {
 		for (String track : Progression.ORDER) {
 			Progression.Step step = Progression.current(here, track);
 			int[] b = Landmarks.bounds(here, track);
-			if (step == null || b == null) {
-				continue;
+			if (step == null || b == null || Progression.POSTERN.equals(track) || Progression.TRAM.equals(track)) {
+				continue; // spread around the town: they show on the plan itself
+			}
+			// the building's own plot, not the box around everything its templates touch (user, 2026-11-25: the side gates'
+			// and the citadel's areas covered half the town)
+			int[] plot = Settlement.MAIN.equals(track) ? io.github.sotadevop.kingdomquest.building.Layout.keep()
+					: io.github.sotadevop.kingdomquest.building.Layout.plot(track);
+			if (plot != null && !Progression.DOCK.equals(track)) {
+				net.minecraft.world.level.block.Rotation r = net.minecraft.world.level.block.Rotation.values()[here.rotation()];
+				BlockPos a = here.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(r, plot[0], 0, plot[1]));
+				BlockPos c = here.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(r, plot[2], 0, plot[3]));
+				BlockPos shift = Settlements.outpostShift(here, track);
+				b = new int[] {Math.min(a.getX(), c.getX()) + shift.getX(), Math.min(a.getZ(), c.getZ()) + shift.getZ(), Math.max(a.getX(), c.getX()) + shift.getX(),
+						Math.max(a.getZ(), c.getZ()) + shift.getZ()};
 			}
 			JsonObject e = new JsonObject();
 			e.addProperty("track", track);
