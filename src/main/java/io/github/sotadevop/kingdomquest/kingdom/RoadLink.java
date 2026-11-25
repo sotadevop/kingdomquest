@@ -251,21 +251,10 @@ final class RoadLink {
 	 * the walls were built up and over ice spikes). Under it lies the land (snow, dirt, stone); the builders clear it.
 	 */
 	static boolean iceSpike(ServerLevel level, BlockPos pos, BlockState st) {
-		if (!st.is(Blocks.PACKED_ICE) && !st.is(Blocks.BLUE_ICE)) {
-			return false;
-		}
-		// an iceberg floats in the sea: it stays what it is (the sea's surface for a road, untouched by the shaping)
-		BlockPos.MutableBlockPos p = pos.mutable();
-		for (int d = 0; d < 64; d++) {
-			p.move(0, -1, 0);
-			BlockState below = level.getBlockState(p);
-			if (below.is(Blocks.PACKED_ICE) || below.is(Blocks.BLUE_ICE) || below.is(Blocks.SNOW_BLOCK) || below.is(Blocks.ICE)) {
-				continue;
-			}
-			return below.getFluidState().isEmpty();
-		}
-		return true;
+		// only the spikes of the ice spikes biome: icebergs and glaciers elsewhere stay what they are
+		return (st.is(Blocks.PACKED_ICE) || st.is(Blocks.BLUE_ICE)) && level.getBiome(pos).getRegisteredName().contains("ice_spikes");
 	}
+
 
 	/**
 	 * Water is crossed straight, at a right angle like a real bridge (user, 2026-11-18: a diagonal bridge had zigzag

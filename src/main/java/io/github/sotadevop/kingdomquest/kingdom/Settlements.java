@@ -2346,7 +2346,7 @@ public final class Settlements {
 					replaced.add(pos.asLong());
 				}
 				BlockState state = neighbourShaped(p.state(), level, pos);
-				if (state.isAir() && !s.jobTrack().equals(Progression.TRAM) && level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BaseRailBlock
+				if (!s.jobTrack().equals(Progression.TRAM) && level.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BaseRailBlock
 						&& s.built().getOrDefault(Progression.TRAM, List.of()).contains(pos.asLong())) {
 					continue; // a lane that crosses the tram keeps its rails
 				}
