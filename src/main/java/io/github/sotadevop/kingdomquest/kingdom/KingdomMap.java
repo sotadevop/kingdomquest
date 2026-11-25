@@ -60,7 +60,7 @@ public final class KingdomMap {
 	static void give(ServerPlayer player) {
 		ItemStack map = new ItemStack(ITEM);
 		if (!player.getInventory().add(map)) {
-			player.drop(map, false);
+			player.drop(map, false, false);
 		}
 	}
 
