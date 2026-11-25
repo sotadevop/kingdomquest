@@ -1,0 +1,6 @@
+[15:03:26] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[15:03:34] [Server thread/INFO] (KingdomQuest) Field test mesa: looking for a site
+[15:04:18] [Server thread/INFO] (KingdomQuest) Field test mesa: site null
+[15:04:18] [Server thread/INFO] (KingdomQuest) Field test mesa done in 44 s
+[15:04:18] [Server thread/INFO] (KingdomQuest) Field test finished: 0 sites with findings
+[15:04:18] [Server thread/INFO] (Minecraft) System chat: Field test finished: 0 sites with findings

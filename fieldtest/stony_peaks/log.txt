@@ -1,0 +1,300 @@
+[14:57:29] [main/INFO] (KingdomQuest) KingdomQuest loaded
+[14:57:36] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: looking for a site
+[14:57:41] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: site BlockPos{x=-232, y=132, z=-3088}
+[14:58:03] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: chunks loaded
+[14:58:19] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: tent_2 built and checked
+[14:58:22] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: tent_3 built and checked
+[14:58:27] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: hamlet_1 built and checked
+[14:58:38] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: hamlet_2 built and checked
+[14:58:50] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: hamlet_3 built and checked
+[14:58:59] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: village_1 built and checked
+[14:59:25] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: town_1 built and checked
+[14:59:49] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: castle_1 built and checked
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_slab
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:03] [Server thread/WARN] (KingdomQuest) Building block skipped: unknown block minecraft:stone_bricks_wall
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:07] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:coarse_dirt has no property snowy
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:11] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:18] [Server thread/INFO] (KingdomQuest) Field test stony_peaks: castle_2 built and checked
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
+[15:00:20] [Server thread/WARN] (KingdomQuest) Building block skipped: minecraft:stone_bricks has no property axis
