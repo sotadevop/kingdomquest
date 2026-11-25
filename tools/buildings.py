@@ -6275,16 +6275,21 @@ def tram_loop():
             seen.add(c)
         path = out
     n = len(path)
-    targets = {"gate": (HEART[0] + 16, z1), "west": (x0, 38), "north": (HEART[0], z0), "east": (x1, 38)}
+    targets = {"gate": (HEART[0] + 16, z1), "west": (x0, 38), "north": (HEART[0] + 30, z0), "east": (x1, 38)}
+    towers = tower_spots(4)
     stops = []
     for name in TRAM_STOP_NAMES:
         tx, tz = targets[name]
         best = None
         for i, (x, z) in enumerate(path):
             # a stop needs a straight stretch of 9 rails (its platform and powered rails)
-            run = [path[(i + d) % n] for d in range(-4, 5)]
+            half = 3 if round_shape() else 4
+            run = [path[(i + d) % n] for d in range(-half, half + 1)]
             if not (all(c[0] == x for c in run) or all(c[1] == z for c in run)):
                 continue
+            along_x = run[0][1] == z
+            if any((abs(x - tx_) <= 6 and abs(z - tz_) <= 14) if along_x else (abs(z - tz_) <= 6 and abs(x - tx_) <= 14) for tx_, tz_ in towers):
+                continue                               # clear of the wall's towers
             dd = (x - tx) ** 2 + (z - tz) ** 2
             if best is None or dd < best[0]:
                 best = (dd, i)
