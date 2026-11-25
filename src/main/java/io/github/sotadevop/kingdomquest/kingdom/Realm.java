@@ -316,6 +316,7 @@ final class Realm {
 		String[] a = action.split("\\|", 4);
 		switch (a[0]) {
 			case "realm_travel" -> travel(player, a.length > 1 ? a[1] : "");
+			case "realm_visit" -> KingdomMap.visit(player, here, a.length > 1 ? a[1] : "");
 			case "realm_empire" -> {
 				String name = clean(a.length > 1 ? a[1] : "");
 				if (!name.isEmpty()) {

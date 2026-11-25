@@ -251,7 +251,20 @@ final class RoadLink {
 	 * the walls were built up and over ice spikes). Under it lies the land (snow, dirt, stone); the builders clear it.
 	 */
 	static boolean iceSpike(ServerLevel level, BlockPos pos, BlockState st) {
-		return st.is(Blocks.PACKED_ICE) || st.is(Blocks.BLUE_ICE);
+		if (!st.is(Blocks.PACKED_ICE) && !st.is(Blocks.BLUE_ICE)) {
+			return false;
+		}
+		// an iceberg floats in the sea: it stays what it is (the sea's surface for a road, untouched by the shaping)
+		BlockPos.MutableBlockPos p = pos.mutable();
+		for (int d = 0; d < 64; d++) {
+			p.move(0, -1, 0);
+			BlockState below = level.getBlockState(p);
+			if (below.is(Blocks.PACKED_ICE) || below.is(Blocks.BLUE_ICE) || below.is(Blocks.SNOW_BLOCK) || below.is(Blocks.ICE)) {
+				continue;
+			}
+			return below.getFluidState().isEmpty();
+		}
+		return true;
 	}
 
 	/**

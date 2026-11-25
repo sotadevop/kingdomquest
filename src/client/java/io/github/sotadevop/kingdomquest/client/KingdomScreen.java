@@ -148,6 +148,14 @@ public class KingdomScreen extends Screen {
 			build.active = o.ready() && (this.info.percent() < 0 || creative());
 			build.visible = !o.maxed() && !o.locked();
 			this.buildButtons.add(this.addRenderableWidget(build));
+			if (o.level() > 0 && !List.of("roads", "lamps", "walls", "gate", "postern", "tram", "cellar").contains(o.track())) {
+				// go to the building (user, 2026-11-25: teleport from the building menu, in survival too)
+				Button visit = Button.builder(Component.translatable("kingdomquest.realm.visit"), b -> {
+					ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "visit|" + o.track()));
+					this.onClose();
+				}).bounds(this.left + W - 8 - 6 - 56 - 4 - 40, cardY(i) + CARD_H - 6 - 18, 40, 18).build();
+				this.buildButtons.add(this.addRenderableWidget(visit));
+			}
 		}
 		Button color = Button.builder(Component.translatable("kingdomquest.menu.color"), b ->
 				this.minecraft.setScreenAndShow(new ColorScreen(this.info.heart(), this.info.color(), this))).bounds(this.left + 8, this.top + H - 24, 60, 18).build();

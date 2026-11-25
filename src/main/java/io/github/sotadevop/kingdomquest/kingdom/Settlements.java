@@ -312,6 +312,9 @@ public final class Settlements {
 			return false;
 		}
 		Settlement s = found(level, s0, data.look(), data.shape(), false);
+		if (all(server).stream().filter(o -> o.owner().equals(player.getUUID())).count() <= 1) {
+			KingdomMap.give(player); // the first kingdom: the map to carry around it
+		}
 		player.sendSystemMessage(Component.translatable("kingdomquest.site.started"));
 		level.getServer().getPlayerList().broadcastSystemMessage(Component.translatable("kingdomquest.found.done", player.getDisplayName(), data.name()), false);
 		KingdomQuest.LOG.info("Settlement {} founded at {} ({})", data.name(), heart, style);
@@ -651,7 +654,9 @@ public final class Settlements {
 			case "undo_changes" -> undoChanges(player, s);
 			case "rebuild" -> startRebuild(player, s);
 			default -> {
-				if (action.equals("chronicle")) {
+				if (action.startsWith("visit|")) {
+					KingdomMap.visit(player, s, action.substring(6));
+				} else if (action.equals("chronicle")) {
 					Chronicle.send(player, s);
 				} else if (action.equals("realm")) {
 					Realm.send(player, s);

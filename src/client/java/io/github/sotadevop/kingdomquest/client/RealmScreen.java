@@ -714,8 +714,13 @@ public class RealmScreen extends Screen {
 		}
 	}
 
+	/** The building under the mouse on the plan (a click without dragging visits it), and where the press began. */
+	private String hoverTrack;
+	private double pressX = -1, pressY = -1;
+
 	private void drawPlot(GuiGraphicsExtractor g, int mouseX, int mouseY, Theme t) {
 		double[] f = view(1);
+		this.hoverTrack = null;
 		JsonObject hover = null;
 		JsonObject latest = null;
 		for (JsonElement e : arr("buildings")) {
@@ -774,9 +779,11 @@ public class RealmScreen extends Screen {
 		}
 		label(g, Component.translatable("kingdomquest.realm.plan_hint").getString(), mapX0() + 3, mapY0() + mapH() - 11, 0xFFE0E0E0);
 		if (hover != null) {
+			this.hoverTrack = hover.get("track").getAsString();
 			List<Component> lines = new ArrayList<>();
 			lines.add(Component.translatable(hover.get("title").getAsString()));
 			lines.add(Component.translatable("kingdomquest.realm.at", where(hover)));
+			lines.add(Component.translatable("kingdomquest.realm.visit_hint").withStyle(net.minecraft.ChatFormatting.YELLOW));
 			g.setComponentTooltipForNextFrame(this.font, lines, mouseX, mouseY);
 		} else if (inMap(mouseX, mouseY) && mouseX < mapX0() + mapW() - 18) {
 			int wx = (int) Math.floor(f[1] + (mouseX - (mapX0() + mapW() / 2.0)) / f[0]);
@@ -998,6 +1005,10 @@ public class RealmScreen extends Screen {
 				return true;
 			}
 		}
+		if (this.tab == 1 && inMap(event.x(), event.y())) {
+			this.pressX = event.x();
+			this.pressY = event.y();
+		}
 		if (this.tab == 0 && inMap(event.x(), event.y())) {
 			double[] f = view(0);
 			for (Node n : this.nodes) {
@@ -1014,6 +1025,19 @@ public class RealmScreen extends Screen {
 			}
 		}
 		return super.mouseClicked(event, doubleClick);
+	}
+
+	@Override
+	public boolean mouseReleased(MouseButtonEvent event) {
+		// a click on a building of the plan (not the end of a drag): the lord goes there (user, 2026-11-25)
+		if (this.tab == 1 && this.pressX >= 0 && Math.abs(event.x() - this.pressX) < 3 && Math.abs(event.y() - this.pressY) < 3 && this.hoverTrack != null) {
+			send("realm_visit|" + this.hoverTrack);
+			this.pressX = -1;
+			this.onClose();
+			return true;
+		}
+		this.pressX = -1;
+		return super.mouseReleased(event);
 	}
 
 	@Override

@@ -1,5 +1,9 @@
 {
 	"item.kingdomquest.royal_charter": "Royal Charter",
+	"item.kingdomquest.kingdom_map": "Kingdom Map",
+	"kingdomquest.map.none": "You have no kingdom yet.",
+	"kingdomquest.realm.visit": "Visit",
+	"kingdomquest.realm.visit_hint": "Click: go there",
 	"item.kingdomquest.royal_charter.tooltip": "Right-click: found your kingdom",
 	"kingdomquest.founding.title": "Found your Kingdom",
 	"kingdomquest.founding.name": "Name",
