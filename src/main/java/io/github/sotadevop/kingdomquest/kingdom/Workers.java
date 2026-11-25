@@ -90,13 +90,22 @@ final class Workers {
 		if (!level.isLoaded(s.heart())) {
 			return;
 		}
-		List<KingdomNpc> all = level.getEntitiesOfClass(KingdomNpc.class, new AABB(s.heart()).inflate(120, 64, 120),
+		// the outposts' workers live 200 and more blocks out: the whole realm around the heart is looked through (user,
+		// 2026-11-25: hundreds of quarrymen on one block, a new one every 10 seconds because the old ones weren't found)
+		List<KingdomNpc> all = level.getEntitiesOfClass(KingdomNpc.class, new AABB(s.heart()).inflate(320, 96, 320),
 				n -> n.getAttached(People.ROLE) != null && n.getAttached(People.ROLE).startsWith("worker|" + s.id()));
 		for (Spec spec : SPECS) {
 			boolean wanted = s.level(spec.track()) >= spec.minLevel();
 			String tag = tag(s, spec);
-			KingdomNpc npc = all.stream().filter(n -> tag.equals(n.getAttached(People.ROLE))).findFirst().orElse(null);
+			List<KingdomNpc> mine = all.stream().filter(n -> tag.equals(n.getAttached(People.ROLE))).toList();
+			for (int i = 1; i < mine.size(); i++) {
+				mine.get(i).discard(); // one of each, ever
+			}
+			KingdomNpc npc = mine.isEmpty() ? null : mine.get(0);
 			BlockPos home = home(s, spec);
+			if (npc == null && wanted && !level.isPositionEntityTicking(home)) {
+				continue; // his workplace isn't running: he may be there unseen, and comes when the land is near
+			}
 			if (!wanted) {
 				if (npc != null) {
 					npc.discard();

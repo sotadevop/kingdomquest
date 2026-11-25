@@ -736,7 +736,6 @@ final class Grade {
 			e.setValue(e.getValue() - heartLevel);
 		}
 		lifts.put(Progression.GATE, -heartLevel); // the gate stands in the wall, on the plateau
-		lifts.put("tourney", -heartLevel); // the tournament field lies outside, on the plateau's level
 
 		// what stays flat: the ring and its band, its edge wobbling a little
 		float[] cut = new float[n];
@@ -749,8 +748,12 @@ final class Grade {
 				int c = i * d + k, x = x0 + i, z = z0 + k;
 				// the flat band's edge wanders (never closer than the moat and the landing need) and its corners are round
 				double pad = PAD + 3 + noise(x, z, 16) * 6 + noise(x - 71, z + 29, 5) * 1.5;
-				double ox = Math.max(0, Math.max(ring[0] - x, x - ring[2])), oz = Math.max(0, Math.max(ring[1] - z, z - ring[3]));
-				double out = round ? Math.max(0, -inside(clicked, r, true, x, z)) : Math.sqrt(ox * ox + oz * oz);
+				// a square castle's platform has wide round corners, like a natural island, not a box (user, 2026-11-25):
+				// the distance is taken from the ring drawn in by CORNER with that radius (the wall's corners still lie
+				// on the flat band)
+				final int corner = 28;
+				double ox = Math.max(0, Math.max(ring[0] + corner - x, x - ring[2] + corner)), oz = Math.max(0, Math.max(ring[1] + corner - z, z - ring[3] + corner));
+				double out = round ? Math.max(0, -inside(clicked, r, true, x, z)) : Math.max(0, Math.sqrt(ox * ox + oz * oz) - corner);
 				boolean flat = out <= Math.max(PAD - 3, pad);
 				for (int[] o : outside) {
 					flat |= x >= o[0] - 2 && x <= o[2] + 2 && z >= o[1] - 2 && z <= o[3] + 2;
@@ -1547,6 +1550,8 @@ final class Grade {
 		Set<Long> built = new HashSet<>();
 		s.built().values().forEach(built::addAll);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		Rotation turn = Rotation.values()[s.rotation()];
+		boolean round = Settlements.round(s);
 		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
 			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
 				int c = i * this.d + k;
@@ -1554,14 +1559,19 @@ final class Grade {
 				byte kd = effKind(c, t);
 				// only what this shaping changed (a section shaped again as the town grows isn't planted twice), and not the
 				// plateau's own ground: it starts clear (user, 2026-11-25)
-				if (kd != SLOPE && kd != HILL || !this.fresh.get(c)) {
+				int x = this.x0 + i, z = this.z0 + k;
+				// the flat land around the walls beyond the moat is grown over like the country around, once the walls
+				// stand (user, 2026-11-25: no trees or anything outside the castle looked unnatural)
+				boolean band = this.all && (kd == PLATEAU || kd == MADE) && inside(s.heart(), turn, round, x, z) < -(Layout.moat() + 5);
+				if (band) {
+					kd = SLOPE;
+				} else if (kd != SLOPE && kd != HILL || !this.fresh.get(c)) {
 					continue;
 				}
 				this.fresh.clear(c);
 				if (!this.all && !this.claimed.get(c)) {
 					continue; // a slope back to the land that the town will grow over: planted once it has its final height
 				}
-				int x = this.x0 + i, z = this.z0 + k;
 				BlockState ground = level.getBlockState(pos.set(x, t, z));
 				BlockState over = level.getBlockState(pos.set(x, t + 1, z));
 				if (!over.isAir() || built.contains(BlockPos.asLong(x, t, z))) {
@@ -1571,9 +1581,13 @@ final class Grade {
 				boolean soil = ground.is(Blocks.GRASS_BLOCK) || ground.is(Blocks.PODZOL) || ground.is(Blocks.DIRT) || ground.is(Blocks.COARSE_DIRT)
 						|| ground.is(Blocks.MYCELIUM) || ground.is(Blocks.MOSS_BLOCK) || ground.is(Blocks.MUD);
 				boolean sandy = ground.is(BlockTags.SAND) || ground.is(BlockTags.TERRACOTTA);
+				if (band && !(ground.is(Blocks.GRASS_BLOCK) || ground.is(Blocks.PODZOL) || ground.is(Blocks.MYCELIUM) || ground.is(BlockTags.SAND)
+						|| ground.is(Blocks.SNOW_BLOCK))) {
+					continue; // a road, a path or a landing: left free
+				}
 				double r = random.nextDouble();
 				boolean wild = kd == SLOPE || kd == HILL; // free land: trees and stones; on the plateau's plots only meadow
-				double woods = kd == HILL ? Math.max(this.trees * 1.1, 0.012) : this.trees * 1.1;
+				double woods = kd == HILL ? Math.max(this.trees * 1.1, 0.012) : Math.max(this.trees * 1.1, band ? 0.004 : 0);
 				if (wild && (material(ground) == 2 || kd == HILL) && r < (steepness(x, z) >= 2 ? 1 / 70.0 : 1 / 160.0)) {
 					boulder(level, at, ground, random, built);
 				} else if (wild && soil && r < woods) {

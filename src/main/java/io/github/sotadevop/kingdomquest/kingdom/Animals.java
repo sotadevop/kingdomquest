@@ -96,6 +96,9 @@ final class Animals {
 	}
 
 	private static Mob spawn(ServerLevel level, Settlement s, String type, String role, BlockPos pos) {
+		if (!level.isPositionEntityTicking(pos)) {
+			return null; // its place isn't running: the one there may just be unseen
+		}
 		EntityType<?> et = BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace(type));
 		Entity e = et == null ? null : et.create(level, EntitySpawnReason.MOB_SUMMONED);
 		if (!(e instanceof Mob m)) {
