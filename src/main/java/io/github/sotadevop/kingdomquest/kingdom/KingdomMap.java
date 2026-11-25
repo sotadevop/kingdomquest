@@ -58,7 +58,10 @@ public final class KingdomMap {
 
 	/** A new lord gets his map with the founding. */
 	static void give(ServerPlayer player) {
-		player.getInventory().placeItemBackInInventory(new ItemStack(ITEM)); // into the inventory, or dropped at his feet
+		ItemStack map = new ItemStack(ITEM);
+		if (!player.getInventory().add(map)) {
+			player.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(player.level(), player.getX(), player.getY(), player.getZ(), map));
+		}
 	}
 
 	/** Takes the lord to the front of a building's door (or onto its plot when it has none). */
