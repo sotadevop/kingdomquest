@@ -1558,6 +1558,9 @@ final class Grade {
 					continue;
 				}
 				this.fresh.clear(c);
+				if (!this.all && !this.claimed.get(c)) {
+					continue; // a slope back to the land that the town will grow over: planted once it has its final height
+				}
 				int x = this.x0 + i, z = this.z0 + k;
 				BlockState ground = level.getBlockState(pos.set(x, t, z));
 				BlockState over = level.getBlockState(pos.set(x, t + 1, z));
