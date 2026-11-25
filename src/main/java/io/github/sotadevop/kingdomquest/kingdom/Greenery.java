@@ -67,7 +67,9 @@ final class Greenery {
 				continue; // something stands there now (the lord's own building, a path): the spot stays as it is
 			}
 			budget--;
-			switch (spots[i][2]) {
+			String biome = level.getBiome(ground).getRegisteredName();
+			boolean odd = biome.contains("mushroom") || biome.contains("mangrove") || biome.contains("bamboo");
+			switch (odd && spots[i][2] == 0 ? 1 : spots[i][2]) { // no huge mushrooms, mangrove roots or bamboo groves in a town
 				case 0 -> Grade.place(level, level.getChunkSource().getGenerator(), level.getRandom(), ground.above(), true, s.heart(), false);
 				case 1 -> Grade.place(level, level.getChunkSource().getGenerator(), level.getRandom(), ground.above(), false, s.heart(), true);
 				default -> bush(level, ground.above(), style);

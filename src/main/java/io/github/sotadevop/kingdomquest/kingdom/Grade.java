@@ -1454,8 +1454,8 @@ final class Grade {
 		for (int y = t + 1; y <= g + 1; y++) {
 			for (Direction dir : Direction.Plane.HORIZONTAL) {
 				pos.set(x + dir.getStepX(), y, z + dir.getStepZ());
-				if (!level.getFluidState(pos).isEmpty() && !built.contains(pos.asLong())) {
-					BlockPos here = new BlockPos(x, y, z);
+				BlockPos here = new BlockPos(x, y, z);
+				if (!level.getFluidState(pos).isEmpty() && !built.contains(pos.asLong()) && !built.contains(here.asLong())) {
 					level.setBlock(here, stack.get(Math.min(2, stack.size() - 1)), SiteWork.FLAGS);
 				}
 			}
