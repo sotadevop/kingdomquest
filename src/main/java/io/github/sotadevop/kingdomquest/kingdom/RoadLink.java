@@ -300,8 +300,8 @@ final class RoadLink {
 						if (toward <= 0 || onward <= 0) {
 							continue;
 						}
-						int len = 1, dry = 0, wet = 0;
-						while (len < 96 && wet == 0 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 0) {
+						int len = 1, dry = 0, water = 0;
+						while (len < 96 && water == 0 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 0) {
 							dry++;
 							len++;
 							if (dry > 6) {
@@ -312,14 +312,14 @@ final class RoadLink {
 							continue; // no water ahead this way
 						}
 						while (len < 96 && surfaceAt(level, a.getX() + d.getStepX() * len, a.getZ() + d.getStepZ() * len)[1] == 1) {
-							wet++;
+							water++;
 							len++;
 						}
-						if (len >= 96 || wet == 0) {
+						if (len >= 96 || water == 0) {
 							continue;
 						}
-						double cost = 2.0 * wet + dry + 0.5 * (i - 1 - ia);
-						if (cost < bestCost && (straight ? wet < wetHere : true)) {
+						double cost = 2.0 * water + dry + 0.5 * (i - 1 - ia);
+						if (cost < bestCost && (straight ? water < wetHere : true)) {
 							bestCost = cost;
 							bestLen = len;
 							best = d;

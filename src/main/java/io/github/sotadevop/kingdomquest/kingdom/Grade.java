@@ -347,6 +347,16 @@ final class Grade {
 		}
 	}
 
+	/** True when a column has its final height and is shaped: the town's greenery may be planted there. */
+	boolean settled(int x, int z) {
+		int c = index(x, z);
+		if (c < 0) {
+			return false;
+		}
+		int i = c / this.d, k = c % this.d;
+		return (this.all || this.claimed.get(c)) && (this.shaped.get(i / SECTION * this.sd + k / SECTION) || !needed(i / SECTION * this.sd + k / SECTION));
+	}
+
 	/** Everything to its plan: the walls are coming. */
 	void claimAll() {
 		if (!this.all) {
@@ -1056,6 +1066,15 @@ final class Grade {
 		return all;
 	}
 
+	/** Loads (or generates) every chunk of the site and a ring around it, now: the test's "max" shapes it all at once. */
+	void loadAll(ServerLevel level) {
+		for (int cx = (this.x0 - 16) >> 4; cx <= (this.x0 + this.w + 16) >> 4; cx++) {
+			for (int cz = (this.z0 - 16) >> 4; cz <= (this.z0 + this.d + 16) >> 4; cz++) {
+				level.getChunk(cx, cz);
+			}
+		}
+	}
+
 	/** The whole site at once (field test). */
 	void shapeAll(ServerLevel level, Settlement s) {
 		for (int sec = 0; sec < this.sw * this.sd; sec++) {
@@ -1083,6 +1102,9 @@ final class Grade {
 		}
 		if (server.getTickCount() % 20 == 0) {
 			g.stage(s); // the yard grows with the tiers
+		}
+		if (server.getTickCount() % 200 == 37) {
+			Greenery.grow(server, s, 6); // the town's trees and flowers where the land is done
 		}
 		if (g.complete() || server.getTickCount() % 2 != 0) {
 			return; // a section every other tick: about 10 ms of work, the server keeps its pace
@@ -1549,7 +1571,7 @@ final class Grade {
 	}
 
 	/** One of the biome's own vegetation features at {@code at}: a tree, or a patch of flowers, grass or bushes. */
-	private static void place(ServerLevel level, ChunkGenerator gen, RandomSource random, BlockPos at, boolean tree, BlockPos heart, boolean meadow) {
+	static void place(ServerLevel level, ChunkGenerator gen, RandomSource random, BlockPos at, boolean tree, BlockPos heart, boolean meadow) {
 		// the land's biome: a filled river or beach is grown over like the land around the site
 		Holder<net.minecraft.world.level.biome.Biome> biome = level.getBiome(at);
 		String b = biome.getRegisteredName();

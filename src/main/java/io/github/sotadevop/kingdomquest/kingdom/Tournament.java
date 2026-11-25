@@ -32,12 +32,17 @@ import net.minecraft.world.phys.Vec3;
  * dusk everyone goes home. Positions in the base frame of tools/buildings.py (TOURNEY).
  */
 final class Tournament {
-	private static final int TILT_Z = -157;
-	private static final int WEST = -10;
-	private static final int EAST = 18;
-	private static final String ROLE = "tourney";
-	private static final int[][] ARCHERS = {{24, -151}, {27, -151}, {30, -151}};
-	private static final int TARGET_Z = -166;
+	/**
+	 * A tournament ground: the field outside the walls (TOURNEY), and the tilting yard inside them (LISTS; user,
+	 * 2026-11-25: tournaments inside the castle too). Base frame of tools/buildings.py.
+	 */
+	private record Field(String track, String role, int tiltZ, int west, int east, int centreX, int[][] archers, int targetZ, int crowdX, int crowdZ,
+			int crowd) {
+	}
+
+	private static final Field[] FIELDS = {
+			new Field("tourney", "tourney", -157, -10, 18, 5, new int[][] {{24, -151}, {27, -151}, {30, -151}}, -166, -8, -152, 8),
+			new Field("lists", "lists", -34, -24, -3, -13, new int[0][], 0, -21, -29, 6)};
 
 	private Tournament() {
 	}
@@ -60,25 +65,31 @@ final class Tournament {
 		return s.heart().offset(Layout.rel(Rotation.values()[s.rotation()], bx, 0, bz));
 	}
 
-	private static List<Entity> tagged(ServerLevel level, Settlement s) {
-		String want = ROLE + "|" + s.id();
-		BlockPos c = at(s, 5, TILT_Z);
+	private static List<Entity> tagged(ServerLevel level, Settlement s, Field f) {
+		String want = f.role() + "|" + s.id();
+		BlockPos c = at(s, f.centreX(), f.tiltZ());
 		return level.getEntitiesOfClass(Entity.class, new AABB(c).inflate(60, 40, 60), e -> {
 			String r = e.getAttached(People.ROLE);
-			return r != null && (r.equals(want) || r.equals("animal|" + s.id() + "|tourney_horse"));
+			return r != null && (r.equals(want) || r.equals("animal|" + s.id() + "|" + f.role() + "_horse"));
 		});
 	}
 
 	private static void tick(MinecraftServer server, Settlement s) {
+		for (Field f : FIELDS) {
+			tick(server, s, f);
+		}
+	}
+
+	private static void tick(MinecraftServer server, Settlement s, Field f) {
 		ServerLevel level = server.overworld();
-		if (s.level("tourney") <= 0) {
+		if (s.level(f.track()) <= 0) {
 			return;
 		}
-		BlockPos centre = at(s, 5, TILT_Z);
+		BlockPos centre = at(s, f.centreX(), f.tiltZ());
 		if (!level.isLoaded(centre)) {
 			return;
 		}
-		List<Entity> here = tagged(level, s);
+		List<Entity> here = tagged(level, s, f);
 		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 		boolean near = owner != null && owner.level() == level && owner.distanceToSqr(Vec3.atCenterOf(centre)) < 120 * 120;
 		boolean on = isTournamentDay(level.getGameTime()) && level.isBrightOutside();
@@ -92,22 +103,23 @@ final class Tournament {
 			if (!near) {
 				return;
 			}
-			start(level, s);
-			owner.sendSystemMessage(Component.translatable("kingdomquest.tourney.start", s.name()));
+			start(level, s, f);
+			if (f.track().equals("tourney") || s.level("tourney") <= 0) {
+				owner.sendSystemMessage(Component.translatable("kingdomquest.tourney.start", s.name()));
+			}
 			return;
 		}
-		joust(level, s, here);
+		joust(level, s, f, here);
 		if (server.getTickCount() % 60 == 11) {
 			archery(level, s, here);
 		}
 	}
 
-	private static void start(ServerLevel level, Settlement s) {
-		int y = s.heart().getY() + Settlements.lift(s, Settlements.template(s, "tourney_1"));
-		String role = ROLE + "|" + s.id();
+	private static void start(ServerLevel level, Settlement s, Field f) {
+		int y = s.heart().getY() + Settlements.lift(s, Settlements.template(s, f.track() + "_1"));
 		for (int i = 0; i < 2; i++) {
-			int lane = TILT_Z + (i == 0 ? 2 : -2);
-			BlockPos p = Animals.floor(level, at(s, i == 0 ? WEST : EAST, lane), y);
+			int lane = f.tiltZ() + (i == 0 ? 2 : -2);
+			BlockPos p = Animals.floor(level, at(s, i == 0 ? f.west() : f.east(), lane), y);
 			if (p == null) {
 				continue;
 			}
@@ -119,10 +131,10 @@ final class Tournament {
 			horse.snapTo(Vec3.atBottomCenterOf(p), i == 0 ? -90 : 90, 0);
 			horse.setPersistenceRequired();
 			horse.addTag(i == 0 ? "kq_lane_s" : "kq_lane_n");
-			horse.setAttached(People.ROLE, "animal|" + s.id() + "|tourney_horse");
+			horse.setAttached(People.ROLE, "animal|" + s.id() + "|" + f.role() + "_horse");
 			horse.setItemSlot(EquipmentSlot.BODY, new ItemStack(i == 0 ? Items.GOLDEN_HORSE_ARMOR : Items.IRON_HORSE_ARMOR));
 			level.addFreshEntity(horse);
-			KingdomNpc knight = People.visitor(level, s, ROLE, p);
+			KingdomNpc knight = People.visitor(level, s, f.role(), p);
 			if (knight == null) {
 				horse.discard();
 				continue;
@@ -135,36 +147,36 @@ final class Tournament {
 			knight.setNoAi(true);
 			knight.startRiding(horse);
 		}
-		for (int[] a : ARCHERS) {
+		for (int[] a : f.archers()) {
 			BlockPos p = Animals.floor(level, at(s, a[0], a[1]), y);
-			KingdomNpc archer = p == null ? null : People.visitor(level, s, ROLE, p);
+			KingdomNpc archer = p == null ? null : People.visitor(level, s, f.role(), p);
 			if (archer != null) {
 				archer.setCustomName(Component.translatable("kingdomquest.tourney.archer"));
 				archer.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
 				archer.setNoAi(true);
-				BlockPos t = at(s, a[0], TARGET_Z);
+				BlockPos t = at(s, a[0], f.targetZ());
 				archer.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(t.atY(p.getY() + 1)));
 			}
 		}
 		// the crowd by the lists, in front of the stand
-		for (int i = 0; i < 8; i++) {
-			BlockPos p = Animals.floor(level, at(s, -8 + i * 3, TILT_Z + 5), y);
-			KingdomNpc fan = p == null ? null : People.visitor(level, s, ROLE, p);
+		for (int i = 0; i < f.crowd(); i++) {
+			BlockPos p = Animals.floor(level, at(s, f.crowdX() + i * 3, f.crowdZ()), y);
+			KingdomNpc fan = p == null ? null : People.visitor(level, s, f.role(), p);
 			if (fan != null) {
 				fan.setNoAi(true);
-				fan.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(at(s, -8 + i * 3, TILT_Z).atY(p.getY() + 1)));
+				fan.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, Vec3.atCenterOf(at(s, f.crowdX() + i * 3, f.tiltZ()).atY(p.getY() + 1)));
 			}
 		}
 	}
 
 	/** The horses run to the far end of their lane and turn; when the two pass, the lances clash. */
-	private static void joust(ServerLevel level, Settlement s, List<Entity> here) {
+	private static void joust(ServerLevel level, Settlement s, Field f, List<Entity> here) {
 		Mob[] horses = here.stream().filter(e -> e instanceof Mob && !(e instanceof KingdomNpc) && !e.getPassengers().isEmpty()).map(e -> (Mob) e)
 				.toArray(Mob[]::new);
 		for (Mob horse : horses) {
-			int lane = TILT_Z + (horse.entityTags().contains("kq_lane_s") ? 2 : -2);
-			BlockPos west = at(s, WEST, lane);
-			BlockPos east = at(s, EAST, lane);
+			int lane = f.tiltZ() + (horse.entityTags().contains("kq_lane_s") ? 2 : -2);
+			BlockPos west = at(s, f.west(), lane);
+			BlockPos east = at(s, f.east(), lane);
 			double dw = horse.distanceToSqr(west.getX() + 0.5, horse.getY(), west.getZ() + 0.5);
 			double de = horse.distanceToSqr(east.getX() + 0.5, horse.getY(), east.getZ() + 0.5);
 			BlockPos to = dw < 9 ? east : de < 9 ? west : horse.getNavigation().isDone() ? (dw < de ? east : west) : null;

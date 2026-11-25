@@ -944,9 +944,20 @@ public final class Settlements {
 	/** Every track to its highest level. */
 	public static boolean testMax(ServerPlayer player) {
 		boolean ok = true;
+		// the whole site at once (user, 2026-11-25: max took too long: the jobs waited for the land, shaped a section at
+		// a time where the lord flew): its chunks loaded now, then shaped in one go, then every track built on it
+		Settlement s0 = testFinish(player);
+		MinecraftServer server = player.level().getServer();
+		Grade grade = s0 == null ? null : Grade.of(server, s0);
+		if (grade != null) {
+			grade.loadAll(server.overworld());
+			grade.claimAll();
+			grade.shapeAll(server.overworld(), s0);
+		}
 		for (String track : Progression.ORDER) {
 			ok &= testSet(player, track, Progression.steps(track).size());
 		}
+		RoadLink.runAll(server); // the roads out to the outposts and the places around
 		return ok;
 	}
 
@@ -2272,11 +2283,11 @@ public final class Settlements {
 			if (jt.equals(Progression.WALLS) || jt.equals(Progression.GATE) || jt.equals(Progression.POSTERN)) {
 				grade.claimAll();
 			} else {
-				List<Long> cols = new ArrayList<>(columns.size());
+				List<Long> claimCols = new ArrayList<>(columns.size());
 				for (SiteWork.Column c : columns) {
-					cols.add(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()));
+					claimCols.add(BlockPos.asLong(s.heart().getX() + c.dx(), 0, s.heart().getZ() + c.dz()));
 				}
-				grade.claim(cols, 3);
+				grade.claim(claimCols, 3);
 			}
 		}
 		if (grade != null && !grade.complete()) {
@@ -2482,6 +2493,7 @@ public final class Settlements {
 				owner.sendSystemMessage(Component.translatable("kingdomquest.build.done", s.name()));
 			}
 			Chronicle.built(server, byHeart(server, s.heart()), s.jobTrack());
+			TownSigns.built(server, byHeart(server, s.heart()), s.jobTrack());
 			roadOut(server, byHeart(server, s.heart()), s.jobTrack());
 			Settlement latest = byHeart(server, s.heart());
 			if (latest != null) {

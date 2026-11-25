@@ -15,7 +15,7 @@ import net.minecraft.network.chat.Component;
 
 /** The tram stop's lectern: one button per other stop on the line; picking one starts the ride. */
 public class TramScreen extends Screen {
-	private static final String[] KEYS = {"gate", "square", "castle", "storehouse"};
+	private final List<String> names = new ArrayList<>();
 	private static final int W = 200;
 	private static final int ROW = 22;
 
@@ -32,10 +32,13 @@ public class TramScreen extends Screen {
 		this.heart = new BlockPos(o.get("x").getAsInt(), o.get("y").getAsInt(), o.get("z").getAsInt());
 		this.here = o.get("here").getAsInt();
 		o.getAsJsonArray("stops").forEach(e -> this.stops.add(e.getAsInt()));
+		if (o.has("names")) {
+			o.getAsJsonArray("names").forEach(e -> this.names.add(e.getAsString()));
+		}
 	}
 
-	private static Component stop(int i) {
-		return Component.translatable("kingdomquest.tram.stop." + KEYS[i]);
+	private Component stop(int i) {
+		return Component.translatable("kingdomquest.tram.stop." + (i < this.names.size() ? this.names.get(i) : "gate"));
 	}
 
 	@Override

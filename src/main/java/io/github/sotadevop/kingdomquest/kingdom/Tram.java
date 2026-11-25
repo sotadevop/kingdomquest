@@ -35,25 +35,15 @@ import net.minecraft.world.level.block.state.properties.RailShape;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * The tram (19.11): rails in the street from the gate up the main street to the square and the castle, with a branch
- * along the south cross street to the storehouse. The lectern at a stop opens a small menu of the other stops; the
- * mod brings a minecart, seats the lord in it and drives it along the rails to the chosen stop.
+ * The tram (19.11): a loop of rails around the town just inside the wall (user, 2026-11-25: not straight through the
+ * city), with stops by the gate and in the middle of the west, north and east sides. The lectern at a stop opens a
+ * small menu of the other stops; the mod brings a minecart, seats the lord in it and drives it along the rails the
+ * shorter way round to the chosen stop.
  * <p>
- * The rails lie on the street plan's heights. Only the part reachable from the gate is laid: a step of more than one
- * block, a half step (a slab in the street) or a gap in the street ends the line, and stops past the end are left out
- * (a hill castle's motte stairs, for example). The lines are kept in step with tools/buildings.py (TRAM_MAIN,
- * TRAM_BRANCH, TRAM_STOPS).
+ * The rails lie on the plan's height (the plateau's flat band along the wall), on the street's where they cross one.
+ * The loop and its stops come from layout.json (tools/buildings.py tram_loop).
  */
 public final class Tram {
-	/** Base-frame columns of the main line, gate end first. */
-	private static final int[][] MAIN = line(9, 94, 9, 17);
-	/** Base-frame columns of the branch, from beside the junction westward. */
-	private static final int[][] BRANCH = line(8, 58, -22, 58);
-	/** Index on the main line where the branch leaves. */
-	private static final int JUNCTION = 94 - 58;
-	/** Stop keys and where they lie: {line (0 main, 1 branch), index}. */
-	static final String[] STOPS = {"gate", "square", "castle", "storehouse"};
-	private static final int[][] STOP_AT = {{0, 94 - 91}, {0, 94 - 32}, {0, 94 - 20}, {1, 8 + 19}};
 	private static final double SPEED = 0.5;
 
 	private static final Map<UUID, Trip> TRIPS = new HashMap<>();
@@ -61,13 +51,9 @@ public final class Tram {
 	private Tram() {
 	}
 
-	private static int[][] line(int x0, int z0, int x1, int z1) {
-		int n = Math.max(Math.abs(x1 - x0), Math.abs(z1 - z0)) + 1;
-		int[][] out = new int[n][];
-		for (int i = 0; i < n; i++) {
-			out[i] = new int[] {x0 + Integer.signum(x1 - x0) * i, z0 + Integer.signum(z1 - z0) * i};
-		}
-		return out;
+	/** The stop names of a settlement's loop. */
+	static String[] stops(Settlement s) {
+		return Layout.tramStops(Settlements.round(s));
 	}
 
 	static void register() {
@@ -101,37 +87,39 @@ public final class Tram {
 
 	// ---- the line as laid ----
 
-	/** The reachable part of a settlement's line: world rail positions by line and index. */
+	/** The loop as laid: world rail positions in order (a closed loop). */
 	static final class Line {
-		final BlockPos[] main;
-		final BlockPos[] branch;
+		final BlockPos[] loop;
+		final int[] stopAt;
 		final Settlement s;
 
-		private Line(Settlement s, BlockPos[] main, BlockPos[] branch) {
+		private Line(Settlement s, BlockPos[] loop, int[] stopAt) {
 			this.s = s;
-			this.main = main;
-			this.branch = branch;
+			this.loop = loop;
+			this.stopAt = stopAt;
 		}
 
 		static Line of(MinecraftServer server, Settlement s) {
+			Grade plan = Grade.of(server, s);
 			StreetPlan streets = StreetPlan.of(server, s);
-			if (streets == null) {
+			if (plan == null) {
 				return null;
 			}
-			Rotation r = Rotation.values()[s.rotation()];
-			BlockPos[] main = reach(s, streets, r, MAIN, null);
-			BlockPos[] branch = main[JUNCTION] == null ? new BlockPos[BRANCH.length] : reach(s, streets, r, BRANCH, main[JUNCTION]);
-			return new Line(s, main, branch);
+			boolean round = Settlements.round(s);
+			int[][] cells = Layout.tramLoop(round);
+			if (cells.length == 0) {
+				return null;
+			}
+			return new Line(s, positions(s, plan, streets, cells), Layout.tramStopAt(round));
 		}
 
 		BlockPos stop(int i) {
-			int[] at = STOP_AT[i];
-			return (at[0] == 0 ? this.main : this.branch)[at[1]];
+			return i < this.stopAt.length ? this.loop[this.stopAt[i]] : null;
 		}
 
 		/** The stop whose platform the position is on (within 4 blocks of its rail), or -1. */
 		int stopNear(BlockPos pos) {
-			for (int i = 0; i < STOPS.length; i++) {
+			for (int i = 0; i < this.stopAt.length; i++) {
 				BlockPos p = stop(i);
 				if (p != null && Math.abs(p.getX() - pos.getX()) <= 4 && Math.abs(p.getZ() - pos.getZ()) <= 4 && Math.abs(p.getY() - pos.getY()) <= 3) {
 					return i;
@@ -140,103 +128,103 @@ public final class Tram {
 			return -1;
 		}
 
-		/** The rails from one stop to another, in order. */
+		/** The rails from one stop to another, the shorter way round the loop. */
 		List<BlockPos> route(int from, int to) {
+			int n = this.loop.length, a = this.stopAt[from], b = this.stopAt[to];
+			int fwd = Math.floorMod(b - a, n);
+			int step = fwd <= n - fwd ? 1 : -1;
 			List<BlockPos> out = new ArrayList<>();
-			int[] a = STOP_AT[from];
-			int[] b = STOP_AT[to];
-			if (a[0] == b[0]) {
-				BlockPos[] l = a[0] == 0 ? this.main : this.branch;
-				walk(l, a[1], b[1], out);
-			} else if (a[0] == 0) {
-				walk(this.main, a[1], JUNCTION, out);
-				walk(this.branch, 0, b[1], out);
-			} else {
-				walk(this.branch, a[1], 0, out);
-				walk(this.main, JUNCTION, b[1], out);
-			}
-			return out;
-		}
-
-		private static void walk(BlockPos[] l, int i, int j, List<BlockPos> out) {
-			int d = Integer.signum(j - i);
-			for (int k = i; ; k += d) {
-				out.add(l[k]);
-				if (k == j) {
+			for (int k = a; ; k = Math.floorMod(k + step, n)) {
+				out.add(this.loop[k]);
+				if (k == b) {
 					break;
 				}
 			}
+			return out;
 		}
 	}
 
-	/**
-	 * World rail positions along a line from its first column while the street allows it: a street column, not a half
-	 * step, at most one block up or down from the one before. The rest is null.
-	 */
-	private static BlockPos[] reach(Settlement s, StreetPlan streets, Rotation r, int[][] line, BlockPos from) {
-		BlockPos[] out = new BlockPos[line.length];
-		BlockPos prev = from;
-		for (int i = 0; i < line.length; i++) {
-			BlockPos col = s.heart().offset(Layout.rel(r, line[i][0], 0, line[i][1]));
-			long key = BlockPos.asLong(col.getX(), 0, col.getZ());
-			Integer f = streets.feetAt(key);
-			if (f == null || streets.slab(key)) {
-				break;
-			}
-			BlockPos here = col.atY(s.heart().getY() + f);
-			if (prev != null && Math.abs(here.getY() - prev.getY()) > 1) {
-				break;
-			}
-			out[i] = here;
-			prev = here;
+	/** World rail positions: on the street where the loop crosses one, else on the plan's ground. */
+	private static BlockPos[] positions(Settlement s, Grade plan, StreetPlan streets, int[][] cells) {
+		Rotation r = Rotation.values()[s.rotation()];
+		BlockPos[] out = new BlockPos[cells.length];
+		for (int i = 0; i < cells.length; i++) {
+			BlockPos col = s.heart().offset(Layout.rel(r, cells[i][0], 0, cells[i][1]));
+			Integer f = streets == null ? null : streets.feetAt(BlockPos.asLong(col.getX(), 0, col.getZ()));
+			int top = plan.topAt(col.getX(), col.getZ());
+			int y = f != null ? s.heart().getY() + f : top != Integer.MIN_VALUE ? top + 1 : s.heart().getY();
+			out[i] = col.atY(y);
 		}
 		return out;
 	}
 
 	/**
-	 * The tram's blocks as placed: only what stands on the reachable line (rails, and stops whose rail is reached), and
-	 * every rail turned to run along its line, sloping where the next rail is one block up.
+	 * The tram's blocks as placed: every rail turned to run along the loop, round its corners and up where the next
+	 * rail is a block higher.
 	 */
 	static void trim(Settlement s, StreetPlan streets, List<Template.Placement> out) {
-		Rotation r = Rotation.values()[s.rotation()];
-		BlockPos[] main = reach(s, streets, r, MAIN, null);
-		BlockPos[] branch = main[JUNCTION] == null ? new BlockPos[BRANCH.length] : reach(s, streets, r, BRANCH, main[JUNCTION]);
-		Set<Long> kept = new HashSet<>();
-		Map<Long, RailShape> shapes = new HashMap<>();
-		for (BlockPos[] l : new BlockPos[][] {main, branch}) {
-			for (int i = 0; i < l.length && l[i] != null; i++) {
-				BlockPos here = l[i];
-				BlockPos next = i + 1 < l.length ? l[i + 1] : null;
-				BlockPos prev = i > 0 ? l[i - 1] : l == branch ? main[JUNCTION] : null;
-				BlockPos along = next != null ? next : prev;
-				RailShape shape;
-				if (next != null && next.getY() == here.getY() + 1) {
-					shape = ascending(next.getX() - here.getX(), next.getZ() - here.getZ());
-				} else if (prev != null && prev.getY() == here.getY() + 1) {
-					shape = ascending(prev.getX() - here.getX(), prev.getZ() - here.getZ());
-				} else {
-					shape = along != null && along.getX() != here.getX() ? RailShape.EAST_WEST : RailShape.NORTH_SOUTH;
-				}
-				BlockPos rel = here.subtract(s.heart());
-				long k = BlockPos.asLong(rel.getX(), 0, rel.getZ());
-				kept.add(k);
-				shapes.put(k, shape);
-			}
+		Grade plan = Settlements.server() == null ? null : Grade.of(Settlements.server(), s);
+		int[][] cells = Layout.tramLoop(Settlements.round(s));
+		if (plan == null || cells.length == 0) {
+			out.clear();
+			return;
 		}
-		out.removeIf(p -> !kept.contains(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ())));
+		BlockPos[] loop = positions(s, plan, streets, cells);
+		int n = loop.length;
+		Map<Long, RailShape> shapes = new HashMap<>();
+		for (int i = 0; i < n; i++) {
+			BlockPos here = loop[i], prev = loop[Math.floorMod(i - 1, n)], next = loop[(i + 1) % n];
+			RailShape shape;
+			if (next.getY() == here.getY() + 1) {
+				shape = ascending(next.getX() - here.getX(), next.getZ() - here.getZ());
+			} else if (prev.getY() == here.getY() + 1) {
+				shape = ascending(prev.getX() - here.getX(), prev.getZ() - here.getZ());
+			} else {
+				shape = joining(prev.getX() - here.getX(), prev.getZ() - here.getZ(), next.getX() - here.getX(), next.getZ() - here.getZ());
+			}
+			BlockPos rel = here.subtract(s.heart());
+			shapes.put(BlockPos.asLong(rel.getX(), 0, rel.getZ()), shape);
+		}
 		out.replaceAll(p -> {
 			if (!(p.state().getBlock() instanceof BaseRailBlock) || p.offset().getX() != p.anchor().getX() || p.offset().getZ() != p.anchor().getZ()) {
 				return p;
 			}
 			RailShape shape = shapes.get(BlockPos.asLong(p.anchor().getX(), 0, p.anchor().getZ()));
 			BlockState st = p.state();
+			if (shape == null) {
+				return p;
+			}
 			if (st.hasProperty(BlockStateProperties.RAIL_SHAPE)) {
 				st = st.setValue(BlockStateProperties.RAIL_SHAPE, shape);
-			} else if (st.hasProperty(BlockStateProperties.RAIL_SHAPE_STRAIGHT)) {
+			} else if (st.hasProperty(BlockStateProperties.RAIL_SHAPE_STRAIGHT) && BlockStateProperties.RAIL_SHAPE_STRAIGHT.getPossibleValues().contains(shape)) {
 				st = st.setValue(BlockStateProperties.RAIL_SHAPE_STRAIGHT, shape);
 			}
 			return new Template.Placement(p.offset(), st, p.segment(), p.anchor());
 		});
+	}
+
+	/** The rail shape joining the two neighbours (dx, dz each): straight, or one of the four curves. */
+	private static RailShape joining(int ax, int az, int bx, int bz) {
+		boolean n = az < 0 || bz < 0, so = az > 0 || bz > 0, e = ax > 0 || bx > 0, w = ax < 0 || bx < 0;
+		if (n && so) {
+			return RailShape.NORTH_SOUTH;
+		}
+		if (e && w) {
+			return RailShape.EAST_WEST;
+		}
+		if (n && e) {
+			return RailShape.NORTH_EAST;
+		}
+		if (n && w) {
+			return RailShape.NORTH_WEST;
+		}
+		if (so && e) {
+			return RailShape.SOUTH_EAST;
+		}
+		if (so && w) {
+			return RailShape.SOUTH_WEST;
+		}
+		return ax != 0 || bx != 0 ? RailShape.EAST_WEST : RailShape.NORTH_SOUTH;
 	}
 
 	private static RailShape ascending(int dx, int dz) {
@@ -254,23 +242,13 @@ public final class Tram {
 			problems.add("tram: no street plan");
 			return problems;
 		}
-		List<String> stops = new ArrayList<>();
-		for (int i = 0; i < STOPS.length; i++) {
-			if (l.stop(i) != null) {
-				stops.add(STOPS[i]);
-			}
-		}
+		List<String> stops = new ArrayList<>(List.of(stops(s)));
 		int rails = 0;
 		List<String> missing = new ArrayList<>();
-		for (BlockPos[] line : new BlockPos[][] {l.main, l.branch}) {
-			for (BlockPos p : line) {
-				if (p == null) {
-					break;
-				}
-				rails++;
-				if (!(level.getBlockState(p).getBlock() instanceof BaseRailBlock) && missing.size() < 4) {
-					missing.add(p.subtract(s.heart()).toShortString());
-				}
+		for (BlockPos p : l.loop) {
+			rails++;
+			if (!(level.getBlockState(p).getBlock() instanceof BaseRailBlock) && missing.size() < 4) {
+				missing.add(p.subtract(s.heart()).toShortString());
 			}
 		}
 		report.append("\nTram: ").append(rails).append(" rails, stops ").append(stops).append('\n');
@@ -294,12 +272,13 @@ public final class Tram {
 		o.addProperty("here", here);
 		o.addProperty("name", s.name());
 		JsonArray stops = new JsonArray();
-		for (int i = 0; i < STOPS.length; i++) {
-			if (l.stop(i) != null) {
-				stops.add(i);
-			}
+		JsonArray names = new JsonArray();
+		for (int i = 0; i < l.stopAt.length; i++) {
+			stops.add(i);
+			names.add(stops(s)[i]);
 		}
 		o.add("stops", stops);
+		o.add("names", names);
 		ServerPlayNetworking.send(player, new TramPayload(o.toString()));
 	}
 
@@ -307,7 +286,7 @@ public final class Tram {
 		MinecraftServer server = player.level().getServer();
 		Settlement s = Settlements.byHeart(server, p.heart());
 		if (s == null || s.level(Progression.TRAM) <= 0 || p.from() == p.to() || p.from() < 0 || p.to() < 0
-				|| p.from() >= STOPS.length || p.to() >= STOPS.length || player.isPassenger()) {
+				|| p.from() >= stops(s).length || p.to() >= stops(s).length || player.isPassenger()) {
 			return;
 		}
 		Line l = Line.of(server, s);
@@ -367,7 +346,7 @@ public final class Tram {
 			if (l == null) {
 				continue;
 			}
-			for (int i = 0; i < STOPS.length; i++) {
+			for (int i = 0; i < l.stopAt.length; i++) {
 				BlockPos stop = l.stop(i);
 				if (stop == null || !level.isLoaded(stop) || !(level.getBlockState(stop).getBlock() instanceof BaseRailBlock)) {
 					continue;

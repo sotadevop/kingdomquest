@@ -32,6 +32,9 @@ public class NpcRenderer extends HumanoidMobRenderer<KingdomNpc, NpcRenderer.Sta
 
 	private NpcRenderer(EntityRendererProvider.Context ctx, boolean slim) {
 		super(ctx, new HumanoidModel<>(ctx.bakeLayer(slim ? ModelLayers.PLAYER_SLIM : ModelLayers.PLAYER)), 0.5f);
+		// the armour they wear is drawn (user, 2026-11-25: the knights' iron didn't show, only their horses')
+		this.addLayer(new net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer<>(this, net.minecraft.client.renderer.entity.ArmorModelSet.bake(
+				slim ? ModelLayers.PLAYER_SLIM_ARMOR : ModelLayers.PLAYER_ARMOR, ctx.getModelSet(), HumanoidModel::new), ctx.getEquipmentRenderer()));
 		this.slimTwin = slim ? null : new NpcRenderer(ctx, true);
 	}
 
