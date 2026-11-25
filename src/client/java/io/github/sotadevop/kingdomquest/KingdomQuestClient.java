@@ -29,7 +29,7 @@ public class KingdomQuestClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.TramPayload.TYPE,
 				(payload, context) -> context.client().setScreenAndShow(new io.github.sotadevop.kingdomquest.client.TramScreen(payload)));
 		ClientPlayNetworking.registerGlobalReceiver(io.github.sotadevop.kingdomquest.kingdom.ChroniclePayload.TYPE,
-				(payload, context) -> context.client().setScreenAndShow(new io.github.sotadevop.kingdomquest.client.ChronicleScreen(payload)));
+				(payload, context) -> context.client().setScreenAndShow(new io.github.sotadevop.kingdomquest.client.ChronicleScreen(payload, io.github.sotadevop.kingdomquest.client.KingdomScreen.last())));
 		ClientTickEvents.END_CLIENT_TICK.register(PlacementPreview::tick);
 	}
 }

@@ -76,8 +76,8 @@ public class RealmScreen extends Screen {
 	private int tab = lastTab;
 	/** First row (or row of cards) shown in the people and animal lists; the mouse wheel moves it. */
 	private int scroll;
-	/** People as cards with their 3D figure instead of rows (user, 2026-11-18); remembered while the game runs. */
-	private static boolean cards;
+	/** People as cards with their 3D figure instead of rows (user, 2026-11-18; the default since 2026-11-25); remembered while the game runs. */
+	private static boolean cards = true;
 	/** The person whose look is being chosen (the skin picker is shown over the list), or null. */
 	private String picking;
 	private int pickScroll;

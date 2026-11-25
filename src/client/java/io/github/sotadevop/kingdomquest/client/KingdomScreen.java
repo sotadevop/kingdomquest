@@ -75,10 +75,18 @@ public class KingdomScreen extends Screen {
 		return lastHeart;
 	}
 
+	private static KingdomScreen last;
+
+	/** The kingdom menu last opened: where the chronicle's "Back" leads. */
+	public static KingdomScreen last() {
+		return last;
+	}
+
 	public static void open(KingdomInfoPayload info) {
 		lastHeart = info.heart();
 		RealmScreen.forget();
-		Minecraft.getInstance().setScreenAndShow(new KingdomScreen(info));
+		last = new KingdomScreen(info);
+		Minecraft.getInstance().setScreenAndShow(last);
 	}
 
 	private boolean creative() {

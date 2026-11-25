@@ -33,9 +33,12 @@ public class ChronicleScreen extends Screen {
 	private int left;
 	private int top;
 	private Button toggle;
+	/** The kingdom menu it was opened from: "Back" returns there (user, 2026-11-25: the chronicle had no way back). */
+	private final Screen parent;
 
-	public ChronicleScreen(ChroniclePayload payload) {
+	public ChronicleScreen(ChroniclePayload payload, Screen parent) {
 		super(Component.literal(""));
+		this.parent = parent;
 		JsonObject o = JsonParser.parseString(payload.json()).getAsJsonObject();
 		this.kingdom = o.get("name").getAsString();
 		JsonArray e = o.getAsJsonArray("entries");
@@ -122,12 +125,23 @@ public class ChronicleScreen extends Screen {
 		this.addRenderableWidget(Button.builder(Component.literal(">"), b -> {
 			this.page = Math.min(Math.max(0, this.pages.size() - 1), this.page + 1);
 		}).bounds(this.left + W - 32, this.top + H - 28, 20, 18).build());
+		this.addRenderableWidget(Button.builder(Component.translatable("gui.back"), b -> this.onClose())
+				.bounds(this.left + 36, this.top + H - 28, 50, 18).build());
 		this.toggle = this.addRenderableWidget(Button.builder(label(), b -> {
 			this.highlights = !this.highlights;
 			this.page = 0;
 			paginate();
 			b.setMessage(label());
-		}).bounds(this.left + W / 2 - 50, this.top + H - 28, 100, 18).build());
+		}).bounds(this.left + W / 2 - 40, this.top + H - 28, 100, 18).build());
+	}
+
+	@Override
+	public void onClose() {
+		if (this.parent != null && this.minecraft != null) {
+			this.minecraft.setScreenAndShow(this.parent);
+		} else {
+			super.onClose();
+		}
 	}
 
 	private Component label() {

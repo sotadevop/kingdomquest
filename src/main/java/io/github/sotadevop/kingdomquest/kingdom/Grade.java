@@ -88,6 +88,7 @@ final class Grade {
 	/** A hill inside the walls (hill looks), not on a plot: grown over like the land around until a building comes. */
 	private static final byte HILL = 4;
 	private static final int FORMAT = 0x4B514731; // "KQG1"
+	private static final int FORMAT2 = 0x4B514732; // "KQG2": with the staged shaping
 
 	private static final Map<UUID, Grade> GRADES = new HashMap<>();
 
@@ -108,6 +109,26 @@ final class Grade {
 	private final BitSet planted;
 	private final int sw;
 	private final int sd;
+	/*
+	 * Staged shaping (user, 2026-11-25: founding flattened the whole site at once, as if the castle were maxed; agreed:
+	 * the land is shaped as the settlement grows, outward from the middle). The plan stays the one plan; only what is
+	 * claimed gets its planned height: a circle around the heart that grows with the tiers, and the ground every building
+	 * job stands on. Around what is claimed the land eases back to the natural ground on a soft slope. Once the walls
+	 * come, everything is claimed. Plans saved before this have no natural heights: all claimed.
+	 */
+	/** The natural ground per column (the generator's guess, the real ground once a column is first worked); null: no staging. */
+	private final short[] orig;
+	private final BitSet origReal;
+	private final BitSet claimed;
+	private boolean all;
+	private int circle;
+	/** Distance (blocks) of each column to the nearest claimed one, up to {@link #BLEND_MAX}. */
+	private short[] dist;
+	/** Per section, what its columns were last shaped to: a new claim reshapes only what changes. */
+	private final int[] sig;
+	/** Columns the last shaping of their section changed: only those are planted (no plants twice). */
+	private final BitSet fresh = new BitSet();
+	private static final int BLEND_MAX = 48;
 	/** Sections with anything to shape. */
 	private final BitSet need = new BitSet();
 	private boolean done;
@@ -115,6 +136,11 @@ final class Grade {
 	private long savedAt;
 
 	private Grade(int x0, int z0, int w, int d, int plateau, int look, float trees, short[] top, byte[] kind, BitSet shaped, BitSet planted) {
+		this(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted, null, null, null, true, 0, null);
+	}
+
+	private Grade(int x0, int z0, int w, int d, int plateau, int look, float trees, short[] top, byte[] kind, BitSet shaped, BitSet planted,
+			short[] orig, BitSet origReal, BitSet claimed, boolean all, int circle, int[] sig) {
 		this.x0 = x0;
 		this.z0 = z0;
 		this.w = w;
@@ -128,6 +154,15 @@ final class Grade {
 		this.planted = planted;
 		this.sw = (w + SECTION - 1) / SECTION;
 		this.sd = (d + SECTION - 1) / SECTION;
+		this.orig = orig;
+		this.origReal = origReal == null ? new BitSet() : origReal;
+		this.claimed = claimed == null ? new BitSet() : claimed;
+		this.all = all || orig == null;
+		this.circle = circle;
+		this.sig = sig != null && sig.length == this.sw * this.sd ? sig : new int[this.sw * this.sd];
+		if (!this.all) {
+			computeDist();
+		}
 		for (int i = 0; i < w; i++) {
 			for (int k = 0; k < d; k++) {
 				if (kind[i * d + k] != UNTOUCHED) {
@@ -181,6 +216,174 @@ final class Grade {
 		return this.done;
 	}
 
+	// ---- staged shaping ----
+
+	/** The height a column is shaped to now: its planned height where claimed, easing back to the natural ground around. */
+	private int effTop(int c) {
+		if (this.all || this.claimed.get(c)) {
+			return this.top[c];
+		}
+		int diff = this.top[c] - this.orig[c];
+		if (diff == 0) {
+			return this.top[c];
+		}
+		double band = Math.min(BLEND_MAX, 6 + 1.6 * Math.abs(diff)); // never steeper than a natural slope
+		double u = this.dist[c] / band;
+		if (u >= 1) {
+			return this.orig[c];
+		}
+		double wgt = u * u * (3 - 2 * u);
+		return (int) Math.round(this.top[c] + (this.orig[c] - this.top[c]) * wgt);
+	}
+
+	/** What kind of land a column is now: its plan's where claimed, else a slope where it moves, untouched where it doesn't. */
+	private byte effKind(int c, int t) {
+		if (this.all || this.claimed.get(c)) {
+			return this.kind[c];
+		}
+		return t == this.orig[c] ? UNTOUCHED : SLOPE;
+	}
+
+	/** Chamfer distance of every column to the nearest claimed one (5 straight, 7 diagonal; in blocks, capped). */
+	private void computeDist() {
+		int n = this.w * this.d;
+		int inf = BLEND_MAX * 5 + 5;
+		int[] t = new int[n];
+		for (int c = 0; c < n; c++) {
+			t[c] = this.claimed.get(c) ? 0 : inf;
+		}
+		for (int i = 0; i < this.w; i++) {
+			for (int k = 0; k < this.d; k++) {
+				int c = i * this.d + k, v = t[c];
+				if (i > 0) {
+					v = Math.min(v, t[c - this.d] + 5);
+					if (k > 0) {
+						v = Math.min(v, t[c - this.d - 1] + 7);
+					}
+					if (k + 1 < this.d) {
+						v = Math.min(v, t[c - this.d + 1] + 7);
+					}
+				}
+				if (k > 0) {
+					v = Math.min(v, t[c - 1] + 5);
+				}
+				t[c] = v;
+			}
+		}
+		for (int i = this.w - 1; i >= 0; i--) {
+			for (int k = this.d - 1; k >= 0; k--) {
+				int c = i * this.d + k, v = t[c];
+				if (i + 1 < this.w) {
+					v = Math.min(v, t[c + this.d] + 5);
+					if (k + 1 < this.d) {
+						v = Math.min(v, t[c + this.d + 1] + 7);
+					}
+					if (k > 0) {
+						v = Math.min(v, t[c + this.d - 1] + 7);
+					}
+				}
+				if (k + 1 < this.d) {
+					v = Math.min(v, t[c + 1] + 5);
+				}
+				t[c] = v;
+			}
+		}
+		this.dist = new short[n];
+		for (int c = 0; c < n; c++) {
+			this.dist[c] = (short) Math.min(BLEND_MAX, t[c] / 5);
+		}
+	}
+
+	/** What a section's columns are shaped to now, as one number: when it changes, the section is shaped again. */
+	private int signature(int sec) {
+		int si = sec / this.sd, sk = sec % this.sd, h = 1;
+		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
+			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
+				int c = i * this.d + k;
+				h = h * 31 + effTop(c) * 7 + effKind(c, effTop(c));
+			}
+		}
+		return h;
+	}
+
+	/** After a claim: the sections whose heights change are shaped (and planted) again. */
+	private void claimsChanged() {
+		if (!this.all) {
+			computeDist();
+		}
+		for (int sec = 0; sec < this.sw * this.sd; sec++) {
+			if (!needed(sec) || !this.shaped.get(sec)) {
+				continue;
+			}
+			if (signature(sec) != this.sig[sec]) {
+				this.shaped.clear(sec);
+				this.planted.clear(sec);
+			}
+		}
+		this.done = false;
+		this.dirty = true;
+	}
+
+	/** The ground of a building job (world columns), with room around it: shaped to the plan before the job. */
+	void claim(java.util.Collection<Long> columns, int pad) {
+		if (this.all) {
+			return;
+		}
+		boolean changed = false;
+		for (long col : columns) {
+			int x = BlockPos.getX(col), z = BlockPos.getZ(col);
+			for (int a = -pad; a <= pad; a++) {
+				for (int b = -pad; b <= pad; b++) {
+					int c = index(x + a, z + b);
+					if (c >= 0 && !this.claimed.get(c)) {
+						this.claimed.set(c);
+						changed = true;
+					}
+				}
+			}
+		}
+		if (changed) {
+			claimsChanged();
+		}
+	}
+
+	/** Everything to its plan: the walls are coming. */
+	void claimAll() {
+		if (!this.all) {
+			this.all = true;
+			claimsChanged();
+		}
+	}
+
+	/** The tier's yard: a circle around the heart, growing with the settlement; everything once the walls come. */
+	void stage(Settlement s) {
+		if (this.all) {
+			return;
+		}
+		int main = s.level(Settlement.MAIN);
+		if (s.level(Progression.WALLS) > 0 || main >= 9) {
+			this.all = true;
+			claimsChanged();
+			return;
+		}
+		int r = main <= 1 ? 10 : main <= 3 ? 22 : main <= 6 ? 40 : 64;
+		if (r <= this.circle) {
+			return;
+		}
+		this.circle = r;
+		int hx = s.heart().getX(), hz = s.heart().getZ();
+		for (int i = 0; i < this.w; i++) {
+			for (int k = 0; k < this.d; k++) {
+				int dx = this.x0 + i - hx, dz = this.z0 + k - hz;
+				double wob = noise(this.x0 + i, this.z0 + k, 11) * 4; // a natural edge, not a compass circle
+				if (dx * dx + dz * dz <= (r + wob) * (r + wob)) {
+					this.claimed.set(i * this.d + k);
+				}
+			}
+		}
+		claimsChanged();
+	}
+
 	// ---- the settlement's grade ----
 
 	static void forgetAll(MinecraftServer server) {
@@ -211,7 +414,8 @@ final class Grade {
 		Path file = file(server, s.id());
 		if (Files.exists(file)) {
 			try (DataInputStream in = new DataInputStream(new java.io.BufferedInputStream(Files.newInputStream(file)))) {
-				if (in.readInt() == FORMAT) {
+				int format = in.readInt();
+				if (format == FORMAT || format == FORMAT2) {
 					int x0 = in.readInt(), z0 = in.readInt(), w = in.readInt(), d = in.readInt();
 					int plateau = in.readInt(), look = in.readInt();
 					float trees = in.readFloat();
@@ -224,7 +428,23 @@ final class Grade {
 						in.readFully(kind);
 						BitSet shaped = BitSet.valueOf(in.readNBytes(in.readInt()));
 						BitSet planted = BitSet.valueOf(in.readNBytes(in.readInt()));
-						g = new Grade(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted);
+						if (format == FORMAT2 && in.readBoolean()) {
+							short[] orig = new short[w * d];
+							for (int i = 0; i < orig.length; i++) {
+								orig[i] = in.readShort();
+							}
+							BitSet origReal = BitSet.valueOf(in.readNBytes(in.readInt()));
+							BitSet claimed = BitSet.valueOf(in.readNBytes(in.readInt()));
+							boolean all = in.readBoolean();
+							int circle = in.readInt();
+							int[] sig = new int[in.readInt()];
+							for (int i = 0; i < sig.length; i++) {
+								sig[i] = in.readInt();
+							}
+							g = new Grade(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted, orig, origReal, claimed, all, circle, sig);
+						} else {
+							g = new Grade(x0, z0, w, d, plateau, look, trees, top, kind, shaped, planted);
+						}
 					}
 				}
 			} catch (IOException e) {
@@ -247,7 +467,7 @@ final class Grade {
 		try {
 			Files.createDirectories(file.getParent());
 			try (DataOutputStream out = new DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(file)))) {
-				out.writeInt(FORMAT);
+				out.writeInt(FORMAT2);
 				out.writeInt(this.x0);
 				out.writeInt(this.z0);
 				out.writeInt(this.w);
@@ -265,6 +485,24 @@ final class Grade {
 				byte[] b = this.planted.toByteArray();
 				out.writeInt(b.length);
 				out.write(b);
+				out.writeBoolean(this.orig != null);
+				if (this.orig != null) {
+					for (short o : this.orig) {
+						out.writeShort(o);
+					}
+					byte[] c = this.origReal.toByteArray();
+					out.writeInt(c.length);
+					out.write(c);
+					byte[] e = this.claimed.toByteArray();
+					out.writeInt(e.length);
+					out.write(e);
+					out.writeBoolean(this.all);
+					out.writeInt(this.circle);
+					out.writeInt(this.sig.length);
+					for (int v : this.sig) {
+						out.writeInt(v);
+					}
+				}
 			}
 			this.dirty = false;
 		} catch (IOException e) {
@@ -567,7 +805,11 @@ final class Grade {
 			}
 		}
 		float trees = dry == 0 ? 0 : Math.min(0.08f, (float) trunks / dry);
-		Grade grade = new Grade(x0, z0, w, d, p, look, trees, top, kind, new BitSet(), new BitSet());
+		short[] orig = new short[n];
+		for (int c = 0; c < n; c++) {
+			orig[c] = (short) bed[c];
+		}
+		Grade grade = new Grade(x0, z0, w, d, p, look, trees, top, kind, new BitSet(), new BitSet(), orig, new BitSet(), new BitSet(), false, 0, null);
 		BlockPos heart = new BlockPos(clicked.getX(), p + heartLevel + 1, clicked.getZ());
 		return new Planned(grade, heart, lifts);
 	}
@@ -593,6 +835,17 @@ final class Grade {
 			}
 			if (lord != null) {
 				out.add(new double[] {lord[0] - 3, lord[1] - 3, lord[2] + 3, lord[3] + 3, LORD_HILL, HILL_SLOPE});
+			}
+			// two lower hills (user, 2026-11-25: more hills inside the walls): the monastery's in the east, and one in
+			// the south-west with the workshop and the herb garden on its top
+			int[] abbey = Layout.plot("monastery");
+			if (abbey != null) {
+				out.add(new double[] {abbey[0] - 3, abbey[1] - 3, abbey[2] + 3, abbey[3] + 3, 8, HILL_SLOPE});
+			}
+			int[] shop = Layout.plot("workshop"), herbs = Layout.plot("herbs");
+			if (shop != null && herbs != null) {
+				out.add(new double[] {Math.min(shop[0], herbs[0]) - 3, Math.min(shop[1], herbs[1]) - 3, Math.max(shop[2], herbs[2]) + 3,
+						Math.max(shop[3], herbs[3]) + 3, 7, HILL_SLOPE});
 			}
 		}
 		return out;
@@ -732,7 +985,8 @@ final class Grade {
 			BlockState st = level.getBlockState(pos.set(x, y, z));
 			if (st.isAir() || st.is(BlockTags.LOGS) || st.is(BlockTags.LEAVES) || SiteWork.stalk(st) || st.canBeReplaced() && st.getFluidState().isEmpty()
 					|| st.is(Blocks.MANGROVE_ROOTS) || st.is(Blocks.MUDDY_MANGROVE_ROOTS)
-					|| st.is(Blocks.BROWN_MUSHROOM_BLOCK) || st.is(Blocks.RED_MUSHROOM_BLOCK) || st.is(Blocks.MUSHROOM_STEM) || st.is(Blocks.BEE_NEST)) {
+					|| st.is(Blocks.BROWN_MUSHROOM_BLOCK) || st.is(Blocks.RED_MUSHROOM_BLOCK) || st.is(Blocks.MUSHROOM_STEM) || st.is(Blocks.BEE_NEST)
+					|| RoadLink.iceSpike(level, pos.immutable(), st)) { // ice spikes aren't land (user, 2026-11-25: walls built up and over them)
 				y--;
 			} else {
 				break;
@@ -827,6 +1081,9 @@ final class Grade {
 				return;
 			}
 		}
+		if (server.getTickCount() % 20 == 0) {
+			g.stage(s); // the yard grows with the tiers
+		}
 		if (g.complete() || server.getTickCount() % 2 != 0) {
 			return; // a section every other tick: about 10 ms of work, the server keeps its pace
 		}
@@ -899,14 +1156,30 @@ final class Grade {
 		List<BlockState> fallback = List.of(surface, SiteWork.subsoil(surface), SiteWork.subsoil(surface), SiteWork.subsoil(surface));
 		int ax = this.x0 + si * SECTION, az = this.z0 + sk * SECTION;
 		Map<Long, List<BlockState>> nearby = new HashMap<>(); // layers of the nearest dry land, per 8 x 8 cell
+		Rotation turn = Rotation.values()[s.rotation()];
+		boolean round = Settlements.round(s);
 		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
 			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
-				byte kd = this.kind[i * this.d + k];
+				int c = i * this.d + k;
+				if (this.kind[c] == UNTOUCHED) {
+					continue;
+				}
+				if (this.orig != null && !this.origReal.get(c)) { // the real natural ground, before anything works it
+					this.orig[c] = (short) land(level, this.x0 + i, this.z0 + k)[0];
+					this.origReal.set(c);
+				}
+				int t = effTop(c);
+				byte kd = effKind(c, t);
 				if (kd != UNTOUCHED) {
-					column(level, this.x0 + i, this.z0 + k, this.top[i * this.d + k], kd, built, fallback, nearby);
+					int edge = Math.min(Math.min(i, k), Math.min(this.w - 1 - i, this.d - 1 - k));
+					boolean outside = inside(s.heart(), turn, round, this.x0 + i, this.z0 + k) < -(PAD - 2);
+					if (column(level, this.x0 + i, this.z0 + k, t, kd, edge, outside, built, fallback, nearby)) {
+						this.fresh.set(c);
+					}
 				}
 			}
 		}
+		this.sig[sec] = signature(sec);
 		SiteWork.dropFloating(level, ax - 4, az - 4, ax + SECTION + 3, az + SECTION + 3, built);
 		SiteWork.stumps(level, ax, az, ax + SECTION - 1, az + SECTION - 1, built, surface);
 		// nobody is left inside new ground; whoever stands where the land was cut away floats down
@@ -933,11 +1206,17 @@ final class Grade {
 	}
 
 	/** One column to its planned top {@code t}. */
-	private void column(ServerLevel level, int x, int z, int t, byte kd, Set<Long> built, List<BlockState> fallback, Map<Long, List<BlockState>> nearby) {
+	private boolean column(ServerLevel level, int x, int z, int t, byte kd, int edge, boolean outside, Set<Long> built, List<BlockState> fallback,
+			Map<Long, List<BlockState>> nearby) {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		int[] l = land(level, x, z);
 		int g = l[0], water = l[1];
 		boolean wet = water > g;
+		if (kd == SLOPE) {
+			// near the plan's edge the slope meets the land as it really is (user, 2026-11-25: a savanna site ended in a
+			// straight cut of dirt 6 to 8 high where the generator's guess of the land was off)
+			t = Math.max(g - edge, Math.min(g + edge, t));
+		}
 		// made ground where there was water: inside the walls the site's own ground (a filled lake is no beach), outside
 		// the layers of the nearest dry land
 		List<BlockState> stack = wet ? kd == SLOPE ? nearby.computeIfAbsent(BlockPos.asLong(x >> 3, 0, z >> 3), c -> reference(level, x, z, fallback)) : fallback
@@ -962,6 +1241,15 @@ final class Grade {
 			BlockState st = level.getBlockState(pos.set(x, y, z));
 			if (st.is(Blocks.MUSHROOM_STEM) && !built.contains(pos.asLong())) {
 				removeMushroom(level, pos.immutable(), built); // a huge mushroom goes whole, or its cap is left hanging
+			}
+		}
+		// ice spikes on the site go whole: the land under them is what is shaped (user, 2026-11-25: spikes were left
+		// standing in and through the wall, and cut ones hung in the air)
+		int sky = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+		for (int y = sky; y > Math.max(t, g); y--) {
+			BlockState st = level.getBlockState(pos.set(x, y, z));
+			if (RoadLink.iceSpike(level, pos, st) && !built.contains(pos.asLong())) {
+				level.setBlock(pos, Blocks.AIR.defaultBlockState(), SiteWork.FLAGS);
 			}
 		}
 		boolean steep = steepness(x, z) >= 2;
@@ -1016,13 +1304,38 @@ final class Grade {
 			}
 			level.setBlock(pos.set(x, t, z), stack.get(0), SiteWork.FLAGS);
 		}
-		if (kd != SLOPE) {
-			// inside the walls one meadow of the site's own ground: no patches of mud, sand or gravel (rock stays rock)
+		boolean shore = outside && !wet && t >= water && beachy(level, x, z, t);
+		if (kd != SLOPE && !shore) {
+			// inside the walls one meadow of the site's own ground: no patches of stone, mud, sand or gravel left on it
+			// (user, 2026-11-25: on a stone start grass came everywhere but stone patches stayed); only a hill's steep rock
+			// face stays rock
 			BlockState here = level.getBlockState(pos.set(x, t, z));
-			if (!built.contains(pos.asLong()) && here.getBlock() != fallback.get(0).getBlock() && (here.is(Blocks.MUD) || here.is(BlockTags.SAND)
-					|| here.is(Blocks.GRAVEL) || here.is(Blocks.DIRT) || here.is(Blocks.COARSE_DIRT) || here.is(Blocks.ROOTED_DIRT) || here.is(Blocks.CLAY)
-					|| here.is(Blocks.PODZOL) && !fallback.get(0).is(Blocks.GRASS_BLOCK))) {
+			boolean rockFace = kd == HILL && steepness(x, z) >= 2 && material(here) == 2;
+			if (!built.contains(pos.asLong()) && here.getBlock() != fallback.get(0).getBlock() && here.getFluidState().isEmpty() && !rockFace
+					&& (SiteWork.natural(here) || SiteWork.earthwork(here)) && !here.is(BlockTags.LOGS) && !here.is(BlockTags.LEAVES)) {
 				level.setBlock(pos, fallback.get(0), SiteWork.FLAGS);
+				BlockState under = level.getBlockState(pos.set(x, t - 1, z));
+				if (!built.contains(pos.asLong()) && under.isAir()) {
+					level.setBlock(pos, fallback.get(1), SiteWork.FLAGS);
+				}
+			}
+		} else if (shore) {
+			// land by the sea or a lake meets it with a real beach, several blocks wide (user, 2026-11-25: one block of sand
+			// around the site looked unnatural)
+			BlockState sand = Blocks.SAND.defaultBlockState();
+			for (int j = 0; j < 3; j++) {
+				BlockState st = level.getBlockState(pos.set(x, t - j, z));
+				if (!built.contains(pos.asLong()) && (st.is(Blocks.GRASS_BLOCK) || st.is(Blocks.DIRT) || st.is(Blocks.COARSE_DIRT) || st.is(Blocks.PODZOL)
+						|| st.is(Blocks.SNOW_BLOCK) || st.is(Blocks.GRAVEL) || st.is(Blocks.MUD))) {
+					level.setBlock(pos, j < 2 ? sand : Blocks.SANDSTONE.defaultBlockState(), SiteWork.FLAGS);
+				}
+			}
+			for (int y = t + 1; y <= t + 2; y++) { // no grass or flowers on the sand
+				BlockState st = level.getBlockState(pos.set(x, y, z));
+				if (!built.contains(pos.asLong()) && !st.isAir() && st.getFluidState().isEmpty() && st.getCollisionShape(level, pos).isEmpty()
+						&& !st.is(Blocks.SNOW)) {
+					level.setBlock(pos, Blocks.AIR.defaultBlockState(), SiteWork.FLAGS);
+				}
 			}
 		} else if (wet && t >= water && t <= water + 1) {
 			// land made out of the water outside the walls meets it with a beach, as natural shores do
@@ -1031,12 +1344,14 @@ final class Grade {
 				level.setBlock(pos, (fallback.get(0).is(Blocks.SNOW_BLOCK) ? Blocks.GRAVEL : Blocks.SAND).defaultBlockState(), SiteWork.FLAGS);
 			}
 		}
-		if (t != g) {
-			// plants and snow that stood on the old ground
+		if (t != g || kd != SLOPE || shore) {
+			// plants and snow that stood on the old ground; on the plateau everything that grew on it (grass, flowers,
+			// leaf litter, bushes): the site starts clear, the town's own greenery comes with its buildings
 			for (int y = t + 1; y <= t + 3; y++) {
 				BlockState st = level.getBlockState(pos.set(x, y, z));
-				if (!st.isAir() && st.getFluidState().isEmpty() && SiteWork.natural(st) && !SiteWork.terrain(st) && !st.is(BlockTags.LOGS)
-						&& !st.is(BlockTags.LEAVES) && !built.contains(pos.asLong())) {
+				boolean plant = (kd != SLOPE || shore) && st.getCollisionShape(level, pos).isEmpty() && !st.is(Blocks.SNOW);
+				if (!st.isAir() && st.getFluidState().isEmpty() && (plant || SiteWork.natural(st) && !SiteWork.terrain(st) && !st.is(BlockTags.LOGS)
+						&& !st.is(BlockTags.LEAVES)) && !built.contains(pos.asLong())) {
 					level.setBlock(pos, Blocks.AIR.defaultBlockState(), SiteWork.FLAGS);
 				}
 			}
@@ -1056,6 +1371,23 @@ final class Grade {
 				}
 			}
 		}
+		return t != g;
+	}
+
+	/** Open water within a few blocks of a low dry column (its surface no more than 3 below the column's top): a shore. */
+	private static boolean beachy(ServerLevel level, int x, int z, int t) {
+		BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
+		int reach = 4 + (int) Math.round(noise(x + 311, z - 97, 6) * 2); // 2 to 6 wide, wandering
+		for (int r = 1; r <= reach; r++) {
+			for (int[] d : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}) {
+				int qx = x + d[0] * r, qz = z + d[1] * r;
+				int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, qx, qz) - 1;
+				if (top <= t && top >= t - 3 && level.getFluidState(p.set(qx, top, qz)).is(net.minecraft.tags.FluidTags.WATER)) {
+					return t - top <= 2 + r / 2; // a beach climbs gently from the water
+				}
+			}
+		}
+		return false;
 	}
 
 	/** Every block of a huge mushroom connected to {@code start} (stem and caps). */
@@ -1179,11 +1511,16 @@ final class Grade {
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		for (int i = si * SECTION; i < Math.min(this.w, (si + 1) * SECTION); i++) {
 			for (int k = sk * SECTION; k < Math.min(this.d, (sk + 1) * SECTION); k++) {
-				byte kd = this.kind[i * this.d + k];
-				if (kd != MADE && kd != SLOPE && kd != HILL) {
+				int c = i * this.d + k;
+				int t = effTop(c);
+				byte kd = effKind(c, t);
+				// only what this shaping changed (a section shaped again as the town grows isn't planted twice), and not the
+				// plateau's own ground: it starts clear (user, 2026-11-25)
+				if (kd != SLOPE && kd != HILL || !this.fresh.get(c)) {
 					continue;
 				}
-				int x = this.x0 + i, z = this.z0 + k, t = this.top[i * this.d + k];
+				this.fresh.clear(c);
+				int x = this.x0 + i, z = this.z0 + k;
 				BlockState ground = level.getBlockState(pos.set(x, t, z));
 				BlockState over = level.getBlockState(pos.set(x, t + 1, z));
 				if (!over.isAir() || built.contains(BlockPos.asLong(x, t, z))) {
