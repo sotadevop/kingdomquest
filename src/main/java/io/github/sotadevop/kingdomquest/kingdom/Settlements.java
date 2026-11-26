@@ -2783,6 +2783,11 @@ public final class Settlements {
 	// ---- menu ----
 
 	public static void sendInfo(ServerPlayer player, Settlement s) {
+		sendInfo(player, s, false);
+	}
+
+	/** As {@link #sendInfo(ServerPlayer, Settlement)}; {@code admin}: the steward's administration window opens. */
+	public static void sendInfo(ServerPlayer player, Settlement s, boolean admin) {
 		int percent = -1;
 		if (!s.job().isEmpty()) {
 			int total = total(s, s.job());
@@ -2809,7 +2814,7 @@ public final class Settlements {
 		Grade grade = Grade.of(player.level().getServer(), s);
 		int site = grade == null || grade.complete() ? -1 : grade.progress();
 		ServerPlayNetworking.send(player, new KingdomInfoPayload(s.heart(), s.name(), s.color(), s.logo(),
-				current == null ? "" : current.titleKey(), percent, options, bridge, broken, changed, site));
+				current == null ? "" : current.titleKey(), percent, options, bridge, broken, changed, site, admin));
 	}
 
 	/**

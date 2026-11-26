@@ -341,7 +341,8 @@ final class Workers {
 				}
 				Settlements.stewardAdvice(player, s);
 				if (s.owner().equals(player.getUUID())) {
-					Settlements.sendInfo(player, s);
+					// the steward runs the kingdom, the architect builds it (user, 2026-11-26): he opens the administration
+					Settlements.sendInfo(player, s, true);
 				}
 			} else {
 				People.say(player, name, Defense.status(player.level().getServer(), s));
