@@ -546,5 +546,6 @@
 	"kingdomquest.dir.north": "north",
 	"kingdomquest.dir.south": "south",
 	"kingdomquest.dir.east": "east",
-	"kingdomquest.dir.west": "west"
+	"kingdomquest.dir.west": "west",
+	"kingdomquest.outpost.moved": "A camp stood on the water: the builders take it down, with its road over the sea, and build it again on dry land."
 }

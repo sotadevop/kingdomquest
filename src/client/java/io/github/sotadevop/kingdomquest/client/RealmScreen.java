@@ -308,7 +308,7 @@ public class RealmScreen extends Screen {
 	private static final String[] LOOKS = {"Steve", "Alex", "Ari", "Efe", "Kai", "Makena", "Noor", "Sunny", "Zuri"};
 	private static final int ROW_H = 16;
 	private static final int CARD_GAP = 4;
-	private static final int CARD_H = 98;
+	private static final int CARD_H = 112; // room for two rows of buttons (user, 2026-11-26: three in one row were cut off)
 	private static final int CELL_W = 58;
 	private static final int CELL_H = 82;
 
@@ -360,6 +360,44 @@ public class RealmScreen extends Screen {
 		}
 	}
 
+	/** A card's buttons: with three, the first gets the upper row to itself and the others share the lower one. */
+	private static int[][] cardBoxes(int n, int x0, int x1, int yLast) {
+		int[][] out = new int[n][];
+		int first = n == 3 ? 1 : 0;
+		if (first == 1) {
+			out[0] = new int[] {x0, yLast - 14, x1 - x0, 12};
+		}
+		int m = n - first;
+		for (int i = 0; i < m; i++) {
+			int w = (x1 - x0) / Math.max(1, m);
+			out[first + i] = new int[] {x0 + i * w, yLast, w - 2, 12};
+		}
+		return out;
+	}
+
+	private void drawCardActions(GuiGraphicsExtractor g, List<String> acts, int x0, int x1, int yLast, int mouseX, int mouseY, boolean over, Theme t) {
+		int[][] boxes = cardBoxes(acts.size(), x0, x1, yLast);
+		for (int i = 0; i < acts.size(); i++) {
+			int[] b = boxes[i];
+			boolean on = over && mouseX >= b[0] && mouseX < b[0] + b[2] && mouseY >= b[1] && mouseY < b[1] + b[3];
+			Ui.roundedFill(g, b[0], b[1], b[2], b[3], 2, on ? 0x70FFFFFF : 0x38FFFFFF);
+			String label = Component.translatable("kingdomquest.realm.act_" + acts.get(i)).getString();
+			int tw = Math.min(this.font.width(label), b[2] - 4);
+			g.text(this.font, Text.fit(this.font, label, b[2] - 4), b[0] + (b[2] - tw) / 2, b[1] + 2, t.text(), false);
+		}
+	}
+
+	private static String cardActionAt(List<String> acts, int x0, int x1, int yLast, double mx, double my) {
+		int[][] boxes = cardBoxes(acts.size(), x0, x1, yLast);
+		for (int i = 0; i < acts.size(); i++) {
+			int[] b = boxes[i];
+			if (mx >= b[0] && mx < b[0] + b[2] && my >= b[1] && my < b[1] + b[3]) {
+				return acts.get(i);
+			}
+		}
+		return null;
+	}
+
 	/** Which action sits at {@code mx} in {@code x0..x1}, or null. */
 	private static String actionAt(List<String> acts, int x0, int x1, double mx) {
 		if (acts.isEmpty() || mx < x0 || mx >= x1) {
@@ -384,7 +422,7 @@ public class RealmScreen extends Screen {
 			case "name" -> this.minecraft.setScreenAndShow(new NameScreen(new io.github.sotadevop.kingdomquest.kingdom.NamePayload(this.heart,
 					(people ? "npc|" : "mob|") + o.get("uuid").getAsString(), o.get("name").getAsString())));
 			case "go" -> {
-				send("realm_goto|" + o.get("uuid").getAsString());
+				send("realm_goto|" + o.get("uuid").getAsString() + "|" + o.get("x").getAsInt() + "|" + o.get("z").getAsInt());
 				this.onClose();
 			}
 			default -> {
@@ -993,7 +1031,7 @@ public class RealmScreen extends Screen {
 				g.text(this.font, Text.fit(this.font, o.get("name").getAsString(), w - 6), x + 3, y + 64, t.text(), false);
 				g.text(this.font, Text.fit(this.font, people ? o.get("role").getAsString() : direction(o.get("x").getAsInt(), o.get("z").getAsInt()), w - 6), x + 3,
 						y + 74, t.secondary(), false);
-				drawActions(g, actions(o, people), x + 2, x + w - 2, y + CARD_H - 14, 12, mouseX, mouseY, over, t);
+				drawCardActions(g, actions(o, people), x + 2, x + w - 2, y + CARD_H - 14, mouseX, mouseY, over, t);
 			}
 		}
 		scrollBar(g, totalRows, rows, this.scroll);
@@ -1060,10 +1098,10 @@ public class RealmScreen extends Screen {
 				int row = (int) Math.floor((my - mapY0()) / (CARD_H + CARD_GAP));
 				int y = mapY0() + row * (CARD_H + CARD_GAP);
 				int idx = (this.scroll + row) * cardCols() + col;
-				if (col >= 0 && col < cardCols() && row >= 0 && row < cardRows() && idx < list.size() && my >= y + CARD_H - 14 && my < y + CARD_H) {
+				if (col >= 0 && col < cardCols() && row >= 0 && row < cardRows() && idx < list.size() && my >= y + CARD_H - 28 && my < y + CARD_H) {
 					hit = list.get(idx).getAsJsonObject();
 					int x = mapX0() + col * (w + CARD_GAP);
-					action = actionAt(actions(hit, people), x + 2, x + w - 2, mx);
+					action = cardActionAt(actions(hit, people), x + 2, x + w - 2, y + CARD_H - 14, mx, my);
 				}
 			} else {
 				int[] c = columns(people);

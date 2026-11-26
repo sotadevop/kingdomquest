@@ -211,13 +211,18 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	 * and a name tag "Name, Role" so one sees who he is and what he does when one looks at him.
 	 */
 	public void dressGuard(String style, int barracks, boolean archer, int color, String role) {
+		this.dressGuard(style, barracks, archer, color, role, java.util.Set.of());
+	}
+
+	/** As above; a new name is none of {@code used} (the names already given in the kingdom). */
+	public void dressGuard(String style, int barracks, boolean archer, int color, String role, java.util.Set<String> used) {
 		int seed = this.getUUID().hashCode();
 		int region = Folk.region(style);
 		this.guardGear(barracks, archer, color, seed);
 		this.setSkin(Folk.skin(region, Folk.GUARD, seed >>> 4));
 		// a name the lord gave him stays (only the role is set again)
 		String old = this.getCustomName() == null ? "" : this.getCustomName().getString();
-		String name = Folk.roleOf(old) != null ? Folk.nameOf(old) : Folk.name(region, false, seed >>> 8);
+		String name = Folk.roleOf(old) != null ? Folk.nameOf(old) : Folk.name(region, false, seed >>> 8, used);
 		this.setCustomName(net.minecraft.network.chat.Component.literal(Folk.label(name, role)));
 	}
 

@@ -149,6 +149,17 @@ final class People {
 		return v;
 	}
 
+	/** The personal names already given to the kingdom's people (workers, guards, knights), so a new one gets another. */
+	static java.util.Set<String> namesInUse(ServerLevel level, Settlement s) {
+		java.util.Set<String> out = new java.util.HashSet<>();
+		String id = s.id().toString();
+		for (KingdomNpc n : level.getEntitiesOfClass(KingdomNpc.class, new AABB(s.heart()).inflate(320, 96, 320),
+				n -> n.getCustomName() != null && role(n).contains(id))) {
+			out.add(io.github.sotadevop.kingdomquest.npc.Folk.nameOf(n.getCustomName().getString()));
+		}
+		return out;
+	}
+
 	/**
 	 * A townsperson who comes to look (market day), half of them women; a knight is a man of the garrison. Sent off
 	 * again by whoever called them.

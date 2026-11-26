@@ -88,7 +88,7 @@ final class Guild {
 		}
 		String want = Defense.GUARD + "|" + here.id();
 		// those at their posts and those already following him (they may be outside the kingdom's box)
-		List<KingdomNpc> guards = new ArrayList<>(level.getEntities(KingdomNpc.TYPE, new AABB(here.heart()).inflate(120, 64, 120),
+		List<KingdomNpc> guards = new ArrayList<>(level.getEntities(KingdomNpc.TYPE, new AABB(here.heart()).inflate(260, 64, 260),
 				g -> g.isAlive() && want.equals(g.getAttached(People.ROLE))));
 		for (KingdomNpc g : level.getEntities(KingdomNpc.TYPE, player.getBoundingBox().inflate(48), g -> g.isAlive() && want.equals(g.getAttached(People.ROLE)))) {
 			if (!guards.contains(g)) {

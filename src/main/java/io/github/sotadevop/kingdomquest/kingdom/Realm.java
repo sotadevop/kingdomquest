@@ -327,9 +327,18 @@ final class Realm {
 			case "realm_goto" -> {
 				// to one of his people or animals (user, 2026-11-26): beside them, where one can stand
 				Entity e = a.length > 1 ? server.overworld().getEntity(UUID.fromString(a[1])) : null;
-				if (e != null && player.getUUID().equals(here.owner()) && player.level().dimension() == net.minecraft.world.level.Level.OVERWORLD
-						&& !player.isPassenger()) {
-					KingdomMap.goNear(player, e.blockPosition());
+				BlockPos to = e != null ? e.blockPosition() : null;
+				if (to == null && a.length > 3) {
+					// not loaded now: where the list saw him (within the kingdom's land only)
+					BlockPos seen = new BlockPos(Integer.parseInt(a[2]), here.heart().getY(), Integer.parseInt(a[3]));
+					if (seen.distSqr(here.heart().atY(seen.getY())) < 400 * 400) {
+						server.overworld().getChunk(seen.getX() >> 4, seen.getZ() >> 4);
+						to = seen.atY(server.overworld().getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+								seen.getX(), seen.getZ()));
+					}
+				}
+				if (to != null && player.getUUID().equals(here.owner()) && !player.isPassenger()) {
+					KingdomMap.goNear(player, to); // from any dimension: back to the overworld beside him
 				}
 				return; // the screen is closed: nothing to refresh
 			}

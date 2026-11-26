@@ -195,7 +195,7 @@ final class Animals {
 				continue;
 			}
 			// a mounted guard: the garrison's look (coloured helmet, armour of the barracks), a lance (spear) and a shield
-			knight.dressGuard(s.style(), barracks, false, s.color(), "Knight");
+			knight.dressGuard(s.style(), barracks, false, s.color(), "Knight", People.namesInUse(level, s));
 			knight.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(barracks >= 3 ? Items.DIAMOND_SPEAR : Items.IRON_SPEAR));
 			knight.setItemSlot(EquipmentSlot.OFFHAND, knight.shield(s.color()));
 			knight.setNoAi(true);
@@ -210,7 +210,11 @@ final class Animals {
 				continue;
 			}
 			int bl = Math.max(1, Math.min(3, s.level(Progression.BARRACKS)));
-			if (e instanceof KingdomNpc k && (k.guardArmor() != bl || !k.getItemBySlot(EquipmentSlot.HEAD).is(Items.LEATHER_HELMET))) {
+			net.minecraft.world.item.component.DyedItemColor kd = e instanceof KingdomNpc kk
+					? kk.getItemBySlot(EquipmentSlot.HEAD).get(net.minecraft.core.component.DataComponents.DYED_COLOR) : null;
+			int kingdomRgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor() & 0xFFFFFF;
+			if (e instanceof KingdomNpc k && (k.guardArmor() != bl || !k.getItemBySlot(EquipmentSlot.HEAD).is(Items.LEATHER_HELMET)
+					|| kd == null || kd.rgb() != kingdomRgb)) {
 				// knights from before (all iron) and after a barracks upgrade get the garrison's look
 				k.dressGuard(s.style(), bl, false, s.color(), "Knight");
 				k.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(bl >= 3 ? Items.DIAMOND_SPEAR : Items.IRON_SPEAR));
