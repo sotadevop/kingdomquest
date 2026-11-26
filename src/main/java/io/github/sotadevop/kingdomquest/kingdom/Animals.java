@@ -212,9 +212,9 @@ final class Animals {
 			int bl = Math.max(1, Math.min(3, s.level(Progression.BARRACKS)));
 			net.minecraft.world.item.component.DyedItemColor kd = e instanceof KingdomNpc kk
 					? kk.getItemBySlot(EquipmentSlot.HEAD).get(net.minecraft.core.component.DataComponents.DYED_COLOR) : null;
-			int want = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor() & 0xFFFFFF;
+			int kingdomRgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor() & 0xFFFFFF;
 			if (e instanceof KingdomNpc k && (k.guardArmor() != bl || !k.getItemBySlot(EquipmentSlot.HEAD).is(Items.LEATHER_HELMET)
-					|| kd == null || kd.rgb() != want)) {
+					|| kd == null || kd.rgb() != kingdomRgb)) {
 				// knights from before (all iron) and after a barracks upgrade get the garrison's look
 				k.dressGuard(s.style(), bl, false, s.color(), "Knight");
 				k.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(bl >= 3 ? Items.DIAMOND_SPEAR : Items.IRON_SPEAR));
