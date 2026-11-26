@@ -14,21 +14,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # to see which files a branch changed against main
       - uses: gradle/actions/wrapper-validation@v6
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
-
-      # The building templates are generated: they must be up to date, and the settlement they make must hold
-      # together (roads reach every door, nothing is sealed off, floats or overlaps). See tools/check.py.
-      - name: Check the buildings
-        run: |
-          python3 tools/buildings.py
-          git diff --quiet -- src/main/resources/kingdomquest || { echo "::error title=Buildings::templates are stale: run python3 tools/buildings.py and commit"; exit 1; }
-          python3 tools/check.py > check.txt || { head -40 check.txt | while read -r line; do echo "::error title=Buildings::${line:0:300}"; done; exit 1; }
-          cat check.txt
 
       - name: Build
         run: |
@@ -64,6 +57,29 @@ jobs:
                    data/kingdomquest/advancement/recipes/misc/royal_charter.json; do
             grep -qx "$f" contents.txt || { echo "::error title=Jar check::missing $f"; exit 1; }
           done
+
+      # The building templates are generated: they must be up to date, and the settlement they make must hold
+      # together (roads reach every door, nothing is sealed off, floats or overlaps). See tools/check.py.
+      # It takes about 25 minutes, so it runs after the compile (a typo fails in minutes, not half an hour) and on
+      # branches only when the buildings' sources changed. On main it always runs before the jar is published.
+      - name: Do the buildings need checking?
+        id: buildings
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "check=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only origin/main...HEAD | grep -qE '^(tools/|src/main/resources/kingdomquest/|src/main/java/io/github/sotadevop/kingdomquest/building/)'; then
+            echo "check=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "check=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Buildings::not checked: no building sources changed on this branch (always checked on main)"
+          fi
+      - name: Check the buildings
+        if: steps.buildings.outputs.check == 'true'
+        run: |
+          python3 tools/buildings.py
+          git diff --quiet -- src/main/resources/kingdomquest || { echo "::error title=Buildings::templates are stale: run python3 tools/buildings.py and commit"; exit 1; }
+          python3 tools/check.py > check.txt || { head -40 check.txt | while read -r line; do echo "::error title=Buildings::${line:0:300}"; done; exit 1; }
+          cat check.txt
 
       # Starts a real dedicated server with the mod and fails unless it loads cleanly.
       - name: Server smoke test
