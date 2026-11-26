@@ -82,15 +82,48 @@ final class Workers {
 				Settlements.liftAt(s, spec.track(), spec.x(), spec.z()), spec.z()).offset(Settlements.outpostShift(s, spec.track()));
 	}
 
+	/**
+	 * No two workers share a name (user, 2026-11-26): a worker whose generated name another already has gets a new one
+	 * (names the lord gave are kept).
+	 */
+	private static void unique(ServerLevel level, Settlement s, List<KingdomNpc> all) {
+		java.util.Set<String> seen = new java.util.HashSet<>();
+		java.util.Set<String> used = null;
+		for (KingdomNpc n : all) {
+			if (n.getCustomName() == null) {
+				continue;
+			}
+			String label = n.getCustomName().getString();
+			String name = io.github.sotadevop.kingdomquest.npc.Folk.nameOf(label);
+			String role = io.github.sotadevop.kingdomquest.npc.Folk.roleOf(label);
+			String tag = n.getAttached(People.ROLE);
+			if (!seen.add(name) && role != null && !s.names().containsKey("npcname|" + tag)) {
+				if (used == null) {
+					used = People.namesInUse(level, s);
+				}
+				used.addAll(seen);
+				int region = io.github.sotadevop.kingdomquest.npc.Folk.region(s.style());
+				int base = KingdomNpc.skinBase(n.skin());
+				boolean female = io.github.sotadevop.kingdomquest.npc.Folk.generated(base)
+						&& io.github.sotadevop.kingdomquest.npc.Folk.female(io.github.sotadevop.kingdomquest.npc.Folk.outfitOf(base));
+				String fresh = io.github.sotadevop.kingdomquest.npc.Folk.name(region, female, tag.hashCode() >>> 7, used);
+				n.setCustomName(Component.literal(io.github.sotadevop.kingdomquest.npc.Folk.label(fresh, role)));
+				seen.add(fresh);
+				used.add(fresh);
+			}
+		}
+	}
+
 	/** The look and name tag of a worker: a face and name of the region, man or woman as the job was held. */
-	private static void dress(KingdomNpc npc, Settlement s, String tag, String job) {
+	private static void dress(KingdomNpc npc, Settlement s, String tag, String job, java.util.Set<String> used) {
 		int seed = tag.hashCode();
 		int region = io.github.sotadevop.kingdomquest.npc.Folk.region(s.style());
 		int outfit = io.github.sotadevop.kingdomquest.npc.Folk.outfit(job);
 		boolean female = io.github.sotadevop.kingdomquest.npc.Folk.female(outfit);
 		npc.setSkin(io.github.sotadevop.kingdomquest.npc.Folk.skin(region, outfit, seed >>> 3));
 		String own = s.names().get("npcname|" + tag); // a name the lord gave him
-		String name = own != null ? own : io.github.sotadevop.kingdomquest.npc.Folk.name(region, female, seed >>> 7);
+		String name = own != null ? own : io.github.sotadevop.kingdomquest.npc.Folk.name(region, female, seed >>> 7, used);
+		used.add(name);
 		npc.setCustomName(Component.literal(io.github.sotadevop.kingdomquest.npc.Folk.label(name, job)));
 	}
 
@@ -199,7 +232,7 @@ final class Workers {
 			npc.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new net.minecraft.world.item.ItemStack(tool));
 		}
 		npc.setAttached(People.ROLE, tag);
-		dress(npc, s, tag, job);
+		dress(npc, s, tag, job, People.namesInUse(level, s));
 		npc.snapTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, level.getRandom().nextFloat() * 360, 0);
 		level.addFreshEntity(npc);
 		return npc;
@@ -217,6 +250,7 @@ final class Workers {
 		// 2026-11-25: hundreds of quarrymen on one block, a new one every 10 seconds because the old ones weren't found)
 		List<KingdomNpc> all = level.getEntitiesOfClass(KingdomNpc.class, new AABB(s.heart()).inflate(320, 96, 320),
 				n -> n.getAttached(People.ROLE) != null && n.getAttached(People.ROLE).startsWith("worker|" + s.id()));
+		unique(level, s, all);
 		for (Spec spec : SPECS) {
 			boolean wanted = s.level(spec.track()) >= spec.minLevel();
 			String tag = tag(s, spec);
@@ -247,7 +281,7 @@ final class Workers {
 			}
 			if (npc.getCustomName() == null || io.github.sotadevop.kingdomquest.npc.Folk.roleOf(npc.getCustomName().getString()) == null
 					|| !io.github.sotadevop.kingdomquest.npc.Folk.generated(KingdomNpc.skinBase(npc.skin()))) {
-				dress(npc, s, tag, spec.name()); // workers from before regional people
+				dress(npc, s, tag, spec.name(), People.namesInUse(level, s)); // workers from before regional people
 			}
 			keep(level, npc, spot);
 		}

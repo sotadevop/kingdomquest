@@ -1331,13 +1331,14 @@ public final class Settlements {
 		}
 		BlockPos best = BlockPos.ZERO;
 		int bestScore = Integer.MAX_VALUE;
-		for (int r = 0; r <= 72 && bestScore == Integer.MAX_VALUE; r += 8) {
-			int steps = r == 0 ? 1 : Math.max(8, r / 3);
+		// near the planned spot first; on a coast the search goes further out (in coarser steps) until there is land
+		for (int r = 0; r <= 200 && bestScore == Integer.MAX_VALUE; r += r < 72 ? 8 : 16) {
+			int steps = r == 0 ? 1 : Math.max(8, r / (r < 72 ? 3 : 6));
 			for (int a = 0; a < steps; a++) {
 				double ang = 2 * Math.PI * a / steps;
 				BlockPos d = new BlockPos((int) Math.round(r * Math.cos(ang)), 0, (int) Math.round(r * Math.sin(ang)));
 				BlockPos q = c.offset(d);
-				if (Math.sqrt(q.distSqr(new BlockPos(s.heart().getX(), q.getY(), s.heart().getZ()))) < keep) {
+				if (Math.sqrt(q.distSqr(new BlockPos(s.heart().getX(), q.getY(), s.heart().getZ()))) < Math.min(keep, 110)) {
 					continue;
 				}
 				boolean clash = false;
@@ -1364,9 +1365,12 @@ public final class Settlements {
 		for (int dx = -8; dx <= 8; dx += 4) {
 			for (int dz = -8; dz <= 8; dz += 4) {
 				int x = c.getX() + dx, z = c.getZ() + dz;
+				// the land is loaded first: unloaded land reads as a flat floor at the bottom of the world, and the
+				// camps were put on the sea that way (user, 2026-11-26)
+				level.getChunk(x >> 4, z >> 4);
 				int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
 				BlockState st = level.getBlockState(new BlockPos(x, top, z));
-				if (!st.getFluidState().isEmpty() || st.is(Blocks.ICE) || st.is(Blocks.PACKED_ICE) || st.is(Blocks.BLUE_ICE)) {
+				if (top < level.getSeaLevel() - 1 || !st.getFluidState().isEmpty() || st.is(Blocks.ICE) || st.is(Blocks.PACKED_ICE) || st.is(Blocks.BLUE_ICE)) {
 					return Integer.MAX_VALUE;
 				}
 				lo = Math.min(lo, top);
@@ -1374,6 +1378,118 @@ public final class Settlements {
 			}
 		}
 		return hi - lo > 8 ? Integer.MAX_VALUE : hi - lo;
+	}
+
+	/** Whether a camp's ground is mostly water (5 x 5 samples over 17 x 17). */
+	private static boolean wet(ServerLevel level, BlockPos c) {
+		int wet = 0;
+		for (int dx = -8; dx <= 8; dx += 4) {
+			for (int dz = -8; dz <= 8; dz += 4) {
+				int x = c.getX() + dx, z = c.getZ() + dz;
+				int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+				BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
+				// the camp's own blocks stand on the water: look down through what isn't natural
+				while (p.getY() > level.getMinY() && !level.getBlockState(p).isAir() && level.getFluidState(p).isEmpty()
+						&& !SiteWork.natural(level.getBlockState(p))) {
+					p.move(0, -1, 0);
+				}
+				if (!level.getFluidState(p).isEmpty()) {
+					wet++;
+				}
+			}
+		}
+		return wet >= 8;
+	}
+
+	/**
+	 * Camps that were put on the sea (user, 2026-11-26: before the land was read loaded) are taken down, with the
+	 * road over the water to them, and built again on dry land: one camp a call, once per camp.
+	 */
+	private static boolean rescueDrowned(MinecraftServer server, Settlement s) {
+		ServerLevel level = server.overworld();
+		for (String track : OUTPOST_SPOTS.keySet()) {
+			if (s.level(track) == 0 || s.level("op_" + track) != 1 || s.level("op_dry_" + track) == 1) {
+				continue;
+			}
+			BlockPos c = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(Rotation.values()[s.rotation()],
+					OUTPOST_SPOTS.get(track)[0], 0, OUTPOST_SPOTS.get(track)[1])).offset(outpostShift(s, track));
+			if (!level.isLoaded(c)) {
+				continue;
+			}
+			if (!wet(level, c)) {
+				putState(server, s.withLevel("op_dry_" + track, 1));
+				return true;
+			}
+			Set<Long> others = new HashSet<>();
+			s.built().forEach((t, l) -> {
+				if (!t.equals(track)) {
+					others.addAll(l);
+				}
+			});
+			int sea = level.getSeaLevel();
+			for (long l : s.built().getOrDefault(track, List.of())) {
+				BlockPos p = BlockPos.of(l);
+				if (!others.contains(l) && !level.getBlockState(p).isAir()) {
+					level.setBlock(p, p.getY() < sea ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+				}
+			}
+			// the road's part over the water (bridge, piers, lamps): its cells between the stored samples, 4 to each side
+			String key = "outpost:" + track;
+			List<BlockPos> path = Roadside.path(s, key);
+			for (int i = 0; i + 1 < path.size(); i++) {
+				BlockPos a = path.get(i), b = path.get(i + 1);
+				int n = Math.max(1, Math.max(Math.abs(b.getX() - a.getX()), Math.abs(b.getZ() - a.getZ())));
+				for (int k = 0; k <= n; k++) {
+					int cx = a.getX() + Math.round((float) (b.getX() - a.getX()) * k / n), cz = a.getZ() + Math.round((float) (b.getZ() - a.getZ()) * k / n);
+					int top = Math.max(a.getY(), b.getY()) + 7;
+					for (int dx = -4; dx <= 4; dx++) {
+						for (int dz = -4; dz <= 4; dz++) {
+							clearSeaColumn(level, cx + dx, cz + dz, top, sea, others);
+						}
+					}
+				}
+			}
+			Settlement fresh = s.withBuilt(track, List.of()).withLevel("op_" + track, 0).withName(RoadLink.PREFIX + key, null)
+					.withName(Roadside.PATH + key, null).withName(RoadLink.LINE_PREFIX + key, null);
+			String queue = fresh.names().getOrDefault("rebuild", "");
+			fresh = fresh.withName("rebuild", queue.isEmpty() ? track : queue + "," + track);
+			putState(server, fresh);
+			ServerPlayer o = server.getPlayerList().getPlayer(s.owner());
+			if (o != null) {
+				o.sendSystemMessage(Component.translatable("kingdomquest.outpost.moved"));
+			}
+			return true;
+		}
+		return false;
+	}
+
+	/** Takes the built blocks out of a column that stands in the sea (water below the road), down to the sea floor. */
+	private static void clearSeaColumn(ServerLevel level, int x, int z, int top, int sea, Set<Long> keep) {
+		if (!level.isLoaded(new BlockPos(x, 0, z))) {
+			return;
+		}
+		BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos(x, top, z);
+		// is it the sea? the first natural thing under the built blocks must be water
+		while (p.getY() > level.getMinY() && (level.getBlockState(p).isAir() || !SiteWork.natural(level.getBlockState(p)))
+				&& level.getFluidState(p).isEmpty()) {
+			p.move(0, -1, 0);
+		}
+		if (level.getFluidState(p).isEmpty()) {
+			return; // dry land: that part of the road stays
+		}
+		for (int y = top; y > level.getMinY(); y--) {
+			p.setY(y);
+			BlockState st = level.getBlockState(p);
+			if (st.isAir() || !st.getFluidState().isEmpty() && st.is(Blocks.WATER)) {
+				continue;
+			}
+			if (SiteWork.natural(st) && y < sea - 1) {
+				break; // the sea floor
+			}
+			if (!SiteWork.natural(st) && !keep.contains(p.asLong())) {
+				level.setBlock(p, y < sea ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
+			}
+		}
 	}
 
 	/** A place outside the walls is finished: a road leads to it from the gate (once; later tiers rebuild it). */
@@ -2253,6 +2369,9 @@ public final class Settlements {
 				Workers.tick(server.overworld(), s);
 			}
 			repairTick(server, s);
+			if (people && s.job().isEmpty() && s.names().getOrDefault("rebuild", "").isEmpty() && rescueDrowned(server, s)) {
+				continue;
+			}
 			rebuildTick(server, s);
 			if (people && s.job().isEmpty() && s.level("moat_dressed") == 0 && s.level(Progression.GATE) >= 3 && server.overworld().isLoaded(s.heart())
 					&& !moatColumns(s).isEmpty()) {

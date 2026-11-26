@@ -138,7 +138,7 @@ final class Defense {
 		boolean archer = post != null && post.tower();
 		g.guardGear(lvl, archer, s.color(), g.getUUID().hashCode()); // before setup: the bow decides how he fights
 		g.setup("guard", io.github.sotadevop.kingdomquest.npc.KingdomNpc.GUARD_SKIN, s.owner());
-		g.dressGuard(s.style(), lvl, archer, s.color(), post == null ? "Watchman" : post.role());
+		g.dressGuard(s.style(), lvl, archer, s.color(), post == null ? "Watchman" : post.role(), People.namesInUse(level, s));
 		g.setTier(lvl);
 		g.setHome(s.heart());
 		g.setAttached(People.ROLE, GUARD + "|" + s.id());
@@ -163,7 +163,11 @@ final class Defense {
 		level.getEntitiesOfClass(Mob.class, new AABB(s.heart()).inflate(120, 64, 120),
 				m -> !(m instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc) && (GUARD + "|" + s.id()).equals(m.getAttached(People.ROLE)))
 				.forEach(Mob::discard);
-		List<Mob> guards = find(level, s, GUARD, 120);
+		// the whole site (2x bigger since 2026-11-23): guards at far towers weren't found and got doubled every
+		// time (user, 2026-11-26: five guards inside each other)
+		List<Mob> guards = find(level, s, GUARD, 260);
+		java.util.Set<String> used = People.namesInUse(level, s);
+		int rgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor() & 0xFFFFFF;
 		List<Post> posts = lvl >= 1 && s.job().isEmpty() ? posts(level, s) : null; // while something is being built, posts stay as they are
 		java.util.Set<Long> wanted = new java.util.HashSet<>();
 		if (posts != null) {
@@ -188,13 +192,17 @@ final class Defense {
 			int armor = Math.max(1, Math.min(3, lvl));
 			boolean archer = npc.getMainHandItem().is(net.minecraft.world.item.Items.BOW);
 			String label = npc.getCustomName() == null ? "" : npc.getCustomName().getString();
+			net.minecraft.world.item.ItemStack helmet = npc.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD);
+			net.minecraft.world.item.component.DyedItemColor dye = helmet.get(net.minecraft.core.component.DataComponents.DYED_COLOR);
 			if (io.github.sotadevop.kingdomquest.npc.Folk.roleOf(label) == null || npc.guardArmor() != armor
-					|| !npc.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).is(net.minecraft.world.item.Items.LEATHER_HELMET)) {
+					|| !helmet.is(net.minecraft.world.item.Items.LEATHER_HELMET) || dye == null || dye.rgb() != rgb) {
+				// also after the kingdom's colour was changed: helmet, leather armour and shield in the new colour
 				String role = io.github.sotadevop.kingdomquest.npc.Folk.roleOf(label);
 				if (role == null) {
 					role = npc.post() == 0 ? "Watchman" : archer ? "Tower Guard" : "Gate Guard";
 				}
-				npc.dressGuard(s.style(), lvl, archer, s.color(), role);
+				npc.dressGuard(s.style(), lvl, archer, s.color(), role, used);
+				used.add(io.github.sotadevop.kingdomquest.npc.Folk.nameOf(npc.getCustomName().getString()));
 			}
 			npc.setTier(lvl);
 		}
@@ -205,7 +213,9 @@ final class Defense {
 		}
 		if (posts != null) {
 			for (Post p : posts) {
-				if (!manned.contains(p.pos().asLong())) {
+				// a guard of this post already standing there (found by the post, not the area) is never doubled
+				if (!manned.contains(p.pos().asLong()) && level.getEntitiesOfClass(io.github.sotadevop.kingdomquest.npc.KingdomNpc.class,
+						new AABB(p.pos()).inflate(24), g -> g.isAlive() && g.post() == p.pos().asLong()).isEmpty()) {
 					spawnGuard(level, s, lvl, p.pos(), p);
 				}
 			}

@@ -96,8 +96,26 @@ public final class Folk {
 
 	/** A name of the region for a man or a woman, fixed by {@code seed}. */
 	public static String name(int region, boolean female, int seed) {
+		return name(region, female, seed, java.util.Set.of());
+	}
+
+	/** As {@link #name(int, boolean, int)}, but none of {@code used}: no two people of a kingdom share a name. */
+	public static String name(int region, boolean female, int seed, java.util.Set<String> used) {
 		String[] list = NAMES.get(Math.floorMod(region, REGIONS.length))[female ? 1 : 0];
-		return list[Math.floorMod(seed * 31 + 17, list.length)];
+		int start = Math.floorMod(seed * 31 + 17, list.length);
+		for (int i = 0; i < list.length; i++) {
+			String n = list[(start + i) % list.length];
+			if (!used.contains(n)) {
+				return n;
+			}
+		}
+		// every name taken: the next one of the same name is "the Younger", then numbered
+		for (int k = 2; ; k++) {
+			String n = list[start] + " " + (k == 2 ? "the Younger" : String.valueOf(k));
+			if (!used.contains(n)) {
+				return n;
+			}
+		}
 	}
 
 	/** "Name, Role": the name tag shows both when one looks at the person. */
