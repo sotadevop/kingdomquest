@@ -1120,8 +1120,10 @@ final class Grade {
 		if (server.getTickCount() % 200 == 37) {
 			Greenery.grow(server, s, 6); // the town's trees and flowers where the land is done
 		}
-		if (g.complete() || server.getTickCount() % 2 != 0) {
-			return; // a section every other tick: about 10 ms of work, the server keeps its pace
+		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
+		boolean creative = owner != null && owner.isCreative();
+		if (g.complete() || !creative && server.getTickCount() % 2 != 0) {
+			return; // a section every other tick: about 10 ms of work, the server keeps its pace (in creative: 3 a tick)
 		}
 		ServerLevel level = server.overworld();
 		List<ServerPlayer> players = level.players();
@@ -1142,6 +1144,25 @@ final class Grade {
 		}
 		if (best >= 0) {
 			g.shape(level, s, best);
+			for (int extra = 0; creative && extra < 2; extra++) {
+				int next = -1;
+				double nd = 128 * 128;
+				for (int sec = 0; sec < g.sw * g.sd; sec++) {
+					if (g.shaped.get(sec) || !g.needed(sec) || !g.loaded(level, sec)) {
+						continue;
+					}
+					double cx = g.x0 + (sec / g.sd) * SECTION + SECTION / 2.0, cz = g.z0 + (sec % g.sd) * SECTION + SECTION / 2.0;
+					double dd = (owner.getX() - cx) * (owner.getX() - cx) + (owner.getZ() - cz) * (owner.getZ() - cz);
+					if (dd < nd) {
+						nd = dd;
+						next = sec;
+					}
+				}
+				if (next < 0) {
+					break;
+				}
+				g.shape(level, s, next);
+			}
 		}
 		g.plantReady(level, s, 1);
 		if (g.dirty && server.getTickCount() - g.savedAt > 200) {

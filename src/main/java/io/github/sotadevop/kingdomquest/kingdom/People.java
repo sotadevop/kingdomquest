@@ -49,8 +49,10 @@ final class People {
 
 	static void register() {
 		// our people can't be hurt
+		// and a guard isn't hurt by his own lord (he doesn't turn on him either; he stays at his post)
 		ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity, source, amount) -> !role(entity).startsWith(ARCHITECT) && !role(entity).startsWith(WORKER)
-				&& !role(entity).startsWith("pet|"));
+				&& !role(entity).startsWith("pet|") && !(entity instanceof KingdomNpc n && n.lord() != null && source.getEntity() != null
+				&& n.lord().equals(source.getEntity().getUUID()) && (n.role().equals("guard") || Guild.isAlly(n))));
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			if (!(player instanceof ServerPlayer sp) || !(entity instanceof KingdomNpc npc)) {
 				return InteractionResult.PASS;
@@ -63,7 +65,17 @@ final class People {
 				return InteractionResult.SUCCESS;
 			}
 			if (npc.role().equals("guard")) {
-				say(sp, "Guard", "All quiet on my watch, my lord.");
+				String who = npc.getCustomName() == null ? "Guard" : io.github.sotadevop.kingdomquest.npc.Folk.nameOf(npc.getCustomName().getString());
+				if (npc.rallied() && sp.getUUID().equals(npc.lord())) {
+					// talking to a called guard sends all the called guards back to their posts
+					String tag = role(npc);
+					List<KingdomNpc> called = ((ServerLevel) sp.level()).getEntities(KingdomNpc.TYPE, sp.getBoundingBox().inflate(160),
+							g -> g.isAlive() && g.rallied() && tag.equals(role(g)));
+					called.forEach(g -> g.setRallied(false));
+					say(sp, who, "Back to our posts, my lord.");
+				} else {
+					say(sp, who, "All quiet on my watch, my lord.");
+				}
 				return InteractionResult.SUCCESS;
 			}
 			if (!Guild.isAlly(npc) && role(entity).isEmpty()) {
@@ -118,7 +130,12 @@ final class People {
 		if (v == null) {
 			return null;
 		}
-		v.setup(role, KingdomNpc.skinFor(name), s.owner()); // a fixed face per person, not a random one
+		v.setup(role, KingdomNpc.skinFor(name), s.owner());
+		// a face of the region, fixed per person (the architect is a scholar, builders craftsmen)
+		int region = io.github.sotadevop.kingdomquest.npc.Folk.region(s.style());
+		int outfit = role.equals(ARCHITECT) ? io.github.sotadevop.kingdomquest.npc.Folk.SCHOLAR
+				: role.equals("builder") ? io.github.sotadevop.kingdomquest.npc.Folk.BUILDER : io.github.sotadevop.kingdomquest.npc.Folk.outfit(name);
+		v.setSkin(io.github.sotadevop.kingdomquest.npc.Folk.skin(region, outfit, name.hashCode() + s.id().hashCode()));
 		BlockPos pos = at;
 		for (int up = 0; up < 12 && !(level.getBlockState(pos).isAir() && level.getBlockState(pos.above()).isAir()); up++) {
 			pos = pos.above();
@@ -132,12 +149,24 @@ final class People {
 		return v;
 	}
 
-	private static final String[] FOLK = {"Anna", "Bertram", "Clara", "Dietrich", "Elsa", "Friedrich", "Greta", "Hans", "Ida", "Jakob",
-			"Lena", "Matthias", "Nora", "Otto", "Paula"};
-
-	/** A townsperson who comes to look (market day); sent off again by whoever called him. */
+	/**
+	 * A townsperson who comes to look (market day), half of them women; a knight is a man of the garrison. Sent off
+	 * again by whoever called them.
+	 */
 	static KingdomNpc visitor(ServerLevel level, Settlement s, String role, BlockPos at) {
-		return spawn(level, s, role, FOLK[level.getRandom().nextInt(FOLK.length)], at);
+		int region = io.github.sotadevop.kingdomquest.npc.Folk.region(s.style());
+		int seed = level.getRandom().nextInt();
+		boolean knight = role.equals("knight");
+		boolean female = !knight && (seed & 1) == 1;
+		String name = io.github.sotadevop.kingdomquest.npc.Folk.name(region, female, seed >>> 1);
+		KingdomNpc v = spawn(level, s, role, name, at);
+		if (v != null) {
+			int outfit = knight ? io.github.sotadevop.kingdomquest.npc.Folk.GUARD : female ? ((seed >>> 3 & 1) == 0 ? io.github.sotadevop.kingdomquest.npc.Folk.HOUSEWIFE
+					: io.github.sotadevop.kingdomquest.npc.Folk.WORKER_WOMAN) : ((seed >>> 3 & 1) == 0 ? io.github.sotadevop.kingdomquest.npc.Folk.PEASANT
+					: io.github.sotadevop.kingdomquest.npc.Folk.BURGHER);
+			v.setSkin(io.github.sotadevop.kingdomquest.npc.Folk.skin(region, outfit, seed >>> 5));
+		}
+		return v;
 	}
 
 	/** Every 10 seconds: settlements with a house get their Architect (again, if he went missing). */

@@ -1,6 +1,5 @@
 package io.github.sotadevop.kingdomquest.kingdom;
 
-import io.github.sotadevop.kingdomquest.building.Template;
 import io.github.sotadevop.kingdomquest.npc.KingdomNpc;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -64,8 +63,6 @@ final class Workers {
 			new Spec("minecamp", 1, "Prospector", "iron_pickaxe", 203, 43, "The seams run deep here. Mind the shaft."),
 			new Spec(Progression.TOWNHALL, 1, "Chronicler", "writable_book", 55, 8, "Every deed of the realm goes into my book. Shall I read to you?"));
 
-	/** Inside the houses (base frame): main house, then the three houses on the square. */
-	private static final int[][] HOMES = {{7, 1}, {-6, 35}, {20, 35}, {-18, 35}};
 
 	private Workers() {
 	}
@@ -85,7 +82,133 @@ final class Workers {
 				Settlements.liftAt(s, spec.track(), spec.x(), spec.z()), spec.z()).offset(Settlements.outpostShift(s, spec.track()));
 	}
 
-	/** Every 10 seconds: workers appear at their buildings, wanderers go back, workers of removed buildings leave. */
+	/** The look and name tag of a worker: a face and name of the region, man or woman as the job was held. */
+	private static void dress(KingdomNpc npc, Settlement s, String tag, String job) {
+		int seed = tag.hashCode();
+		int region = io.github.sotadevop.kingdomquest.npc.Folk.region(s.style());
+		int outfit = io.github.sotadevop.kingdomquest.npc.Folk.outfit(job);
+		boolean female = io.github.sotadevop.kingdomquest.npc.Folk.female(outfit);
+		npc.setSkin(io.github.sotadevop.kingdomquest.npc.Folk.skin(region, outfit, seed >>> 3));
+		String own = s.names().get("npcname|" + tag); // a name the lord gave him
+		String name = own != null ? own : io.github.sotadevop.kingdomquest.npc.Folk.name(region, female, seed >>> 7);
+		npc.setCustomName(Component.literal(io.github.sotadevop.kingdomquest.npc.Folk.label(name, job)));
+	}
+
+	/**
+	 * Where a worker stands at his workplace: on the floor inside the building near {@code home} (user, 2026-11-26:
+	 * many stood on the roofs), under a roof where there is one; null if no place is free.
+	 */
+	static BlockPos floorNear(ServerLevel level, BlockPos home) {
+		int[] dys = {0, 1, -1, 2, -2, 3, -3, 4, -4};
+		for (boolean indoors : new boolean[] {true, false}) {
+			for (int r = 0; r <= 3; r++) {
+				for (int dx = -r; dx <= r; dx++) {
+					for (int dz = -r; dz <= r; dz++) {
+						if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
+							continue;
+						}
+						for (int dy : dys) {
+							BlockPos feet = home.offset(dx, dy, dz);
+							if (standable(level, feet) && (!indoors || !level.canSeeSky(feet.above()))) {
+								return feet;
+							}
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private static boolean standable(ServerLevel level, BlockPos feet) {
+		return level.getBlockState(feet).getCollisionShape(level, feet).isEmpty() && level.getBlockState(feet.above()).getCollisionShape(level, feet.above()).isEmpty()
+				&& level.getFluidState(feet).isEmpty() && !level.getBlockState(feet.below()).getCollisionShape(level, feet.below()).isEmpty()
+				&& level.getFluidState(feet.below()).isEmpty();
+	}
+
+	/** Per settlement: the spots beside the beds of its town houses (housewives live there), found once per main level. */
+	private static final java.util.Map<String, List<BlockPos>> HOUSE_SPOTS = new java.util.HashMap<>();
+	private static final int HOUSEWIVES = 8;
+
+	private static List<BlockPos> houseSpots(ServerLevel level, Settlement s) {
+		String key = s.id() + "|" + s.level(Settlement.MAIN) + "|" + s.built().getOrDefault(Settlement.MAIN, List.of()).size();
+		return HOUSE_SPOTS.computeIfAbsent(key, k -> {
+			List<BlockPos> out = new java.util.ArrayList<>();
+			Rotation r = Rotation.values()[s.rotation()];
+			BlockPos.MutableBlockPos q = new BlockPos.MutableBlockPos();
+			for (int[] h : io.github.sotadevop.kingdomquest.building.Layout.houses(s.style())) {
+				if (out.size() >= HOUSEWIVES) {
+					break;
+				}
+				BlockPos a = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(r, h[0], 0, h[1]));
+				BlockPos b = s.heart().offset(io.github.sotadevop.kingdomquest.building.Layout.rel(r, h[2], 0, h[3]));
+				BlockPos bed = null;
+				for (int x = Math.min(a.getX(), b.getX()); x <= Math.max(a.getX(), b.getX()) && bed == null; x++) {
+					for (int z = Math.min(a.getZ(), b.getZ()); z <= Math.max(a.getZ(), b.getZ()) && bed == null; z++) {
+						if (!level.isLoaded(q.set(x, 0, z))) {
+							continue;
+						}
+						for (int y = s.heart().getY() - 8; y <= s.heart().getY() + 20; y++) {
+							if (level.getBlockState(q.set(x, y, z)).getBlock() instanceof net.minecraft.world.level.block.BedBlock) {
+								bed = q.immutable();
+								break;
+							}
+						}
+					}
+				}
+				if (bed != null) {
+					BlockPos spot = floorNear(level, bed);
+					if (spot != null) {
+						out.add(spot);
+					}
+				}
+			}
+			return out;
+		});
+	}
+
+	private static final String[] HOUSEWIFE_LINES = {"The hearth is warm and the pottage is on, my lord.",
+			"The children are at the well and the bread is rising.", "Mind the floor, I've only just swept it.",
+			"The hens laid well today. Eggs for the whole lane."};
+
+	/** Keeps a worker at his place: he comes back if he wandered, and potters about the room. */
+	private static void keep(ServerLevel level, KingdomNpc npc, BlockPos spot) {
+		double d = npc.distanceToSqr(Vec3.atBottomCenterOf(spot));
+		if (d > 24 * 24 || d > 3 * 3 && level.canSeeSky(npc.blockPosition().above()) && !level.canSeeSky(spot.above())) {
+			// far off, or up on the roof of his own building: put back inside
+			npc.getNavigation().stop();
+			npc.snapTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, npc.getYRot(), 0);
+		} else if (d > 5 * 5) {
+			npc.getNavigation().moveTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, 0.8);
+		} else if (level.getRandom().nextInt(3) == 0) {
+			BlockPos to = floorNear(level, spot.offset(level.getRandom().nextInt(5) - 2, 0, level.getRandom().nextInt(5) - 2));
+			if (to != null && to.distSqr(spot) <= 9 && level.canSeeSky(to.above()) == level.canSeeSky(spot.above())) {
+				npc.getNavigation().moveTo(to.getX() + 0.5, to.getY(), to.getZ() + 0.5, 0.5);
+			}
+			npc.swingArm();
+		}
+	}
+
+	private static KingdomNpc spawnAt(ServerLevel level, Settlement s, String tag, String job, Item tool, BlockPos spot) {
+		KingdomNpc npc = KingdomNpc.TYPE.create(level, EntitySpawnReason.MOB_SUMMONED);
+		if (npc == null) {
+			return null;
+		}
+		npc.setup("worker", 0, s.owner());
+		if (tool != null) {
+			npc.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new net.minecraft.world.item.ItemStack(tool));
+		}
+		npc.setAttached(People.ROLE, tag);
+		dress(npc, s, tag, job);
+		npc.snapTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, level.getRandom().nextFloat() * 360, 0);
+		level.addFreshEntity(npc);
+		return npc;
+	}
+
+	/**
+	 * Every 10 seconds: workers appear at their buildings, wanderers go back, workers of removed buildings leave. They
+	 * stay at their work inside the building, day and night (user, 2026-11-26). Housewives keep the town houses.
+	 */
 	static void tick(ServerLevel level, Settlement s) {
 		if (!level.isLoaded(s.heart())) {
 			return;
@@ -112,32 +235,45 @@ final class Workers {
 				}
 				continue;
 			}
-			if (npc == null) {
-				npc = KingdomNpc.TYPE.create(level, EntitySpawnReason.MOB_SUMMONED);
-				if (npc == null) {
-					continue;
-				}
-				npc.setup("worker", Math.floorMod(spec.name().hashCode(), 9), s.owner());
-				Item tool = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(spec.tool()));
-				npc.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new net.minecraft.world.item.ItemStack(tool));
-				npc.setCustomName(Component.literal(spec.name()));
-				npc.setAttached(People.ROLE, tag);
+			BlockPos spot = floorNear(level, home);
+			if (spot == null) {
 				int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, home.getX(), home.getZ());
-				npc.snapTo(home.getX() + 0.5, y, home.getZ() + 0.5, 0, 0);
-				level.addFreshEntity(npc);
-			} else if (level.getSkyDarken() >= 4) {
-				// night: everyone goes home to the houses around the square
-				BlockPos bed = s.heart().offset(Template.rotate(new BlockPos(HOMES[Math.floorMod(spec.name().hashCode(), HOMES.length)][0] - 7, 0,
-						HOMES[Math.floorMod(spec.name().hashCode(), HOMES.length)][1] - 10), Rotation.values()[s.rotation()]));
-				npc.getNavigation().moveTo(bed.getX() + 0.5, s.heart().getY() + 1, bed.getZ() + 0.5, 0.7);
-			} else if (npc.distanceToSqr(Vec3.atCenterOf(home)) > 10 * 10) {
-				npc.getNavigation().moveTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5, 0.8);
-			} else if (level.getRandom().nextInt(3) == 0) {
-				// potter around the workplace
-				npc.getNavigation().moveTo(home.getX() + 0.5 + level.getRandom().nextInt(7) - 3, home.getY(),
-						home.getZ() + 0.5 + level.getRandom().nextInt(7) - 3, 0.5);
-				npc.swingArm();
+				spot = new BlockPos(home.getX(), y, home.getZ());
 			}
+			if (npc == null) {
+				Item tool = BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(spec.tool()));
+				spawnAt(level, s, tag, spec.name(), tool, spot);
+				continue;
+			}
+			if (npc.getCustomName() == null || io.github.sotadevop.kingdomquest.npc.Folk.roleOf(npc.getCustomName().getString()) == null
+					|| !io.github.sotadevop.kingdomquest.npc.Folk.generated(KingdomNpc.skinBase(npc.skin()))) {
+				dress(npc, s, tag, spec.name()); // workers from before regional people
+			}
+			keep(level, npc, spot);
+		}
+		// the housewives: one in each of the first town houses with a bed
+		List<BlockPos> spots = s.level(Settlement.MAIN) >= 4 ? houseSpots(level, s) : List.of();
+		for (int i = 0; i < HOUSEWIVES; i++) {
+			String tag = "worker|" + s.id() + "|Housewife#" + i;
+			List<KingdomNpc> mine = all.stream().filter(n -> tag.equals(n.getAttached(People.ROLE))).toList();
+			for (int k = 1; k < mine.size(); k++) {
+				mine.get(k).discard();
+			}
+			KingdomNpc npc = mine.isEmpty() ? null : mine.get(0);
+			if (i >= spots.size()) {
+				if (npc != null) {
+					npc.discard();
+				}
+				continue;
+			}
+			BlockPos spot = spots.get(i);
+			if (npc == null) {
+				if (level.isPositionEntityTicking(spot)) {
+					spawnAt(level, s, tag, "Housewife", null, spot);
+				}
+				continue;
+			}
+			keep(level, npc, spot);
 		}
 	}
 
@@ -147,6 +283,11 @@ final class Workers {
 			return false;
 		}
 		String name = role.substring(role.lastIndexOf('|') + 1);
+		String who = npc.getCustomName() == null ? name : io.github.sotadevop.kingdomquest.npc.Folk.nameOf(npc.getCustomName().getString());
+		if (name.startsWith("Housewife")) {
+			People.say(player, who, HOUSEWIFE_LINES[Math.floorMod(npc.getUUID().hashCode() + (int) (player.level().getGameTime() / 2400), HOUSEWIFE_LINES.length)]);
+			return true;
+		}
 		if (name.equals("Steward") || name.equals("Warchief")) {
 			Settlement s = Settlements.nearestOwned(player);
 			if (s == null) {
@@ -175,7 +316,7 @@ final class Workers {
 		}
 		for (Spec spec : SPECS) {
 			if (spec.name().equals(name)) {
-				People.say(player, name, spec.line());
+				People.say(player, who, spec.line());
 				Settlement here = name.equals("Chronicler") ? Settlements.nearestOwned(player) : null;
 				if (here != null) {
 					Chronicle.send(player, here);

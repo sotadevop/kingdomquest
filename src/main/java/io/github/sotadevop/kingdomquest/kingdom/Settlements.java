@@ -57,7 +57,8 @@ public final class Settlements {
 	/** Replaced or removed builder blocks never drop items (banners, beds, torches popping off...). */
 	private static final int NO_DROPS = Block.UPDATE_ALL | Block.UPDATE_SUPPRESS_DROPS;
 	/** Creative builds take this long, whatever the size (survival uses the template's time). */
-	private static final int CREATIVE_TICKS = 60;
+	/** A job's length in creative: one second (user, 2026-11-26: building in creative still took too long). */
+	private static final int CREATIVE_TICKS = 20;
 	private static final Map<UUID, Pending> PENDING = new HashMap<>();
 	private static final Map<String, List<Template.Placement>> PLACEMENTS = new HashMap<>();
 	/** Jobs whose ground was claimed for the staged shaping (once per job and server run; claiming again changes nothing). */
@@ -875,12 +876,49 @@ public final class Settlements {
 		lines.forEach(l -> player.sendSystemMessage(Component.literal(" - " + l)));
 	}
 
-	/** The lord chose a name (pets). */
+	/**
+	 * The lord chose a name: a pet ("pet_<kind>"), or one of his people or animals from the realm's lists
+	 * ("npc|<uuid>", "mob|<uuid>"). A person keeps his role in his name tag; workers keep the name when they come back.
+	 */
 	static void rename(ServerPlayer player, NamePayload p) {
 		MinecraftServer srv = player.level().getServer();
 		Settlement s = byHeart(srv, p.heart());
 		String name = p.name().strip();
-		if (s == null || !s.owner().equals(player.getUUID()) || name.isEmpty() || name.length() > 24 || !p.key().startsWith("pet_")) {
+		if (s == null || !s.owner().equals(player.getUUID()) || name.isEmpty() || name.length() > 24) {
+			return;
+		}
+		if (p.key().startsWith("npc|") || p.key().startsWith("mob|")) {
+			net.minecraft.world.entity.Entity e;
+			try {
+				e = srv.overworld().getEntity(java.util.UUID.fromString(p.key().substring(4)));
+			} catch (IllegalArgumentException ex) {
+				return;
+			}
+			String role = e == null ? "" : People.role(e);
+			boolean ours = e != null && (role.contains(s.id().toString()) || e instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc n && player.getUUID().equals(n.lord())
+					|| e instanceof net.minecraft.world.entity.TamableAnimal t && t.isOwnedBy(player));
+			if (!ours) {
+				return;
+			}
+			if (role.startsWith("pet|")) {
+				String kind = role.substring(role.lastIndexOf('|') + 1);
+				put(srv, s.withName("pet_" + kind, name));
+				Collections.rename(srv, s, kind, name);
+			} else if (e instanceof io.github.sotadevop.kingdomquest.npc.KingdomNpc n) {
+				String old = n.getCustomName() == null ? "" : n.getCustomName().getString();
+				String r = io.github.sotadevop.kingdomquest.npc.Folk.roleOf(old);
+				n.setCustomName(Component.literal(r == null ? name : io.github.sotadevop.kingdomquest.npc.Folk.label(name, r)));
+				if (role.startsWith("worker|")) {
+					put(srv, s.withName("npcname|" + role, name));
+				}
+			} else {
+				e.setCustomName(Component.literal(name));
+			}
+			Settlement fresh = byHeart(srv, p.heart());
+			Realm.send(player, fresh == null ? s : fresh);
+			return;
+		}
+		if (!p.key().startsWith("pet_")) {
 			return;
 		}
 		put(srv, s.withName(p.key(), name));
@@ -2216,6 +2254,15 @@ public final class Settlements {
 			}
 			repairTick(server, s);
 			rebuildTick(server, s);
+			if (people && s.job().isEmpty() && s.level("moat_dressed") == 0 && s.level(Progression.GATE) >= 3 && server.overworld().isLoaded(s.heart())
+					&& !moatColumns(s).isEmpty()) {
+				// moats dug before they were grown over get their plants once (user, 2026-11-26)
+				Set<Long> every = new HashSet<>();
+				s.built().values().forEach(every::addAll);
+				MoatDress.dress(server.overworld(), s, moatColumns(s), every);
+				putState(server, s.withLevel("moat_dressed", 1));
+				continue;
+			}
 			if (server.getTickCount() % 1200 == 0) {
 				Defense.guards(server.overworld(), s);
 				Collections.pets(server, s);
@@ -2304,7 +2351,7 @@ public final class Settlements {
 		}
 		if (grade != null && !grade.complete()) {
 			int[] box = JOB_BOX.computeIfAbsent(s.id() + "|" + s.job(), k -> jobBox(s, list, columns));
-			if (!grade.ready(level, s, box[0], box[1], box[2], box[3], instant ? Integer.MAX_VALUE : 2)) {
+			if (!grade.ready(level, s, box[0], box[1], box[2], box[3], instant ? Integer.MAX_VALUE : fast ? 16 : 2)) {
 				return; // waits for the land; it is shaped when someone comes near
 			}
 		}
@@ -2458,13 +2505,24 @@ public final class Settlements {
 			if (s.jobTrack().equals(Progression.GATE) && !moatColumns(done).isEmpty()) {
 				SiteWork.sealDitch(level, moatColumns(done), nowBuilt, SiteWork.surface(level, s.heart()));
 			}
+			if ((s.jobTrack().equals(Progression.GATE) || s.jobTrack().equals(Progression.WALLS)) && !moatColumns(done).isEmpty()) {
+				// the ditch, its banks and the berm grown over (user, 2026-11-26)
+				Set<Long> every = new HashSet<>();
+				done.built().values().forEach(every::addAll);
+				MoatDress.dress(level, done, moatColumns(done), every);
+			}
 			SiteWork.decorate(level, s.heart(), columns, nowBuilt);
 			Production.armTraps(level, done, list);
-			if (Progression.KENNEL.equals(s.jobTrack())) {
+			// a new pet keeps its default name: the lord renames it in the realm's Animals list (user, 2026-11-26: no popup)
+			if (Progression.GUILD.equals(s.jobTrack()) && done.level(Progression.GUILD) == 1) {
+				// the guild's first fighter is called with a goat horn: the lord gets one (user, 2026-11-26)
 				ServerPlayer o = server.getPlayerList().getPlayer(s.owner());
-				String kind = Collections.petKind(done.level(Progression.KENNEL));
-				if (o != null && kind != null) {
-					ServerPlayNetworking.send(o, new NamePayload(s.heart(), "pet_" + kind, Collections.defaultName(kind)));
+				if (o != null && !o.getInventory().hasAnyOf(java.util.Set.of(net.minecraft.world.item.Items.GOAT_HORN))) {
+					net.minecraft.world.item.ItemStack horn = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOAT_HORN);
+					if (!o.getInventory().add(horn)) {
+						o.drop(horn, false);
+					}
+					o.sendSystemMessage(Component.translatable("kingdomquest.horn.given").withStyle(net.minecraft.ChatFormatting.GOLD));
 				}
 			}
 			if (Progression.ROADS.equals(s.jobTrack()) && done.level(Progression.ROADS) == 3) {

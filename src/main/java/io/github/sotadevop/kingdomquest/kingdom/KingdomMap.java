@@ -99,7 +99,11 @@ public final class KingdomMap {
 		if (best == null) {
 			for (int r = 0; r < 12 && best == null; r++) {
 				for (Direction d : Direction.Plane.HORIZONTAL) {
-					BlockPos spot = stand(level, centre.relative(d, r + (b[2] - b[0]) / 2 + 2));
+					BlockPos c = centre.relative(d, r + (b[2] - b[0]) / 2 + 2);
+					level.getChunk(c.getX() >> 4, c.getZ() >> 4);
+					// at the land's own height: the camps 200 blocks out lie far above or below the heart (user, 2026-11-26)
+					BlockPos spot = stand(level, new BlockPos(c.getX(), level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+							c.getX(), c.getZ()), c.getZ()));
 					if (spot != null) {
 						best = spot;
 						break;
@@ -116,6 +120,29 @@ public final class KingdomMap {
 				net.minecraft.world.phys.Vec3.ZERO, yaw, 0, net.minecraft.world.level.portal.TeleportTransition.DO_NOTHING));
 		player.resetFallDistance();
 		level.playSound(null, best, net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT, net.minecraft.sounds.SoundSource.PLAYERS, 0.6f, 1.3f);
+	}
+
+	/** Puts the lord on free ground right beside {@code target} (a person or an animal of his). */
+	static void goNear(ServerPlayer player, BlockPos target) {
+		ServerLevel level = player.level().getServer().overworld();
+		BlockPos best = null;
+		for (int r = 1; r <= 4 && best == null; r++) {
+			for (Direction d : Direction.Plane.HORIZONTAL) {
+				BlockPos spot = stand(level, target.relative(d, r));
+				if (spot != null) {
+					best = spot;
+					break;
+				}
+			}
+		}
+		if (best == null) {
+			best = target;
+		}
+		level.playSound(null, player.blockPosition(), net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT, net.minecraft.sounds.SoundSource.PLAYERS, 0.6f, 1.3f);
+		float yaw = (float) Math.toDegrees(Math.atan2(-(target.getX() - best.getX()), target.getZ() - best.getZ()));
+		player.teleport(new net.minecraft.world.level.portal.TeleportTransition(level, net.minecraft.world.phys.Vec3.atBottomCenterOf(best),
+				net.minecraft.world.phys.Vec3.ZERO, yaw, 0, net.minecraft.world.level.portal.TeleportTransition.DO_NOTHING));
+		player.resetFallDistance();
 	}
 
 	/** Where one can stand in this column, near the given height: feet and head free, solid below. */

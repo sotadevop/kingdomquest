@@ -246,12 +246,12 @@ public class RealmScreen extends Screen {
 				if (from != null && to != null) {
 					send("realm_link|" + from.key() + "|" + to.key());
 				}
-			}).bounds(this.left + 8, fy, 90, 18).build();
+			}).bounds(this.left + 8, fy, 80, 18).build();
 			connect.active = a != null && b2 != null && (a.settlement() || b2.settlement());
 			this.themed.add(this.addRenderableWidget(connect));
 			this.themed.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.find"), b -> send("realm_find"))
-					.bounds(this.left + 102, fy, 90, 18).build()));
-			this.rename = new EditBox(this.font, this.left + 198, fy + 2, 110, 14, Component.translatable("kingdomquest.realm.name"));
+					.bounds(this.left + 92, fy, 76, 18).build()));
+			this.rename = new EditBox(this.font, this.left + 172, fy + 2, 90, 14, Component.translatable("kingdomquest.realm.name"));
 			this.rename.setMaxLength(32);
 			Node sel = this.selB != null ? b2 : a;
 			this.rename.setValue(sel == null ? "" : sel.name());
@@ -263,7 +263,7 @@ public class RealmScreen extends Screen {
 					send(n.settlement() ? "realm_rename|" + n.key() + "|" + this.rename.getValue()
 							: "realm_vname|" + n.key().substring(2) + "|" + this.rename.getValue());
 				}
-			}).bounds(this.left + 312, fy, 50, 18).build();
+			}).bounds(this.left + 266, fy, 44, 18).build();
 			save.active = sel != null;
 			this.themed.add(this.addRenderableWidget(save));
 			// fast travel with the Dimension Globe of Sota Tweaks (the server checks the globe is carried)
@@ -274,7 +274,7 @@ public class RealmScreen extends Screen {
 						send("realm_travel|" + n.key());
 						this.onClose();
 					}
-				}).bounds(this.left + 366, fy, 60, 18).build();
+				}).bounds(this.left + 314, fy, 54, 18).build();
 				travel.active = sel != null;
 				this.themed.add(this.addRenderableWidget(travel));
 			}
@@ -322,11 +322,74 @@ public class RealmScreen extends Screen {
 
 	/** Guards all wear the same face and armor: their look is not changed one by one. */
 	private static boolean fixedLook(JsonObject person) {
-		return "Guard".equals(person.get("role").getAsString());
+		return person.has("guard") && person.get("guard").getAsBoolean() || "Guard".equals(person.get("role").getAsString());
 	}
 
 	private boolean canChange(JsonObject person) {
 		return lord() && !fixedLook(person);
+	}
+
+	/** The actions on a person or animal for the lord: a new look (not guards), a new name, go there. */
+	private List<String> actions(JsonObject o, boolean people) {
+		List<String> out = new ArrayList<>();
+		if (!lord()) {
+			return out;
+		}
+		if (people && canChange(o)) {
+			out.add("look");
+		}
+		if (o.has("uuid")) {
+			out.add("name");
+			out.add("go");
+		}
+		return out;
+	}
+
+	/** Draws the action buttons of one person or animal side by side in {@code x0..x1}. */
+	private void drawActions(GuiGraphicsExtractor g, List<String> acts, int x0, int x1, int y, int h, int mouseX, int mouseY, boolean rowOver, Theme t) {
+		if (acts.isEmpty()) {
+			return;
+		}
+		int w = (x1 - x0) / acts.size();
+		for (int i = 0; i < acts.size(); i++) {
+			int bx = x0 + i * w;
+			boolean on = rowOver && mouseX >= bx && mouseX < bx + w - 2 && mouseY >= y && mouseY < y + h;
+			Ui.roundedFill(g, bx, y, w - 2, h, 2, on ? 0x70FFFFFF : 0x38FFFFFF);
+			String label = Component.translatable("kingdomquest.realm.act_" + acts.get(i)).getString();
+			g.text(this.font, Text.fit(this.font, label, w - 6), bx + (w - 2 - Math.min(this.font.width(label), w - 6)) / 2, y + (h - 8) / 2, t.text(), false);
+		}
+	}
+
+	/** Which action sits at {@code mx} in {@code x0..x1}, or null. */
+	private static String actionAt(List<String> acts, int x0, int x1, double mx) {
+		if (acts.isEmpty() || mx < x0 || mx >= x1) {
+			return null;
+		}
+		int i = (int) ((mx - x0) / ((x1 - x0) / acts.size()));
+		return i >= 0 && i < acts.size() ? acts.get(i) : null;
+	}
+
+	/** Runs an action of a person or animal from the lists. */
+	private void act(String action, JsonObject o, boolean people) {
+		switch (action) {
+			case "look" -> {
+				this.picking = o.get("uuid").getAsString();
+				this.pickScroll = 0;
+				int arms = KingdomNpc.skinArms(o.get("skin").getAsInt());
+				this.pickArms = arms == 3 ? 0 : arms;
+				this.status = null;
+				CustomSkins.rescan();
+				this.rebuildWidgets();
+			}
+			case "name" -> this.minecraft.setScreenAndShow(new NameScreen(new io.github.sotadevop.kingdomquest.kingdom.NamePayload(this.heart,
+					(people ? "npc|" : "mob|") + o.get("uuid").getAsString(), o.get("name").getAsString())));
+			case "go" -> {
+				send("realm_goto|" + o.get("uuid").getAsString());
+				this.onClose();
+			}
+			default -> {
+			}
+		}
 	}
 
 	/** Rows of the list that fit under its header. */
@@ -352,7 +415,7 @@ public class RealmScreen extends Screen {
 
 	/** Column edges of the list: name, role, where, look (the look column only for the lord's people). */
 	private int[] columns(boolean people) {
-		int lookW = people && lord() ? 78 : 0;
+		int lookW = lord() ? (people ? 96 : 64) : 0; // the actions: look, name, go (animals: name, go)
 		int whereW = 74;
 		int rest = mapW() - lookW - whereW - 12;
 		int nameW = rest * 11 / 20;
@@ -393,6 +456,22 @@ public class RealmScreen extends Screen {
 	/** The looks to choose from: the nine vanilla skins and (single player) the skins in the folder. */
 	private List<int[]> looks() {
 		List<int[]> out = new ArrayList<>();
+		// first the region's own people of the same sex as the one being changed (the generated skins), then the
+		// nine vanilla skins and the folder's
+		JsonObject p = this.picking == null ? null : person(this.picking);
+		int now = p == null ? -1 : KingdomNpc.skinBase(p.get("skin").getAsInt());
+		if (io.github.sotadevop.kingdomquest.npc.Folk.generated(now)) {
+			int region = io.github.sotadevop.kingdomquest.npc.Folk.regionOf(now);
+			boolean female = io.github.sotadevop.kingdomquest.npc.Folk.female(io.github.sotadevop.kingdomquest.npc.Folk.outfitOf(now));
+			for (int o = 0; o < io.github.sotadevop.kingdomquest.npc.Folk.OUTFITS; o++) {
+				if (io.github.sotadevop.kingdomquest.npc.Folk.female(o) != female || o == io.github.sotadevop.kingdomquest.npc.Folk.GUARD) {
+					continue;
+				}
+				for (int v = 0; v < io.github.sotadevop.kingdomquest.npc.Folk.VARIANTS; v++) {
+					out.add(new int[] {io.github.sotadevop.kingdomquest.npc.Folk.skin(region, o, v)});
+				}
+			}
+		}
 		for (int i = 0; i < LOOKS.length; i++) {
 			out.add(new int[] {i});
 		}
@@ -404,9 +483,15 @@ public class RealmScreen extends Screen {
 		return out;
 	}
 
+	private static final String[] OUTFIT_NAMES = {"Guard", "Peasant", "Smith", "Burgher", "Scholar", "Craftsman", "Captain", "Housewife",
+			"Working woman", "Cook"};
+
 	private String lookName(int base) {
 		if (base < LOOKS.length) {
 			return LOOKS[base];
+		}
+		if (io.github.sotadevop.kingdomquest.npc.Folk.generated(base)) {
+			return OUTFIT_NAMES[io.github.sotadevop.kingdomquest.npc.Folk.outfitOf(base)] + " " + (base % io.github.sotadevop.kingdomquest.npc.Folk.VARIANTS + 1);
 		}
 		CustomSkins.Skin sk = CustomSkins.get(base);
 		return sk == null ? "?" : sk.name();
@@ -862,12 +947,7 @@ public class RealmScreen extends Screen {
 			g.text(this.font, Text.fit(this.font, people ? o.get("role").getAsString() : o.get("type").getAsString(), c[2] - c[1] - 6), c[1], ty,
 					t.secondary(), false);
 			g.text(this.font, Text.fit(this.font, direction(o.get("x").getAsInt(), o.get("z").getAsInt()), c[3] - c[2] - 4), c[2], ty, t.secondary(), false);
-			if (people && canChange(o)) {
-				boolean on = mouseX >= c[3] && mouseX < c[4] && over;
-				Ui.roundedFill(g, c[3], y + 1, c[4] - c[3] - 2, ROW_H - 3, 2, on ? 0x60FFFFFF : 0x30FFFFFF);
-				g.text(this.font, Text.fit(this.font, Component.translatable("kingdomquest.realm.change_look").getString(), c[4] - c[3] - 8), c[3] + 4, ty,
-						t.text(), false);
-			}
+			drawActions(g, actions(o, people), c[3], c[4], y + 1, ROW_H - 3, mouseX, mouseY, over, t);
 		}
 		scrollBar(g, list.size(), rows, this.scroll);
 		if (hover != null) {
@@ -913,12 +993,7 @@ public class RealmScreen extends Screen {
 				g.text(this.font, Text.fit(this.font, o.get("name").getAsString(), w - 6), x + 3, y + 64, t.text(), false);
 				g.text(this.font, Text.fit(this.font, people ? o.get("role").getAsString() : direction(o.get("x").getAsInt(), o.get("z").getAsInt()), w - 6), x + 3,
 						y + 74, t.secondary(), false);
-				if (people && canChange(o)) {
-					boolean on = over && mouseY >= y + CARD_H - 14;
-					Ui.roundedFill(g, x + 2, y + CARD_H - 14, w - 4, 12, 2, on ? 0x70FFFFFF : 0x38FFFFFF);
-					g.text(this.font, Text.fit(this.font, Component.translatable("kingdomquest.realm.change_look").getString(), w - 10), x + 5, y + CARD_H - 12,
-							t.text(), false);
-				}
+				drawActions(g, actions(o, people), x + 2, x + w - 2, y + CARD_H - 14, 12, mouseX, mouseY, over, t);
 			}
 		}
 		scrollBar(g, totalRows, rows, this.scroll);
@@ -974,9 +1049,11 @@ public class RealmScreen extends Screen {
 				this.rebuildWidgets();
 				return true;
 			}
-		} else if (this.tab == 2 && inMap(mx, my)) {
-			JsonArray list = arr("people");
+		} else if ((this.tab == 2 || this.tab == 3) && inMap(mx, my)) {
+			boolean people = this.tab == 2;
+			JsonArray list = arr(people ? "people" : "animals");
 			JsonObject hit = null;
+			String action = null;
 			if (cards) {
 				int w = cardW();
 				int col = (int) Math.floor((mx - mapX0()) / (w + CARD_GAP));
@@ -985,23 +1062,20 @@ public class RealmScreen extends Screen {
 				int idx = (this.scroll + row) * cardCols() + col;
 				if (col >= 0 && col < cardCols() && row >= 0 && row < cardRows() && idx < list.size() && my >= y + CARD_H - 14 && my < y + CARD_H) {
 					hit = list.get(idx).getAsJsonObject();
+					int x = mapX0() + col * (w + CARD_GAP);
+					action = actionAt(actions(hit, people), x + 2, x + w - 2, mx);
 				}
 			} else {
-				int[] c = columns(true);
+				int[] c = columns(people);
 				int row = (int) Math.floor((my - rowTop(0)) / ROW_H);
 				int idx = this.scroll + row;
 				if (mx >= c[3] && row >= 0 && row < listRows() && idx < list.size()) {
 					hit = list.get(idx).getAsJsonObject();
+					action = actionAt(actions(hit, people), c[3], c[4], mx);
 				}
 			}
-			if (hit != null && canChange(hit)) {
-				this.picking = hit.get("uuid").getAsString();
-				this.pickScroll = 0;
-				int arms = KingdomNpc.skinArms(hit.get("skin").getAsInt());
-				this.pickArms = arms == 3 ? 0 : arms;
-				this.status = null;
-				CustomSkins.rescan();
-				this.rebuildWidgets();
+			if (hit != null && action != null) {
+				act(action, hit, people);
 				return true;
 			}
 		}
