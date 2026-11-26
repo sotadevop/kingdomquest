@@ -2520,7 +2520,7 @@ public final class Settlements {
 				if (o != null && !o.getInventory().hasAnyOf(java.util.Set.of(net.minecraft.world.item.Items.GOAT_HORN))) {
 					net.minecraft.world.item.ItemStack horn = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.GOAT_HORN);
 					if (!o.getInventory().add(horn)) {
-						o.drop(horn, false);
+						o.level().addFreshEntity(new net.minecraft.world.entity.item.ItemEntity(o.level(), o.getX(), o.getY(), o.getZ(), horn));
 					}
 					o.sendSystemMessage(Component.translatable("kingdomquest.horn.given").withStyle(net.minecraft.ChatFormatting.GOLD));
 				}

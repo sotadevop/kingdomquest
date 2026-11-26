@@ -1169,7 +1169,6 @@ final class Grade {
 			g.savedAt = server.getTickCount();
 			g.save(server, s.id());
 		}
-		ServerPlayer owner = server.getPlayerList().getPlayer(s.owner());
 		if (owner != null && server.getTickCount() % 40 == 0 && s.job().isEmpty()
 				&& owner.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(s.heart())) < 200 * 200) {
 			owner.sendOverlayMessage(net.minecraft.network.chat.Component.translatable("kingdomquest.site.shaping", s.name(), g.progress()));
