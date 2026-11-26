@@ -215,7 +215,10 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 		int region = Folk.region(style);
 		this.guardGear(barracks, archer, color, seed);
 		this.setSkin(Folk.skin(region, Folk.GUARD, seed >>> 4));
-		this.setCustomName(net.minecraft.network.chat.Component.literal(Folk.label(Folk.name(region, false, seed >>> 8), role)));
+		// a name the lord gave him stays (only the role is set again)
+		String old = this.getCustomName() == null ? "" : this.getCustomName().getString();
+		String name = Folk.roleOf(old) != null ? Folk.nameOf(old) : Folk.name(region, false, seed >>> 8);
+		this.setCustomName(net.minecraft.network.chat.Component.literal(Folk.label(name, role)));
 	}
 
 	/** The armour level a guard wears now (1 leather, 2 chainmail, 3 iron), from his chestplate. */
