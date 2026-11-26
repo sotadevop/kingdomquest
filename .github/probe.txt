@@ -1,3 +1,12 @@
-com.mojang.blaze3d.Blaze3D
-net.minecraft.client.gui.screens.Screen
-net.minecraft.client.model.geom.ModelLayers
+net.minecraft.world.entity.EntityType$Builder
+net.minecraft.world.item.component.DyedItemColor
+net.minecraft.core.particles.DustParticleOptions
+net.minecraft.client.gui.Gui
+net.minecraft.world.level.block.entity.BannerPatternLayers
+net.minecraft.world.level.block.entity.BannerPatternLayers$Builder
+net.minecraft.world.level.block.entity.BannerPatterns
+net.minecraft.world.entity.player.Player
+net.minecraft.client.renderer.entity.state.LivingEntityRenderState
+net.minecraft.client.renderer.entity.state.EntityRenderState
+net.minecraft.client.renderer.entity.state.HumanoidRenderState
+net.minecraft.world.entity.Entity
