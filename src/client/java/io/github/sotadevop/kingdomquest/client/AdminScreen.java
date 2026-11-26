@@ -35,7 +35,7 @@ public class AdminScreen extends Screen {
 
 	private void send(String action) {
 		ClientPlayNetworking.send(new ActionPayload(this.info.heart(), action));
-		this.minecraft.setScreen(null);
+		this.minecraft.setScreenAndShow(null);
 	}
 
 	private record Row(Component label, Runnable run, boolean active, Component hint) {
