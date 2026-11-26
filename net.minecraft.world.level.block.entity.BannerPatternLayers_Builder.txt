@@ -1,0 +1,9 @@
+Compiled from "BannerPatternLayers.java"
+public class net.minecraft.world.level.block.entity.BannerPatternLayers$Builder {
+  public net.minecraft.world.level.block.entity.BannerPatternLayers$Builder();
+  public net.minecraft.world.level.block.entity.BannerPatternLayers$Builder addIfRegistered(net.minecraft.core.HolderGetter<net.minecraft.world.level.block.entity.BannerPattern>, net.minecraft.resources.ResourceKey<net.minecraft.world.level.block.entity.BannerPattern>, net.minecraft.world.item.DyeColor);
+  public net.minecraft.world.level.block.entity.BannerPatternLayers$Builder add(net.minecraft.core.Holder<net.minecraft.world.level.block.entity.BannerPattern>, net.minecraft.world.item.DyeColor);
+  public net.minecraft.world.level.block.entity.BannerPatternLayers$Builder add(net.minecraft.world.level.block.entity.BannerPatternLayers$Layer);
+  public net.minecraft.world.level.block.entity.BannerPatternLayers$Builder addAll(net.minecraft.world.level.block.entity.BannerPatternLayers);
+  public net.minecraft.world.level.block.entity.BannerPatternLayers build();
+}

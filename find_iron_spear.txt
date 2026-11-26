@@ -1,0 +1,2 @@
+net/minecraft/data/recipes/packs/VanillaRecipeProvider.class
+net/minecraft/references/ItemIds.class

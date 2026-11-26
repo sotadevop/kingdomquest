@@ -1,0 +1,15 @@
+Compiled from "DyedItemColor.java"
+public final class net.minecraft.world.item.component.DyedItemColor extends java.lang.Record implements net.minecraft.world.item.component.TooltipProvider {
+  public static final com.mojang.serialization.Codec<net.minecraft.world.item.component.DyedItemColor> CODEC;
+  public static final net.minecraft.network.codec.StreamCodec<io.netty.buffer.ByteBuf, net.minecraft.world.item.component.DyedItemColor> STREAM_CODEC;
+  public static final int LEATHER_COLOR;
+  public net.minecraft.world.item.component.DyedItemColor(int);
+  public static int getOrDefault(net.minecraft.world.item.ItemStack, int);
+  public static net.minecraft.world.item.ItemStack applyDyes(net.minecraft.world.item.ItemStack, java.util.List<net.minecraft.world.item.DyeColor>);
+  public static net.minecraft.world.item.component.DyedItemColor applyDyes(net.minecraft.world.item.component.DyedItemColor, java.util.List<net.minecraft.world.item.DyeColor>);
+  public void addToTooltip(net.minecraft.world.item.Item$TooltipContext, java.util.function.Consumer<net.minecraft.network.chat.Component>, net.minecraft.world.item.TooltipFlag, net.minecraft.core.component.DataComponentGetter);
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public int rgb();
+}
