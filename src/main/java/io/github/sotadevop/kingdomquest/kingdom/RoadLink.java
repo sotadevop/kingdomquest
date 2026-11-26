@@ -248,6 +248,9 @@ final class RoadLink {
 	 * taken for banks); ice lying on water counts as the water.
 	 */
 	private static int[] surfaceAt(ServerLevel level, int x, int z) {
+		// the chunk is loaded first: an unloaded one reads as the bottom of the world, and the road was cut down to the
+		// bedrock there (user, 2026-11-26: a ravine under a lake)
+		level.getChunk(x >> 4, z >> 4);
 		int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, top, z);
 		while (pos.getY() > level.getMinY()) {
@@ -633,6 +636,39 @@ final class RoadLink {
 		JOBS.put(job.settlement() + "|" + job.key(), new Job(job.player(), job.settlement(), job.key(), line, job.index(), job.tier(), t, w));
 	}
 
+	/**
+	 * The best roads are walked without jumping (user, 2026-11-26: "even 1 block high"): where the next cell lies a
+	 * whole block higher, a stair goes on this cell over the road's width, facing up the road. Half-block rises are slabs
+	 * already and are walked as they are.
+	 */
+	private static void steps(ServerLevel level, Job job, int k, BlockPos p, Direction side, int y) {
+		if (job.tier() < 2) {
+			return;
+		}
+		int[] t = job.height();
+		int n = t.length;
+		for (int j : new int[] {k + 1, k - 1}) {
+			if (j < 0 || j >= n || job.water()[j] || t[j] - t[k] < 2) {
+				continue;
+			}
+			BlockPos up = job.line().get(j);
+			int dx = up.getX() - p.getX(), dz = up.getZ() - p.getZ();
+			Direction toward = Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? Direction.EAST : Direction.WEST) : (dz > 0 ? Direction.SOUTH : Direction.NORTH);
+			BlockState stair = (job.tier() >= 2 ? Blocks.COBBLESTONE_STAIRS : Blocks.MUD_BRICK_STAIRS).defaultBlockState()
+					.setValue(StairBlock.FACING, toward);
+			for (int w = -1; w <= 1; w++) {
+				BlockPos cell = new BlockPos(p.getX(), y + 1, p.getZ()).relative(side, w);
+				BlockState now = level.getBlockState(cell);
+				// over the road block (or in place of its slab); nothing else is replaced
+				if ((now.isAir() || now.canBeReplaced() || now.getBlock() instanceof net.minecraft.world.level.block.SlabBlock)
+						&& !level.getBlockState(cell.below()).getCollisionShape(level, cell.below()).isEmpty()) {
+					level.setBlock(cell, stair, Block.UPDATE_CLIENTS);
+				}
+			}
+			return; // one stair per cell
+		}
+	}
+
 	/** Where each settlement's last road crosses water (its first bridge cell), for the field test's views. */
 	static final Map<String, BlockPos> BRIDGE = new HashMap<>();
 
@@ -675,6 +711,13 @@ final class RoadLink {
 					bridgeCell(level, job, k, p, forward, side, y);
 					continue;
 				}
+				if (t < 2 * ground + 2 && ground - y > 12) {
+					// a cutting deeper than any the profile plans: the heights it was planned from were wrong (land read
+					// before it was there). The road goes over the land as it is instead of cutting a ravine.
+					t = 2 * ground + 2;
+					y = t / 2 - 1;
+					half = false;
+				}
 				if (t < 2 * ground + 2) { // cut into the land: the road lies in a cutting, 3 blocks of air over it
 					for (int w = -1; w <= 1; w++) {
 						BlockPos cell = new BlockPos(p.getX(), y, p.getZ()).relative(side, w);
@@ -694,6 +737,7 @@ final class RoadLink {
 					for (int sgn : new int[] {-1, 1}) {
 						for (int w = 2; w <= 14; w++) {
 							BlockPos col = p.relative(side, sgn * w);
+							level.getChunk(col.getX() >> 4, col.getZ() >> 4);
 							int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, col.getX(), col.getZ()) - 1;
 							int keep = y + w - 1; // highest block the slope leaves here
 							if (top <= keep) {
@@ -718,6 +762,7 @@ final class RoadLink {
 							}
 						}
 					}
+					steps(level, job, k, p, side, y);
 					continue;
 				}
 				for (int w = -1; w <= 1; w++) {
@@ -730,6 +775,9 @@ final class RoadLink {
 						}
 					} else {
 						int gy = groundAt(level, cell);
+						if (job.tier() >= 2 && Math.abs(gy - y) <= 1) {
+							gy = y; // the three lanes lie level across: no step from one lane to the next
+						}
 						BlockPos at = new BlockPos(cell.getX(), gy, cell.getZ());
 						if (level.getBlockState(at).getBlock() instanceof LiquidBlock) { // the river's edge under a lane: stone up from the bed
 							pave(level, new BlockPos(cell.getX(), Math.max(gy, y), cell.getZ()), w, job.tier(), true);
@@ -738,6 +786,7 @@ final class RoadLink {
 						}
 					}
 				}
+				steps(level, job, k, p, side, y);
 				// an embankment two blocks or more above the land gets a parapet; a low fill doesn't (user, 2026-11-25:
 				// railings along a road on solid ground)
 				if (raised && t >= 2 * ground + 6) { // a ramp up to a bridge: an embankment with a parapet
@@ -876,6 +925,7 @@ final class RoadLink {
 
 	/** Ground height at a column: walks down through air, plants and trees (which go, whole). */
 	private static int groundAt(ServerLevel level, BlockPos c) {
+		level.getChunk(c.getX() >> 4, c.getZ() >> 4); // never the bottom of an unloaded chunk
 		int top = level.getHeight(Heightmap.Types.WORLD_SURFACE, c.getX(), c.getZ());
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(c.getX(), top, c.getZ());
 		while (pos.getY() > level.getMinY()) {

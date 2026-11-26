@@ -157,42 +157,18 @@ public class KingdomScreen extends Screen {
 				this.buildButtons.add(this.addRenderableWidget(visit));
 			}
 		}
-		Button color = Button.builder(Component.translatable("kingdomquest.menu.color"), b ->
-				this.minecraft.setScreenAndShow(new ColorScreen(this.info.heart(), this.info.color(), this))).bounds(this.left + 8, this.top + H - 24, 60, 18).build();
-		color.active = this.info.percent() < 0;
-		this.tabButtons.add(this.addRenderableWidget(color));
-		// tab actions in the footer: drawbridge (Defense), roads to other places (Streets)
-		String tabKey = tabs.isEmpty() ? "" : tabs.get(this.tab).key();
-		int fx = this.left + 72;
-		if (tabKey.equals("kingdomquest.tab.defense") && this.info.bridge() >= 0) {
-			this.tabButtons.add(this.addRenderableWidget(action(this.info.bridge() == 1 ? "kingdomquest.bridge.lower" : "kingdomquest.bridge.raise",
-					"bridge", fx, 100)));
+		// the administration (colour, drawbridge, repair, rebuild, undo) has its own window (user, 2026-11-26: declutter)
+		Button admin = Button.builder(Component.translatable("kingdomquest.admin.open"), b ->
+				this.minecraft.setScreenAndShow(new AdminScreen(this.info, this))).bounds(this.left + 8, this.top + H - 24, 90, 18).build();
+		if (this.info.damaged() > 0) {
+			admin.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("kingdomquest.menu.repair", this.info.damaged())));
 		}
+		this.tabButtons.add(this.addRenderableWidget(admin));
+		String tabKey = tabs.isEmpty() ? "" : tabs.get(this.tab).key();
+		int fx = this.left + 102;
 		if (tabKey.equals("kingdomquest.tab.farming")) {
 			// stable breeding: a horse from the kingdom's stables (the server checks the stables and the price)
 			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.animal.buy_horse", "buy_horse", fx, 100)));
-		}
-		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.damaged() > 0) {
-			Button repair = Button.builder(Component.translatable("kingdomquest.menu.repair", this.info.damaged()), b -> {
-				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "repair"));
-				this.onClose();
-			}).bounds(fx, this.top + H - 24, 80, 18).build();
-			this.tabButtons.add(this.addRenderableWidget(repair));
-		}
-		int ux = fx + (this.info.damaged() > 0 ? 84 : 0);
-		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.percent() < 0) {
-			// rebuilds everything from the mod's current plans (after an update to the buildings)
-			this.tabButtons.add(this.addRenderableWidget(action("kingdomquest.menu.rebuild", "rebuild", ux, 70)));
-			ux += 74;
-		}
-		if (tabKey.equals("kingdomquest.tab.settlement") && this.info.changed() > 0 && this.info.percent() < 0) {
-			// the lord's own changes (blocks he broke or placed): repair leaves them; this puts the plan back
-			Button undo = Button.builder(Component.translatable("kingdomquest.menu.undo", this.info.changed()), b -> {
-				ClientPlayNetworking.send(new io.github.sotadevop.kingdomquest.kingdom.ActionPayload(this.info.heart(), "undo_changes"));
-				this.onClose();
-			}).bounds(ux, this.top + H - 24, 54, 18).tooltip(net.minecraft.client.gui.components.Tooltip.create(
-					Component.translatable("kingdomquest.menu.undo_hint", this.info.changed()))).build();
-			this.tabButtons.add(this.addRenderableWidget(undo));
 		}
 		// the realm: map of all settlements, villages and roads, plus the register of buildings, people and animals
 		this.tabButtons.add(this.addRenderableWidget(Button.builder(Component.translatable("kingdomquest.realm.open"), b ->

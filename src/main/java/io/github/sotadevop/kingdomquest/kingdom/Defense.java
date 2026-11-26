@@ -67,7 +67,7 @@ final class Defense {
 	}
 
 	/** A guard's fixed post: where he stands, and whether he is a tower guard (bow, never leaves). */
-	record Post(BlockPos pos, boolean tower) {
+	record Post(BlockPos pos, boolean tower, String role) {
 	}
 
 	/** Nearest place to stand in a column around {@code y}: a full block under two free ones. Null if there is none within 10. */
@@ -97,7 +97,7 @@ final class Defense {
 			BlockPos at = at(s, p[0], p[1]);
 			BlockPos stand = level.isLoaded(at) ? standAt(level, at.getX(), at.getZ(), y) : null;
 			if (stand != null) {
-				out.add(new Post(stand, false));
+				out.add(new Post(stand, false, p[1] == 7 ? "Keep Guard" : "Gate Guard"));
 			}
 		}
 		int walls = s.level(Progression.WALLS);
@@ -118,7 +118,7 @@ final class Defense {
 					if (built.contains(pos.asLong()) && level.getBlockState(pos).isCollisionShapeFullBlock(level, pos)
 							&& level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty()
 							&& level.getBlockState(pos.above(2)).getCollisionShape(level, pos.above(2)).isEmpty()) {
-						out.add(new Post(pos.above().immutable(), true));
+						out.add(new Post(pos.above().immutable(), true, "Tower Guard"));
 						break;
 					}
 				}
@@ -135,11 +135,12 @@ final class Defense {
 		if (post != null) {
 			g.setPost(post.pos());
 		}
-		g.guardGear(lvl, post != null && post.tower()); // before setup: the bow decides how he fights
+		boolean archer = post != null && post.tower();
+		g.guardGear(lvl, archer, s.color(), g.getUUID().hashCode()); // before setup: the bow decides how he fights
 		g.setup("guard", io.github.sotadevop.kingdomquest.npc.KingdomNpc.GUARD_SKIN, s.owner());
+		g.dressGuard(s.style(), lvl, archer, s.color(), post == null ? "Watchman" : post.role());
 		g.setTier(lvl);
 		g.setHome(s.heart());
-		g.setCustomName(net.minecraft.network.chat.Component.literal(post == null ? "Guard" : post.tower() ? "Tower Guard" : "Gate Guard"));
 		g.setAttached(People.ROLE, GUARD + "|" + s.id());
 		g.snapTo(where.getX() + 0.5, where.getY(), where.getZ() + 0.5, 0, 0);
 		level.addFreshEntity(g);
@@ -182,7 +183,19 @@ final class Defense {
 			if (npc.post() == 0) {
 				patrols++;
 			}
-			npc.guardGear(lvl, npc.getMainHandItem().is(net.minecraft.world.item.Items.BOW)); // same face and iron for all, old guards too
+			// old guards (and those of a barracks that was upgraded) get the kingdom's look: coloured leather helmet,
+			// armour of the barracks level, a name of the region
+			int armor = Math.max(1, Math.min(3, lvl));
+			boolean archer = npc.getMainHandItem().is(net.minecraft.world.item.Items.BOW);
+			String label = npc.getCustomName() == null ? "" : npc.getCustomName().getString();
+			if (io.github.sotadevop.kingdomquest.npc.Folk.roleOf(label) == null || npc.guardArmor() != armor
+					|| !npc.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD).is(net.minecraft.world.item.Items.LEATHER_HELMET)) {
+				String role = io.github.sotadevop.kingdomquest.npc.Folk.roleOf(label);
+				if (role == null) {
+					role = npc.post() == 0 ? "Watchman" : archer ? "Tower Guard" : "Gate Guard";
+				}
+				npc.dressGuard(s.style(), lvl, archer, s.color(), role);
+			}
 			npc.setTier(lvl);
 		}
 		for (int i = patrols; i < want; i++) {

@@ -46,9 +46,25 @@ final class Guild {
 		return r.equals("sword") || r.equals("archer") || r.equals("mage");
 	}
 
+	/** Talking to one of his allies sends the guild home (they come again at the next blow of the horn). */
 	static void talk(ServerPlayer player, KingdomNpc npc) {
 		String who = NAMES[List.of(ROLES).indexOf(npc.role())];
-		People.say(player, who, player.getUUID().equals(npc.lord()) ? "At your command, my lord." : "I only serve my own lord.");
+		if (!player.getUUID().equals(npc.lord())) {
+			People.say(player, who, "I only serve my own lord.");
+			return;
+		}
+		dismiss(player);
+		People.say(player, who, "As you wish, my lord. Blow the horn when you need us again.");
+	}
+
+	/** The lord's allies leave (the guild hall keeps them until the horn calls them again). */
+	static void dismiss(ServerPlayer player) {
+		for (ServerLevel level : player.level().getServer().getAllLevels()) {
+			for (KingdomNpc npc : level.getEntities(KingdomNpc.TYPE, e -> e.isAlive() && player.getUUID().equals(e.lord()) && isAlly(e))) {
+				level.sendParticles(net.minecraft.core.particles.ParticleTypes.POOF, npc.getX(), npc.getY() + 1, npc.getZ(), 8, 0.3, 0.5, 0.3, 0.02);
+				npc.discard();
+			}
+		}
 	}
 
 	/**
@@ -71,8 +87,14 @@ final class Guild {
 			return false;
 		}
 		String want = Defense.GUARD + "|" + here.id();
-		List<KingdomNpc> guards = level.getEntities(KingdomNpc.TYPE, new AABB(here.heart()).inflate(120, 64, 120),
-				g -> g.isAlive() && want.equals(g.getAttached(People.ROLE)));
+		// those at their posts and those already following him (they may be outside the kingdom's box)
+		List<KingdomNpc> guards = new ArrayList<>(level.getEntities(KingdomNpc.TYPE, new AABB(here.heart()).inflate(120, 64, 120),
+				g -> g.isAlive() && want.equals(g.getAttached(People.ROLE))));
+		for (KingdomNpc g : level.getEntities(KingdomNpc.TYPE, player.getBoundingBox().inflate(48), g -> g.isAlive() && want.equals(g.getAttached(People.ROLE)))) {
+			if (!guards.contains(g)) {
+				guards.add(g);
+			}
+		}
 		if (guards.isEmpty()) {
 			People.say(player, "Warchief", here.name() + " has no guards yet. The barracks train them.");
 			return true;
@@ -80,6 +102,9 @@ final class Guild {
 		boolean back = guards.stream().anyMatch(KingdomNpc::rallied);
 		guards.forEach(g -> g.setRallied(!back));
 		People.say(player, "Warchief", back ? "Guards, back to your posts!" : "The guards of " + here.name() + " answer the war horn!");
+		if (!back) {
+			player.sendSystemMessage(Component.translatable("kingdomquest.horn.dismiss_hint").withStyle(net.minecraft.ChatFormatting.GRAY));
+		}
 		return true;
 	}
 

@@ -48,7 +48,9 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	public static final ResourceKey<EntityType<?>> KEY = ResourceKey.create(Registries.ENTITY_TYPE,
 			Identifier.fromNamespaceAndPath(KingdomQuest.MOD_ID, "npc"));
 	public static final EntityType<KingdomNpc> TYPE = Registry.register(BuiltInRegistries.ENTITY_TYPE, KEY,
-			EntityType.Builder.of(KingdomNpc::new, MobCategory.MISC).sized(0.6f, 1.8f).eyeHeight(1.62f).clientTrackingRange(10).build(KEY));
+			EntityType.Builder.of(KingdomNpc::new, MobCategory.MISC).sized(0.6f, 1.8f).eyeHeight(1.62f)
+					// seated in the saddle like a player (user, 2026-11-26: the knights floated over their horses)
+					.ridingOffset(-0.6f).clientTrackingRange(10).build(KEY));
 	public static final EntityDataAccessor<Integer> SKIN = SynchedEntityData.defineId(KingdomNpc.class, EntityDataSerializers.INT);
 	public static final EntityDataAccessor<String> ROLE = SynchedEntityData.defineId(KingdomNpc.class, EntityDataSerializers.STRING);
 
@@ -149,7 +151,7 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	 */
 	public void setSkin(int skin) {
 		int base = skinBase(skin);
-		if (base < CUSTOM_SKIN) {
+		if (base < CUSTOM_SKIN && !Folk.generated(base)) {
 			base = Math.floorMod(base, 9);
 		}
 		int arms = skinArms(skin);
@@ -176,22 +178,72 @@ public class KingdomNpc extends PathfinderMob implements RangedAttackMob {
 	}
 
 	/**
-	 * Gear for a guard: every guard wears full iron and has the same face, so they read as one garrison. The
-	 * barracks level shows in the weapons: 1 iron sword, 2 a shield as well, 3 a diamond sword. Archers carry a bow.
+	 * Gear for a guard (agreed with the user, 2026-11-26): the helmet is always leather in the kingdom colour, so one
+	 * knows his own guards; the body armour grows with the barracks (1 leather in the colour, 2 chainmail, 3 iron).
+	 * Weapons as garrisons carried them: most a spear and a shield, some a sword and a shield, a few only a spear;
+	 * tower guards a bow. Shields carry the kingdom colour with a border. {@code seed} fixes each guard's weapon.
 	 */
-	public void guardGear(int barracks, boolean archer) {
-		this.setSkin(GUARD_SKIN);
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(archer ? Items.BOW : barracks >= 3 ? Items.DIAMOND_SWORD
-				: Items.IRON_SWORD));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, barracks >= 2 && !archer ? new ItemStack(Items.SHIELD) : ItemStack.EMPTY);
-		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(archer ? 3 + barracks : 6);
+	public void guardGear(int barracks, boolean archer, int color, int seed) {
+		int rgb = net.minecraft.world.item.DyeColor.byId(color).getTextureDiffuseColor() & 0xFFFFFF;
+		int lvl = Math.max(1, Math.min(3, barracks));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.HEAD, dyed(Items.LEATHER_HELMET, rgb));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.CHEST, lvl == 1 ? dyed(Items.LEATHER_CHESTPLATE, rgb)
+				: new ItemStack(lvl == 2 ? Items.CHAINMAIL_CHESTPLATE : Items.IRON_CHESTPLATE));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.LEGS, lvl == 1 ? dyed(Items.LEATHER_LEGGINGS, rgb)
+				: new ItemStack(lvl == 2 ? Items.CHAINMAIL_LEGGINGS : Items.IRON_LEGGINGS));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.FEET, lvl == 1 ? dyed(Items.LEATHER_BOOTS, rgb)
+				: new ItemStack(lvl == 2 ? Items.CHAINMAIL_BOOTS : Items.IRON_BOOTS));
+		int kind = Math.floorMod(seed, 10); // 0-4 spear and shield, 5-7 sword and shield, 8-9 spear only
+		boolean spear = kind <= 4 || kind >= 8;
+		boolean shield = kind <= 7;
+		net.minecraft.world.item.Item weapon = archer ? Items.BOW : spear ? (lvl >= 3 ? Items.DIAMOND_SPEAR : Items.IRON_SPEAR)
+				: (lvl >= 3 ? Items.DIAMOND_SWORD : Items.IRON_SWORD);
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, new ItemStack(weapon));
+		this.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, !archer && shield ? shield(color) : ItemStack.EMPTY);
+		this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(archer ? 3 + lvl : 5 + lvl);
 		for (var slot : net.minecraft.world.entity.EquipmentSlot.values()) {
 			this.setDropChance(slot, 0);
 		}
+	}
+
+	/**
+	 * A guard's whole look, after {@link #setup}: his gear, a face of the region (always a man, as garrisons were)
+	 * and a name tag "Name, Role" so one sees who he is and what he does when one looks at him.
+	 */
+	public void dressGuard(String style, int barracks, boolean archer, int color, String role) {
+		int seed = this.getUUID().hashCode();
+		int region = Folk.region(style);
+		this.guardGear(barracks, archer, color, seed);
+		this.setSkin(Folk.skin(region, Folk.GUARD, seed >>> 4));
+		// a name the lord gave him stays (only the role is set again)
+		String old = this.getCustomName() == null ? "" : this.getCustomName().getString();
+		String name = Folk.roleOf(old) != null ? Folk.nameOf(old) : Folk.name(region, false, seed >>> 8);
+		this.setCustomName(net.minecraft.network.chat.Component.literal(Folk.label(name, role)));
+	}
+
+	/** The armour level a guard wears now (1 leather, 2 chainmail, 3 iron), from his chestplate. */
+	public int guardArmor() {
+		ItemStack chest = this.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST);
+		return chest.is(Items.IRON_CHESTPLATE) ? 3 : chest.is(Items.CHAINMAIL_CHESTPLATE) ? 2 : chest.is(Items.LEATHER_CHESTPLATE) ? 1 : 0;
+	}
+
+	public static ItemStack dyed(net.minecraft.world.item.Item item, int rgb) {
+		ItemStack st = new ItemStack(item);
+		st.set(net.minecraft.core.component.DataComponents.DYED_COLOR, new net.minecraft.world.item.component.DyedItemColor(rgb));
+		return st;
+	}
+
+	/** A shield in the kingdom colour with a contrasting border (its heraldry). */
+	public ItemStack shield(int color) {
+		ItemStack st = new ItemStack(Items.SHIELD);
+		net.minecraft.world.item.DyeColor base = net.minecraft.world.item.DyeColor.byId(color);
+		st.set(net.minecraft.core.component.DataComponents.BASE_COLOR, base);
+		var patterns = this.level().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BANNER_PATTERN);
+		net.minecraft.world.item.DyeColor edge = base == net.minecraft.world.item.DyeColor.WHITE || base == net.minecraft.world.item.DyeColor.YELLOW
+				|| base == net.minecraft.world.item.DyeColor.LIGHT_GRAY ? net.minecraft.world.item.DyeColor.BLACK : net.minecraft.world.item.DyeColor.WHITE;
+		st.set(net.minecraft.core.component.DataComponents.BANNER_PATTERNS, new net.minecraft.world.level.block.entity.BannerPatternLayers.Builder()
+				.addIfRegistered(patterns, net.minecraft.world.level.block.entity.BannerPatterns.BORDER, edge).build());
+		return st;
 	}
 
 	private void gear(net.minecraft.world.item.Item hand, net.minecraft.world.item.Item head, net.minecraft.world.item.Item chest) {

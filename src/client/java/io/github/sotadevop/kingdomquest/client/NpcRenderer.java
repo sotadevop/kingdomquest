@@ -61,7 +61,9 @@ public class NpcRenderer extends HumanoidMobRenderer<KingdomNpc, NpcRenderer.Sta
 			CustomSkins.Skin s = CustomSkins.get(base);
 			return s != null && s.slim();
 		}
-		return false;
+		// the generated women's skins are drawn for the slim model
+		return io.github.sotadevop.kingdomquest.npc.Folk.generated(base)
+				&& io.github.sotadevop.kingdomquest.npc.Folk.female(io.github.sotadevop.kingdomquest.npc.Folk.outfitOf(base));
 	}
 
 	@Override
@@ -86,6 +88,9 @@ public class NpcRenderer extends HumanoidMobRenderer<KingdomNpc, NpcRenderer.Sta
 				return own;
 			}
 			base = 0; // a skin this computer doesn't have
+		}
+		if (io.github.sotadevop.kingdomquest.npc.Folk.generated(base)) {
+			return Identifier.fromNamespaceAndPath("kingdomquest", "textures/entity/npc/" + base + ".png");
 		}
 		return Identifier.withDefaultNamespace("textures/entity/player/" + (slim ? "slim/" : "wide/") + SKINS[Math.floorMod(base, SKINS.length)] + ".png");
 	}

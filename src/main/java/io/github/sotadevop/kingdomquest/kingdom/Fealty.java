@@ -918,7 +918,10 @@ public final class Fealty {
 					g.discard();
 					continue;
 				}
-				g.guardGear(lvl, false);
+				if (g.guardArmor() != Math.max(1, Math.min(3, lvl)) || io.github.sotadevop.kingdomquest.npc.Folk.roleOf(
+						g.getCustomName() == null ? "" : g.getCustomName().getString()) == null) {
+					g.dressGuard(v.liege().style(), lvl, false, v.liege().color(), "Village Guard");
+				}
 				g.setTier(lvl);
 			}
 			for (BlockPos post : posts(level, v.bell(), v.pole())) {
@@ -945,11 +948,11 @@ public final class Fealty {
 		}
 		int lvl = Math.max(1, liege.level(Progression.BARRACKS));
 		g.setPost(post);
-		g.guardGear(lvl, false);
+		g.guardGear(lvl, false, liege.color(), g.getUUID().hashCode());
 		g.setup("guard", KingdomNpc.GUARD_SKIN, liege.owner());
+		g.dressGuard(liege.style(), lvl, false, liege.color(), "Village Guard");
 		g.setTier(lvl);
 		g.setHome(post);
-		g.setCustomName(Component.literal("Guard of " + liege.name()));
 		g.setAttached(People.ROLE, GUARD + "|" + liege.id() + "|" + key);
 		g.snapTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5, level.getRandom().nextFloat() * 360, 0);
 		level.addFreshEntity(g);

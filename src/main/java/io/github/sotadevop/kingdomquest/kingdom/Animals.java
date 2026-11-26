@@ -183,18 +183,21 @@ final class Animals {
 			if (horse == null) {
 				continue;
 			}
-			horse.setItemSlot(EquipmentSlot.BODY, new ItemStack(main >= 11 ? Items.DIAMOND_HORSE_ARMOR : Items.IRON_HORSE_ARMOR));
+			// the horse's armour grows with the barracks: leather in the kingdom colour, then iron, then diamond (user,
+			// 2026-11-26: real horse armour, the colour only on leather)
+			int barracks = Math.max(1, Math.min(3, s.level(Progression.BARRACKS)));
+			int rgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor() & 0xFFFFFF;
+			horse.setItemSlot(EquipmentSlot.BODY, barracks == 1 ? KingdomNpc.dyed(Items.LEATHER_HORSE_ARMOR, rgb)
+					: new ItemStack(barracks == 2 ? Items.IRON_HORSE_ARMOR : Items.DIAMOND_HORSE_ARMOR));
 			KingdomNpc knight = People.visitor(level, s, "knight", p);
 			if (knight == null) {
 				horse.discard();
 				continue;
 			}
-			knight.setCustomName(Component.translatable("kingdomquest.animal.knight"));
-			knight.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
-			knight.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
-			knight.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
-			knight.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
-			knight.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+			// a mounted guard: the garrison's look (coloured helmet, armour of the barracks), a lance (spear) and a shield
+			knight.dressGuard(s.style(), barracks, false, s.color(), "Knight");
+			knight.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(barracks >= 3 ? Items.DIAMOND_SPEAR : Items.IRON_SPEAR));
+			knight.setItemSlot(EquipmentSlot.OFFHAND, knight.shield(s.color()));
 			knight.setNoAi(true);
 			knight.startRiding(horse);
 		}
@@ -205,6 +208,16 @@ final class Animals {
 			if (!(e.getVehicle() instanceof Mob horse)) {
 				e.discard(); // a knight without his horse goes back to the barracks
 				continue;
+			}
+			int bl = Math.max(1, Math.min(3, s.level(Progression.BARRACKS)));
+			if (e instanceof KingdomNpc k && (k.guardArmor() != bl || !k.getItemBySlot(EquipmentSlot.HEAD).is(Items.LEATHER_HELMET))) {
+				// knights from before (all iron) and after a barracks upgrade get the garrison's look
+				k.dressGuard(s.style(), bl, false, s.color(), "Knight");
+				k.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(bl >= 3 ? Items.DIAMOND_SPEAR : Items.IRON_SPEAR));
+				k.setItemSlot(EquipmentSlot.OFFHAND, k.shield(s.color()));
+				int rgb = net.minecraft.world.item.DyeColor.byId(s.color()).getTextureDiffuseColor() & 0xFFFFFF;
+				horse.setItemSlot(EquipmentSlot.BODY, bl == 1 ? KingdomNpc.dyed(Items.LEATHER_HORSE_ARMOR, rgb)
+						: new ItemStack(bl == 2 ? Items.IRON_HORSE_ARMOR : Items.DIAMOND_HORSE_ARMOR));
 			}
 			int lane = i % 2 == 0 ? -2 : 2;
 			BlockPos a = floorOr(level, at(s, Layout.gateX() + lane, gz - 12 - (i / 2) * 6), gateEnd);

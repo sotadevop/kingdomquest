@@ -176,8 +176,12 @@ final class Realm {
 			}
 			JsonObject e = new JsonObject();
 			e.addProperty("uuid", npc.getUUID().toString());
-			e.addProperty("name", npc.getCustomName() == null ? npc.role() : npc.getCustomName().getString());
-			e.addProperty("role", roleName(npc, role));
+			// "Name, Role" name tags: the name and the role in their own columns (user, 2026-11-26: "Tower Guard Guard")
+			String label = npc.getCustomName() == null ? npc.role() : npc.getCustomName().getString();
+			String own = io.github.sotadevop.kingdomquest.npc.Folk.roleOf(label);
+			e.addProperty("name", io.github.sotadevop.kingdomquest.npc.Folk.nameOf(label));
+			e.addProperty("role", own != null ? own : roleName(npc, role));
+			e.addProperty("guard", npc.role().equals("guard") || npc.role().equals("knight"));
 			e.addProperty("skin", npc.skin());
 			e.addProperty("x", npc.getBlockX());
 			e.addProperty("y", npc.getBlockY());
@@ -191,6 +195,7 @@ final class Realm {
 				continue;
 			}
 			JsonObject e = new JsonObject();
+			e.addProperty("uuid", m.getUUID().toString());
 			e.addProperty("name", m.getCustomName() == null ? m.getType().getDescription().getString() : m.getCustomName().getString());
 			e.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(m.getType()).getPath());
 			e.addProperty("x", m.getBlockX());
@@ -206,7 +211,9 @@ final class Realm {
 	private static String roleName(KingdomNpc npc, String role) {
 		if (role.startsWith("worker|")) {
 			int bar = role.lastIndexOf('|');
-			return bar > 7 && role.indexOf('|', 7) > 0 ? role.substring(bar + 1) : "Builder";
+			String job = bar > 7 && role.indexOf('|', 7) > 0 ? role.substring(bar + 1) : "Builder";
+			int hash = job.indexOf('#');
+			return hash < 0 ? job : job.substring(0, hash);
 		}
 		return switch (npc.role()) {
 			case "architect" -> "Architect";
@@ -317,6 +324,15 @@ final class Realm {
 		switch (a[0]) {
 			case "realm_travel" -> travel(player, a.length > 1 ? a[1] : "");
 			case "realm_visit" -> KingdomMap.visit(player, here, a.length > 1 ? a[1] : "");
+			case "realm_goto" -> {
+				// to one of his people or animals (user, 2026-11-26): beside them, where one can stand
+				Entity e = a.length > 1 ? server.overworld().getEntity(UUID.fromString(a[1])) : null;
+				if (e != null && player.getUUID().equals(here.owner()) && player.level().dimension() == net.minecraft.world.level.Level.OVERWORLD
+						&& !player.isPassenger()) {
+					KingdomMap.goNear(player, e.blockPosition());
+				}
+				return; // the screen is closed: nothing to refresh
+			}
 			case "realm_empire" -> {
 				String name = clean(a.length > 1 ? a[1] : "");
 				if (!name.isEmpty()) {

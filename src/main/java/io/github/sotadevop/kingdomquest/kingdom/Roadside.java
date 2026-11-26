@@ -1398,11 +1398,11 @@ final class Roadside {
 						continue;
 					}
 					g.setPost(post);
-					g.guardGear(lvl, false);
+					g.guardGear(lvl, false, st.owner().color(), g.getUUID().hashCode());
 					g.setup("guard", KingdomNpc.GUARD_SKIN, st.owner().owner());
+					g.dressGuard(st.owner().style(), lvl, false, st.owner().color(), "Road Warden");
 					g.setTier(lvl);
 					g.setHome(post);
-					g.setCustomName(Component.literal("Guard of " + st.owner().name()));
 					g.setAttached(People.ROLE, st.tag());
 					g.snapTo(post.getX() + 0.5, post.getY(), post.getZ() + 0.5, level.getRandom().nextFloat() * 360, 0);
 					level.addFreshEntity(g);
